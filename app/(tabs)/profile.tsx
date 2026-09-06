@@ -4,7 +4,9 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
+import { DEFAULT_DIAL_CODE } from '../../src/constants/config';
 import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
+import { useAuth } from '../../src/context/AuthContext';
 
 const MENU = [
   { icon: 'location-outline', label: 'Saved Addresses', chevron: true },
@@ -29,6 +31,11 @@ function MenuItem({ icon, label }: { icon: string; label: string }) {
 }
 
 export default function ProfileScreen() {
+  const { user, signOut } = useAuth();
+  const contact = user?.phone
+    ? `${DEFAULT_DIAL_CODE} ${user.phone}`
+    : user?.email ?? 'john.samuel@email.com';
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <LinearGradient colors={[Colors.bgDark, Colors.bgMid]} style={styles.bg}>
@@ -42,7 +49,7 @@ export default function ProfileScreen() {
               <Text style={styles.avatarInitials}>JS</Text>
             </LinearGradient>
             <Text style={styles.name}>John Samuel</Text>
-            <Text style={styles.email}>john.samuel@email.com</Text>
+            <Text style={styles.email}>{contact}</Text>
             <Pressable style={styles.editBtn}>
               <Text style={styles.editBtnText}>Edit Profile</Text>
             </Pressable>
@@ -70,7 +77,7 @@ export default function ProfileScreen() {
           </View>
 
           {/* Logout */}
-          <Pressable style={styles.logoutBtn}>
+          <Pressable style={styles.logoutBtn} onPress={signOut}>
             <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
             <Text style={styles.logoutText}>Log Out</Text>
           </Pressable>

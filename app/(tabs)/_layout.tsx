@@ -1,34 +1,27 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { Image, Platform, StyleSheet, View } from 'react-native';
 import { Colors } from '../../src/constants/Colors';
-import { ColorValue, Platform } from 'react-native';
-
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
-
-interface TabIconProps {
-  name: IconName;
-  color: ColorValue;
-  size: number;
-}
-
-function TabIcon({ name, color, size }: TabIconProps) {
-  return <Ionicons name={name} size={size} color={color as string} />;
-}
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.primaryLight,
-        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarActiveTintColor: Colors.foodTabActive,
+        tabBarInactiveTintColor: Colors.foodTabInactive,
         tabBarStyle: {
-          backgroundColor: Colors.bgMid,
-          borderTopColor: Colors.border,
+          backgroundColor: Colors.foodTabBar,
+          borderTopColor: Colors.foodBorder,
           borderTopWidth: 1,
           height: Platform.OS === 'ios' ? 88 : 68,
           paddingBottom: Platform.OS === 'ios' ? 28 : 12,
           paddingTop: 8,
+          elevation: 12,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -42,34 +35,34 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="home" color={color} size={size} />
+            <Ionicons name="home" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="categories"
+        name="search"
         options={{
-          title: 'Categories',
+          title: 'Search',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="grid" color={color} size={size} />
+            <Ionicons name="search" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="cart"
+        name="scan"
         options={{
-          title: 'Cart',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name="bag" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="orders"
-        options={{
-          title: 'Orders',
-          tabBarIcon: ({ color, size }) => (
-            <TabIcon name="receipt-outline" color={color} size={size} />
+          title: 'Scan',
+          tabBarIcon: ({ focused }) => (
+            <View style={styles.scanIconWrap}>
+              <Image
+                source={require('../../assets/Images/Icons/qr-scan.png')}
+                style={[
+                  styles.scanIcon,
+                  { tintColor: focused ? Colors.foodAccent : Colors.foodTabInactive },
+                ]}
+                resizeMode="contain"
+              />
+            </View>
           ),
         }}
       />
@@ -78,10 +71,41 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="person" color={color} size={size} />
+            <Ionicons name="person" size={size} color={color} />
           ),
+        }}
+      />
+
+      {/* Hidden tabs — screens kept for future stack navigation */}
+      <Tabs.Screen
+        name="categories"
+        options={{
+          href: null, // hides from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="cart"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="orders"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  scanIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanIcon: {
+    width: 26,
+    height: 26,
+  },
+});

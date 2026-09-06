@@ -8,13 +8,16 @@
     "userInterfaceStyle": "automatic",
     "scheme": "yulostores",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1A0533"
+      "backgroundColor": "#FF5A00"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yulostores.customerapp"
+      "bundleIdentifier": "com.yulostores.customerapp",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Yulo Stores uses your location to show stores that deliver to you and to place your delivery pin accurately."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +27,16 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.yulostores.customerapp",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_ANDROID_GOOGLE_MAPS_API_KEY"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -32,7 +44,31 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-splash-screen"
-    ]
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FF5A00"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Yulo Stores uses your location to show stores that deliver to you and to place your delivery pin accurately."
+        }
+      ],
+      [
+        "expo-maps",
+        {
+          "requestLocationPermission": true,
+          "locationPermission": "Allow Yulo Stores to use your location to centre the map on where you are."
+        }
+      ]
+    ],
+    "extra": {
+      "apiPort": 3000,
+      "apiUrl": null
+    }
   }
 }
