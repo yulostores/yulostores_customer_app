@@ -32,7 +32,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import {
@@ -488,7 +488,7 @@ export default function CheckoutReviewScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
-      <View style={{ height: insets.top, backgroundColor: Colors.foodBg }} />
+      <View style={{ height: insets.top, backgroundColor: Colors.foodSurface }} />
 
       <View style={styles.header}>
         <Pressable onPress={goBack} hitSlop={8} style={styles.backBtn}>
@@ -560,12 +560,13 @@ const makeStyles = (t: AccentTheme) =>
   },
 
   card: {
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.sm,
+    ...Elevation.card,
   },
 
   // Address
@@ -573,11 +574,12 @@ const makeStyles = (t: AccentTheme) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     padding: Spacing.base,
+    ...Elevation.card,
   },
   addrIcon: {
     width: 40,
@@ -613,12 +615,13 @@ const makeStyles = (t: AccentTheme) =>
   upsellRow: { gap: Spacing.md, paddingVertical: Spacing.xs, paddingRight: Spacing.base },
   upsellCard: {
     width: 128,
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     padding: Spacing.sm,
     gap: 6,
+    ...Elevation.card,
   },
   upsellImgWrap: { borderRadius: BorderRadius.sm, overflow: 'hidden' },
   upsellImg: { width: '100%', height: 76, borderRadius: BorderRadius.sm },
@@ -660,8 +663,8 @@ const makeStyles = (t: AccentTheme) =>
     paddingVertical: 7,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    borderColor: Colors.foodBorder,
-    backgroundColor: Colors.foodBg,
+    borderColor: Colors.foodBorderStrong,
+    backgroundColor: Colors.foodSurface,
   },
   chipActive: { borderColor: t.accent, backgroundColor: t.accentLight },
   chipText: { fontSize: 12.5, fontWeight: '700', color: Colors.foodTextSecondary },
@@ -675,8 +678,8 @@ const makeStyles = (t: AccentTheme) =>
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: Colors.foodBorder,
-    backgroundColor: Colors.foodBg,
+    borderColor: Colors.foodBorderStrong,
+    backgroundColor: Colors.foodSurface,
   },
   tipBtnActive: { borderColor: t.accent, backgroundColor: t.accentLight },
   tipBtnText: { fontSize: 13.5, fontWeight: '800', color: Colors.foodTextSecondary },
@@ -692,7 +695,7 @@ const makeStyles = (t: AccentTheme) =>
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
   },
   vegRowActive: { borderColor: Colors.foodVegGreen, backgroundColor: Colors.foodPureVegBg },
   vegText: { flex: 1, gap: 2 },
@@ -703,7 +706,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 22,
     borderRadius: BorderRadius.sm,
     borderWidth: 2,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -747,6 +750,7 @@ const makeStyles = (t: AccentTheme) =>
     borderTopColor: Colors.foodBorder,
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.md,
+    ...Elevation.sticky,
   },
   footerHint: {
     fontSize: 12,
@@ -785,7 +789,7 @@ const makeStyles = (t: AccentTheme) =>
 
   // Skeleton
   skelWrap: { padding: Spacing.base, gap: Spacing.md },
-  skel: { backgroundColor: Colors.foodSearchBg, borderRadius: BorderRadius.lg },
+  skel: { backgroundColor: Colors.foodSkeleton, borderRadius: BorderRadius.lg },
   });
 
 const styles = makeStyles(ORANGE_ACCENT);

@@ -13,8 +13,7 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import { router, type Href } from 'expo-router';
+import { router, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -272,7 +271,7 @@ export default function ProfileScreen() {
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.authBg },
+  safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   title: {
     fontSize: 28,
@@ -311,6 +310,8 @@ const makeStyles = (t: AccentTheme) =>
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
     ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
   },
   avatar: { width: 60, height: 60, borderRadius: BorderRadius.full },
   avatarFallback: {
@@ -344,6 +345,8 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.md,
     ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
   },
   rowDanger: { marginTop: Spacing.xs },
   rowPressed: { backgroundColor: Colors.foodBgSecondary },

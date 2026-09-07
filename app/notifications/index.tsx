@@ -210,7 +210,7 @@ export default function NotificationPreferencesScreen() {
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.authBg },
+  safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
     flexDirection: 'row',
@@ -267,6 +267,8 @@ const makeStyles = (t: AccentTheme) =>
     padding: Spacing.lg,
     marginBottom: Spacing.md,
     ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
   },
   cardRow: {
     flexDirection: 'row',
@@ -307,7 +309,7 @@ const makeStyles = (t: AccentTheme) =>
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: Colors.authBg,
+    backgroundColor: Colors.foodBg,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
   },

@@ -178,7 +178,7 @@ export default function SettingsScreen() {
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.authBg },
+  safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
     flexDirection: 'row',
@@ -247,6 +247,8 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.base,
     ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
   },
   rowPressed: { backgroundColor: Colors.foodBgSecondary },
   rowLabel: { flex: 1, fontSize: 16, fontWeight: '600', color: Colors.foodText },

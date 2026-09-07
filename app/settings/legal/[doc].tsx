@@ -144,7 +144,7 @@ export default function LegalDocumentScreen() {
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.authBg },
+  safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
     flexDirection: 'row',
@@ -201,6 +201,8 @@ const makeStyles = (t: AccentTheme) =>
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
     ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
   },
   section: {},
   sectionGap: { marginTop: Spacing.lg },

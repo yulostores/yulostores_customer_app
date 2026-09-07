@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import React, { useState } from 'react';
 import {
+  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -9,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import {
   ORANGE_ACCENT,
   useAccentTheme,
@@ -20,6 +22,48 @@ import {
 export default function ScanScreen() {
   const styles = useThemedStyles(makeStyles);
   const { accent } = useAccentTheme();
+  
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanned, setScanned] = useState(false);
+
+  const handleOpenCamera = async () => {
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) {
+        Alert.alert('Permission needed', 'Camera permission is required to scan QR codes.');
+        return;
+      }
+    }
+    setScanned(false);
+    setIsScanning(true);
+  };
+
+  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+    setScanned(true);
+    setIsScanning(false);
+    Alert.alert('QR Code Scanned!', `Data: ${data}`);
+  };
+
+  if (isScanning) {
+    return (
+      <View style={styles.cameraContainer}>
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr'],
+          }}
+        />
+        <SafeAreaView style={styles.cameraOverlay} edges={['top', 'bottom']}>
+           <Pressable style={styles.closeBtn} onPress={() => setIsScanning(false)}>
+             <Ionicons name="close-circle" size={40} color={Colors.white} />
+           </Pressable>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.container}>
@@ -43,7 +87,7 @@ export default function ScanScreen() {
             your order directly.
           </Text>
 
-          <Pressable style={styles.scanBtn}>
+          <Pressable style={styles.scanBtn} onPress={handleOpenCamera}>
             <Ionicons name="camera-outline" size={22} color={Colors.white} />
             <Text style={styles.scanBtnText}>Open Camera</Text>
           </Pressable>
@@ -75,15 +119,32 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: Colors.foodBg,
     paddingHorizontal: Spacing.base,
   },
+  cameraContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  cameraOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    padding: Spacing.lg,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+  },
+  closeBtn: {
+    marginTop: Spacing.xl,
+    marginRight: Spacing.md,
+    ...Elevation.card,
+  },
   title: {
     fontSize: 28,
     fontWeight: '800',
     color: Colors.foodText,
+    letterSpacing: -0.6,
     paddingTop: Spacing.md,
   },
   subtitle: {
     fontSize: 14,
-    color: Colors.foodTextMuted,
+    color: Colors.foodTextSecondary,
     marginBottom: Spacing.lg,
   },
   centerBox: {
@@ -145,11 +206,14 @@ const makeStyles = (t: AccentTheme) =>
   },
   infoCard: {
     flex: 1,
-    backgroundColor: Colors.foodBgSecondary,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
     padding: Spacing.base,
     alignItems: 'center',
     gap: 6,
+    ...Elevation.card,
   },
   infoTitle: {
     fontSize: 14,

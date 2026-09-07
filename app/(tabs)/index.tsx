@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -12,14 +13,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CartBar from '../../src/components/CartBar';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useCart } from '../../src/context/CartContext';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import { useVegMode, type VegScope } from '../../src/context/VegModeContext';
@@ -76,54 +76,190 @@ function formatDistance(distanceKm: number | undefined): string | null {
 
 // ─── Sub-components ────────────────────────────────────────────────────────
 
-/** Delivery address header */
+/**
+ * The home app bar: where we're delivering, who's signed in, which storefront
+ * you're shopping, and the search field — all on one warm wash that runs from
+ * the status bar down into the page canvas.
+ */
+function HomeHeader() {
+  const styles = useThemedStyles(makeStyles);
+  const t = useAccentTheme();
+
+  return (
+    <LinearGradient
+      colors={t.accentWash}
+      locations={[0, 0.55, 1]}
+      start={{ x: 0.15, y: 0 }}
+      end={{ x: 0.85, y: 1 }}
+      style={styles.topBar}
+    >
+      <LocationHeader />
+      <StorefrontTabs />
+      <SearchRow />
+    </LinearGradient>
+  );
+}
+
+/** Delivery address, and the shortcut to the account. */
 function LocationHeader() {
   const styles = useThemedStyles(makeStyles);
   const { activeLocation } = useDeliveryLocation();
 
-  const label = activeLocation
-    ? activeLocation.customLabel ||
-      activeLocation.label[0].toUpperCase() + activeLocation.label.slice(1)
-    : 'Set delivery location';
   const addressText = activeLocation?.line ?? 'Tap to choose where to deliver';
 
   return (
-    <Pressable style={styles.locationHeader} onPress={() => router.push('/location')}>
-      <Image
-        source={require('../../assets/Images/Icons/Location.png')}
-        style={styles.locationIcon}
-        resizeMode="contain"
-      />
-      <View style={styles.locationTextWrap}>
-        <View style={styles.locationRow}>
-          <Text style={styles.locationLabel}>{label}</Text>
-          <Ionicons name="chevron-down" size={16} color={Colors.foodText} />
+    <View style={styles.locationBar}>
+      <Pressable
+        style={styles.locationHeader}
+        onPress={() => router.push('/location')}
+        accessibilityRole="button"
+        accessibilityLabel={`Delivering to ${addressText}. Change delivery location`}
+      >
+        <Image
+          source={require('../../assets/Images/Icons/Location.png')}
+          style={styles.locationIcon}
+          resizeMode="contain"
+        />
+        <View style={styles.locationTextWrap}>
+          <Text style={styles.locationLabel}>Delivering to</Text>
+          <View style={styles.locationRow}>
+            <Text style={styles.locationAddress} numberOfLines={1}>
+              {addressText}
+            </Text>
+            <Ionicons name="chevron-down" size={15} color={Colors.foodTextSecondary} />
+          </View>
         </View>
-        <Text style={styles.locationAddress} numberOfLines={1}>
-          {addressText}
-        </Text>
-      </View>
-    </Pressable>
+      </Pressable>
+
+      <Pressable
+        style={styles.profileBtn}
+        onPress={() => router.navigate('/(tabs)/profile')}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Your account"
+      >
+        <Ionicons name="person-outline" size={20} color={Colors.foodText} />
+      </Pressable>
+    </View>
   );
 }
 
-/** Search bar */
-function SearchBar() {
+/**
+ * The storefronts Yulo sells through. Food is the only one live today — the
+ * other two are on the roadmap, so they render as designed and answer a tap
+ * with a hint rather than a dead press or a route that doesn't exist.
+ */
+const STOREFRONTS: readonly {
+  key: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  tint: string;
+  live: boolean;
+}[] = [
+  { key: 'food', label: 'Food', icon: 'restaurant', tint: Colors.white, live: true },
+  {
+    key: 'gifts',
+    label: 'Gifts & Toys',
+    icon: 'gift',
+    tint: Colors.foodVerticalGift,
+    live: false,
+  },
+  {
+    key: 'bags',
+    label: 'Bags',
+    icon: 'bag-handle',
+    tint: Colors.foodVerticalBag,
+    live: false,
+  },
+];
+
+/** Food / Gifts & Toys / Bags — the live one fills with the accent. */
+function StorefrontTabs() {
+  const styles = useThemedStyles(makeStyles);
+  const t = useAccentTheme();
+  const [hint, setHint] = useState<string | null>(null);
+
+  // The hint behaves like a toast: it clears itself rather than waiting for a
+  // dismiss control the design has nowhere to put.
+  useEffect(() => {
+    if (!hint) return;
+    const timer = setTimeout(() => setHint(null), 2600);
+    return () => clearTimeout(timer);
+  }, [hint]);
+
   return (
-    <View style={styles.searchBar}>
-      <Ionicons name="search-outline" size={20} color={Colors.foodTextMuted} />
+    <>
+      <View style={styles.storefrontRow}>
+        {STOREFRONTS.map((store) => (
+          <Pressable
+            key={store.key}
+            style={[styles.storefrontCard, !store.live && styles.storefrontCardIdle]}
+            onPress={() => {
+              if (!store.live) setHint(`${store.label} is coming soon`);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: store.live }}
+            accessibilityLabel={
+              store.live ? `${store.label}, selected` : `${store.label}, coming soon`
+            }
+          >
+            {store.live && (
+              <LinearGradient
+                colors={[t.accent, t.accentDark]}
+                locations={[0.15, 1]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.storefrontFill}
+              />
+            )}
+            <Ionicons name={store.icon} size={22} color={store.tint} />
+            <Text
+              style={[styles.storefrontLabel, store.live && styles.storefrontLabelActive]}
+              numberOfLines={1}
+            >
+              {store.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {!!hint && (
+        <View style={styles.storefrontHint}>
+          <Ionicons name="time-outline" size={13} color={Colors.foodTextSecondary} />
+          <Text style={styles.storefrontHintText}>{hint}</Text>
+        </View>
+      )}
+    </>
+  );
+}
+
+/** Search pill, with the VEG Only switch parked alongside it. */
+function SearchRow() {
+  const styles = useThemedStyles(makeStyles);
+  const t = useAccentTheme();
+
+  return (
+    <View style={styles.searchRow}>
+      {/* One target for the whole pill, mic included: voice capture isn't wired
+          up yet, so the mic opens the search screen like the rest of the bar
+          rather than pretending to listen. */}
       <Pressable
-        style={{ flex: 1, height: '100%', justifyContent: 'center' }}
+        style={styles.searchBar}
         onPress={() => router.push('/search')}
+        accessibilityRole="search"
+        accessibilityLabel="Search restaurants and cuisines"
       >
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search restaurants, cuisines..."
-          placeholderTextColor={Colors.foodTextMuted}
-          editable={false}
-          pointerEvents="none"
+        <Ionicons name="search" size={20} color={t.accent} />
+        <Text style={styles.searchPlaceholder} numberOfLines={1}>
+          Search restaurants, cuisines...
+        </Text>
+        <Image
+          source={require('../../assets/Images/Icons/Button - Voice search.png')}
+          style={styles.voiceIcon}
+          resizeMode="contain"
         />
       </Pressable>
+
       <VegToggle />
     </View>
   );
@@ -160,7 +296,7 @@ function VegToggle() {
         accessibilityLabel="Veg only"
       >
         <Text style={[styles.vegToggleLabel, enabled && styles.vegToggleLabelOn]}>
-          VEG{enabled ? ' ONLY' : ''}
+          VEG
         </Text>
         <View style={[styles.vegToggleTrack, enabled && styles.vegToggleTrackOn]}>
           <View style={[styles.vegToggleThumb, enabled && styles.vegToggleThumbOn]} />
@@ -679,9 +815,6 @@ function LoadingSkeleton() {
 
   return (
     <View style={styles.skeletonContainer}>
-      {/* Banner skeleton */}
-      <Animated.View style={[styles.skeletonBanner, skeletonStyle]} />
-
       {/* Section header skeleton */}
       <Animated.View style={[styles.skeletonSectionTitle, skeletonStyle]} />
 
@@ -902,11 +1035,10 @@ export default function HomeScreen() {
             />
           }
         >
-          {/* ── Header ── */}
-          <LocationHeader />
-
-          {/* ── Search bar ── */}
-          <SearchBar />
+          {/* ── The app bar: address, storefronts and search on one warm
+                 wash. It's the first thing the eye lands on, so it reads as a
+                 single block rather than three floating rows. ── */}
+          <HomeHeader />
 
           {/* ── Veg-mode confirmation strip ── */}
           {!!vegBannerText && (
@@ -936,17 +1068,27 @@ export default function HomeScreen() {
 // ─── Styles ────────────────────────────────────────────────────────────────
 
 const HORIZONTAL_CARD_WIDTH = SCREEN_WIDTH * 0.42;
+// The promo banner runs edge to edge, so its height follows the screen width
+// instead of being a fixed number of points.
+const BANNER_HEIGHT = Math.round(SCREEN_WIDTH / 2.2);
 const RESTAURANT_H_CARD_WIDTH = SCREEN_WIDTH * 0.42;
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
+  // The status-bar inset sits above the app bar, so it takes the first stop of
+  // the app bar's wash; the canvas starts below it, where the content does.
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.foodBg,
+    backgroundColor: t.accentWash[0],
   },
   bg: {
     flex: 1,
     backgroundColor: Colors.foodBg,
+  },
+  // No border along the bottom: the wash's last stop lands next to foodBg, so
+  // the app bar fades into the canvas rather than ending on a hard line.
+  topBar: {
+    paddingBottom: Spacing.md,
   },
   scrollContent: {
     paddingBottom: 16,
@@ -963,12 +1105,18 @@ const makeStyles = (t: AccentTheme) =>
   },
 
   // ── Location header ──
-  locationHeader: {
+  locationBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.sm,
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.base,
+    gap: Spacing.md,
+  },
+  locationHeader: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   locationIcon: {
@@ -979,38 +1127,129 @@ const makeStyles = (t: AccentTheme) =>
     flex: 1,
   },
   locationLabel: {
-    fontSize: 12,
-    color: t.accent,
-    fontWeight: '600',
+    fontSize: 15,
+    color: Colors.foodText,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
+  // The chevron trails the address rather than the label, so it points at the
+  // line that actually changes when you tap.
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginTop: 1,
   },
   locationAddress: {
-    fontSize: 14,
+    flexShrink: 1,
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: Colors.foodTextSecondary,
+  },
+  // A white disc on the wash — the only round shape up here, so it reads as
+  // "you" without needing a label.
+  profileBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.foodSurface,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
+    ...Elevation.card,
+  },
+
+  // ── Storefront tabs ──
+  storefrontRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.base,
+    gap: 10,
+    marginBottom: Spacing.base,
+  },
+  storefrontCard: {
+    flex: 1,
+    height: 68,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    ...Elevation.card,
+  },
+  storefrontCardIdle: {
+    backgroundColor: Colors.foodSurface,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
+  },
+  // The accent fill is a sibling behind the icon and label rather than a
+  // clipping parent: `overflow: 'hidden'` would take the card's elevation with
+  // it on Android, so the gradient carries the radius itself.
+  storefrontFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: BorderRadius.lg,
+  },
+  storefrontLabel: {
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.foodText,
-    flex: 1,
+  },
+  storefrontLabelActive: {
+    color: Colors.white,
+  },
+  // Sits in the gap the storefront row already leaves, so appearing and clearing
+  // shifts the search bar by the hint's own height and nothing more.
+  storefrontHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    backgroundColor: Colors.foodSurface,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    marginTop: -Spacing.sm,
+    marginBottom: Spacing.sm,
+    ...Elevation.card,
+  },
+  storefrontHintText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.foodTextSecondary,
   },
 
   // ── Search bar ──
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.base,
+    gap: 10,
+  },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.foodSearchBg,
-    borderRadius: BorderRadius.lg,
-    marginHorizontal: Spacing.base,
-    paddingHorizontal: Spacing.md,
-    height: 48,
-    marginBottom: Spacing.md,
-    gap: 8,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.foodBorderStrong,
+    paddingHorizontal: Spacing.base,
+    height: 52,
+    gap: 10,
+    ...Elevation.card,
   },
-  searchInput: {
+  // Not a TextInput: tapping anywhere here opens the search screen, so a
+  // disabled field would only be a placeholder wearing an input's costume.
+  searchPlaceholder: {
     flex: 1,
     fontSize: 14,
-    color: Colors.foodText,
+    fontWeight: '500',
+    color: Colors.foodTextMuted,
   },
   voiceIcon: {
     width: 22,
@@ -1018,29 +1257,35 @@ const makeStyles = (t: AccentTheme) =>
     tintColor: t.accent,
   },
   // ── VEG Only switch ──
+  // Its own square button beside the pill, sized to match the pill's height so
+  // the two read as one row of controls.
+  // Green at rest as well as on: this is the veg control whether or not it's
+  // switched, and beside an orange search pill the green outline is what makes
+  // it findable. The track underneath — grey vs green — is what carries state.
   vegToggle: {
-    flexDirection: 'row',
+    width: 56,
+    height: 52,
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.foodBg,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: Colors.foodSurface,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodVegRing,
+    ...Elevation.card,
   },
   vegToggleOn: {
     backgroundColor: Colors.foodPureVegBg,
     borderColor: Colors.foodVegGreen,
   },
   vegToggleLabel: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '800',
-    color: Colors.foodTextMuted,
-    letterSpacing: 0.3,
+    color: Colors.foodVegGreen,
+    letterSpacing: 0.4,
   },
   vegToggleLabelOn: {
-    color: Colors.foodVegGreen,
+    color: Colors.foodVegGreenDark,
   },
   vegToggleTrack: {
     width: 28,
@@ -1072,14 +1317,10 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: Spacing.base,
   },
   sheetCard: {
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
+    ...Elevation.sheet,
   },
   sheetHandle: {
     alignSelf: 'center',
@@ -1106,7 +1347,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1152,10 +1393,13 @@ const makeStyles = (t: AccentTheme) =>
     gap: 6,
     backgroundColor: Colors.foodPureVegBg,
     marginHorizontal: Spacing.base,
+    marginTop: Spacing.sm,
     borderRadius: BorderRadius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.foodVegGreen,
     paddingHorizontal: Spacing.md,
     paddingVertical: 8,
-    marginBottom: Spacing.md,
+    marginBottom: 0,
   },
   vegBannerText: {
     flex: 1,
@@ -1199,10 +1443,11 @@ const makeStyles = (t: AccentTheme) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: Colors.foodSurface,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: BorderRadius.sm,
+    ...Elevation.raised,
   },
   pureVegBadgeText: {
     fontSize: 11,
@@ -1212,24 +1457,22 @@ const makeStyles = (t: AccentTheme) =>
 
   // ── Banner ──
   bannerWrap: {
-    marginHorizontal: Spacing.base,
-    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
     overflow: 'hidden',
-    marginBottom: Spacing.lg,
   },
   bannerImage: {
     width: '100%',
-    height: 160,
-    borderRadius: BorderRadius.lg,
+    height: BANNER_HEIGHT,
   },
   bannerOverlay: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm + 2,
+    backgroundColor: 'rgba(20,22,26,0.5)',
   },
   bannerOffer: {
     fontSize: 15,
@@ -1251,17 +1494,23 @@ const makeStyles = (t: AccentTheme) =>
     alignItems: 'center',
     paddingHorizontal: Spacing.base,
     marginBottom: Spacing.md,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.lg,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: Colors.foodText,
+    letterSpacing: -0.3,
   },
   seeAll: {
-    fontSize: 13,
-    color: t.accent,
-    fontWeight: '600',
+    fontSize: 12.5,
+    color: t.accentDark,
+    fontWeight: '800',
+    backgroundColor: t.accentLight,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    overflow: 'hidden',
   },
 
   // ── Cuisine cards ──
@@ -1272,20 +1521,18 @@ const makeStyles = (t: AccentTheme) =>
   },
   cuisineCard: {
     alignItems: 'center',
-    width: 72,
+    width: 76,
   },
   cuisineImageWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     overflow: 'hidden',
-    marginBottom: 6,
-    backgroundColor: Colors.foodBgSecondary,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    marginBottom: 7,
+    backgroundColor: t.accentLight,
+    borderWidth: 2,
+    borderColor: t.accentRing,
+    ...Elevation.card,
   },
   cuisineImage: {
     width: 64,
@@ -1293,8 +1540,8 @@ const makeStyles = (t: AccentTheme) =>
     borderRadius: 32,
   },
   cuisineName: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 11.5,
+    fontWeight: '700',
     color: Colors.foodText,
     textAlign: 'center',
   },
@@ -1307,16 +1554,12 @@ const makeStyles = (t: AccentTheme) =>
   },
   recItemCard: {
     width: HORIZONTAL_CARD_WIDTH,
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.foodBorder,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    ...Elevation.card,
   },
   recItemImageWrap: {
     width: '100%',
@@ -1328,7 +1571,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 120,
   },
   recItemInfo: {
-    padding: 10,
+    padding: 11,
     gap: 4,
   },
   recItemNameRow: {
@@ -1362,9 +1605,9 @@ const makeStyles = (t: AccentTheme) =>
     marginTop: 2,
   },
   recItemPrice: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: t.accent,
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.foodText,
   },
 
   // ── Rating badge (shared) ──
@@ -1396,16 +1639,12 @@ const makeStyles = (t: AccentTheme) =>
   },
   restHCard: {
     width: RESTAURANT_H_CARD_WIDTH,
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.foodBorder,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    ...Elevation.card,
   },
   restHImageWrap: {
     width: '100%',
@@ -1417,7 +1656,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 110,
   },
   restHInfo: {
-    padding: 10,
+    padding: 11,
     gap: 4,
   },
   restHName: {
@@ -1442,18 +1681,14 @@ const makeStyles = (t: AccentTheme) =>
 
   // ── Restaurants near you (vertical) ──
   nearbyCard: {
-    backgroundColor: Colors.foodCardBg,
-    borderRadius: BorderRadius.xl,
+    backgroundColor: Colors.foodSurface,
+    borderRadius: BorderRadius.lg,
     marginHorizontal: Spacing.base,
     marginBottom: Spacing.md,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.foodBorder,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+    ...Elevation.card,
   },
   nearbyCoverWrap: {
     position: 'relative',
@@ -1473,6 +1708,7 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: BorderRadius.sm,
+    ...Elevation.raised,
   },
   nearbyRatingText: {
     fontSize: 12,
@@ -1486,7 +1722,7 @@ const makeStyles = (t: AccentTheme) =>
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(20,22,26,0.38)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1498,18 +1734,19 @@ const makeStyles = (t: AccentTheme) =>
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(20,22,26,0.38)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   nearbyInfo: {
-    padding: Spacing.md,
+    padding: Spacing.base,
     gap: 4,
   },
   nearbyName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: Colors.foodText,
+    letterSpacing: -0.3,
   },
   nearbyCuisine: {
     fontSize: 13,
@@ -1570,17 +1807,11 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.md,
   },
-  skeletonBanner: {
-    height: 160,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.foodSearchBg,
-    marginBottom: Spacing.lg,
-  },
   skeletonSectionTitle: {
     height: 20,
     width: 180,
     borderRadius: 6,
-    backgroundColor: Colors.foodSearchBg,
+    backgroundColor: Colors.foodSkeleton,
     marginBottom: Spacing.md,
   },
   skeletonCuisineRow: {
@@ -1596,13 +1827,13 @@ const makeStyles = (t: AccentTheme) =>
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: Colors.foodSearchBg,
+    backgroundColor: Colors.foodSkeleton,
   },
   skeletonCuisineLabel: {
     width: 48,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.foodSearchBg,
+    backgroundColor: Colors.foodSkeleton,
   },
   skeletonCardRow: {
     flexDirection: 'row',
@@ -1612,7 +1843,7 @@ const makeStyles = (t: AccentTheme) =>
     width: HORIZONTAL_CARD_WIDTH,
     height: 170,
     borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.foodSearchBg,
+    backgroundColor: Colors.foodSkeleton,
   },
 
   // ── Error view ──

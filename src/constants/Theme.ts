@@ -1,3 +1,5 @@
+import { Colors } from './Colors';
+
 export const Typography = {
   fontFamily: {
     regular: 'System',
@@ -44,26 +46,63 @@ export const BorderRadius = {
   full: 9999,
 };
 
-export const Shadows = {
-  sm: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.18,
-    shadowRadius: 2,
+/**
+ * Light-theme elevation.
+ *
+ * One shadow ink (a warm near-black — pure black greys the warm canvas around a
+ * card) at four strengths, so every lifted thing in the app casts the same kind
+ * of shadow and the eye can read depth as meaning:
+ *
+ *   card    a resting card on the canvas — wide and faint; the hairline border
+ *           draws the edge, the shadow only lifts it off the page
+ *   raised  a control floating over content — search pill, FAB, logo bubble
+ *   sticky  a bar docked to the bottom edge; the offset points up, at the content
+ *   sheet   a modal or bottom sheet, the only thing above everything else
+ *
+ * Android reads `elevation` and ignores the rest, so the two are tuned together
+ * rather than one being a fallback for the other.
+ */
+const SHADOW_INK = Colors.foodCardShadow;
+
+export const Elevation = {
+  card: {
+    shadowColor: SHADOW_INK,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 2,
   },
-  md: {
-    shadowColor: '#7B2FBE',
+  raised: {
+    shadowColor: SHADOW_INK,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 5,
   },
-  lg: {
-    shadowColor: '#7B2FBE',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
+  sticky: {
+    shadowColor: SHADOW_INK,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
     elevation: 12,
   },
+  sheet: {
+    shadowColor: SHADOW_INK,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+} as const;
+
+/**
+ * The older names, kept because ~20 screens spread `...Shadows.sm` into their
+ * card styles. They now alias the scale above — `sm` used to be a tight, hard
+ * drop (2px blur at 18% black) that read as a dark line under a white card, and
+ * `md`/`lg` still cast the purple of the retired dark theme.
+ */
+export const Shadows = {
+  sm: Elevation.card,
+  md: Elevation.raised,
+  lg: Elevation.sheet,
 };

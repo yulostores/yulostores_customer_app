@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import CartBar from '../../src/components/CartBar';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useVegMode } from '../../src/context/VegModeContext';
 import {
   ORANGE_ACCENT,
@@ -427,7 +427,7 @@ export default function SearchScreen() {
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.foodBg },
+  safe: { flex: 1, backgroundColor: Colors.foodSurface },
   container: { flex: 1, backgroundColor: Colors.foodBg },
 
   // ── Header ──
@@ -438,6 +438,9 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.md,
+    backgroundColor: Colors.foodSurface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.foodBorder,
   },
   backBtn: {
     width: 32,
@@ -449,18 +452,14 @@ const makeStyles = (t: AccentTheme) =>
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSearchBg,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    borderColor: Colors.foodBorder,
-    paddingHorizontal: Spacing.md,
+    borderColor: Colors.foodBorderStrong,
+    paddingHorizontal: Spacing.base,
     height: 48,
     gap: Spacing.sm,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    ...Elevation.card,
   },
   input: {
     flex: 1,
@@ -482,9 +481,10 @@ const makeStyles = (t: AccentTheme) =>
     paddingBottom: 120,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: Colors.foodText,
+    letterSpacing: -0.4,
     marginBottom: Spacing.md,
   },
   sectionTitleSpaced: {
@@ -497,10 +497,18 @@ const makeStyles = (t: AccentTheme) =>
     alignItems: 'center',
     gap: Spacing.md,
     paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.base,
+    backgroundColor: Colors.foodSurface,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+    ...Elevation.card,
   },
   recentText: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 15,
+    fontWeight: '600',
     color: Colors.foodText,
   },
 
@@ -519,11 +527,13 @@ const makeStyles = (t: AccentTheme) =>
     width: TILE_SIZE,
     height: TILE_SIZE,
     borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
   },
   tileLabel: {
     marginTop: Spacing.sm,
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: Colors.foodText,
     textAlign: 'center',
   },
@@ -566,7 +576,7 @@ const makeStyles = (t: AccentTheme) =>
     paddingTop: Spacing.sm,
   },
   skeletonBlock: {
-    backgroundColor: Colors.foodSearchBg,
+    backgroundColor: Colors.foodSkeleton,
     borderRadius: BorderRadius.md,
   },
   skeletonRow: {
@@ -593,18 +603,20 @@ const makeStyles = (t: AccentTheme) =>
   },
   card: {
     flexDirection: 'row',
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     padding: Spacing.md,
     gap: Spacing.md,
     alignItems: 'center',
+    ...Elevation.card,
   },
   cardImage: {
     width: 60,
     height: 60,
     borderRadius: BorderRadius.md,
+    backgroundColor: Colors.foodBgSecondary,
   },
   cardBody: { flex: 1, gap: 3 },
   cardName: {

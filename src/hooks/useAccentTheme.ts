@@ -13,9 +13,11 @@
  * and rebuild it only on that flip, never on every render.
  *
  * Only the accent family moves: `accent` (buttons / links / active states /
- * spinners), `accentLight` (tinted chip & badge backgrounds) and `accentDark`
- * (text on `accentLight`, pressed states). Backgrounds, text and borders are the
- * same in both themes and stay on `Colors`.
+ * spinners), `accentLight` (tinted chip & badge backgrounds), `accentDark` (text
+ * on `accentLight`, pressed states), `accentRing` (the tinted outline around a
+ * round image on the canvas) and `accentWash` (the gradient behind the home app
+ * bar). Backgrounds, text and borders are the same in both themes and stay on
+ * `Colors`.
  */
 
 import { useMemo } from 'react';
@@ -29,6 +31,14 @@ export interface AccentTheme {
   accentLight: string;
   /** Darker accent — text on `accentLight`, pressed states. */
   accentDark: string;
+  /** Tinted ring around a round image that sits directly on the canvas. */
+  accentRing: string;
+  /**
+   * Gradient stops for the tinted wash behind an app bar, lightest first. The
+   * last stop sits a hair off `Colors.foodBg` so the wash fades into the page
+   * canvas rather than ending on a visible edge.
+   */
+  accentWash: readonly [string, string, string];
   /** True while the green "pure veg" palette is active. */
   isPureVeg: boolean;
 }
@@ -38,6 +48,8 @@ export const ORANGE_ACCENT: AccentTheme = {
   accent: Colors.foodAccent,
   accentLight: Colors.foodAccentLight,
   accentDark: Colors.foodAccentDark,
+  accentRing: Colors.foodAccentRing,
+  accentWash: [Colors.foodWashTop, Colors.foodWashMid, Colors.foodWashEdge],
   isPureVeg: false,
 };
 
@@ -46,6 +58,8 @@ export const GREEN_ACCENT: AccentTheme = {
   accent: Colors.foodVegGreen,
   accentLight: Colors.foodPureVegBg,
   accentDark: Colors.foodVegGreenDark,
+  accentRing: Colors.foodVegRing,
+  accentWash: [Colors.foodWashTopVeg, Colors.foodWashMidVeg, Colors.foodWashEdgeVeg],
   isPureVeg: true,
 };
 

@@ -26,7 +26,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import {
   seedSelections,
   selectSingle,
@@ -526,37 +526,32 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: t.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+    ...Elevation.raised,
   },
   savePill: {
     position: 'absolute',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.foodSurface,
     paddingHorizontal: 14,
     height: 40,
     borderRadius: BorderRadius.full,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+    ...Elevation.raised,
   },
   saveText: { fontSize: 13, fontWeight: '800', color: Colors.foodText },
 
   // Info sheet
   sheet: {
-    backgroundColor: Colors.foodBg,
+    backgroundColor: Colors.foodSurface,
     marginTop: -22,
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.lg,
+    paddingBottom: Spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.foodBorder,
   },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: Spacing.sm },
   badge: {
@@ -572,7 +567,7 @@ const makeStyles = (t: AccentTheme) =>
   badgeText: { fontSize: 11.5, fontWeight: '800', color: t.accentDark },
 
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  name: { flexShrink: 1, fontSize: 25, fontWeight: '800', color: Colors.foodText },
+  name: { flexShrink: 1, fontSize: 24, fontWeight: '800', color: Colors.foodText, letterSpacing: -0.5 },
   subtitle: { fontSize: 13.5, color: Colors.foodTextSecondary, marginTop: 6, fontWeight: '600' },
   description: {
     fontSize: 14,
@@ -611,18 +606,14 @@ const makeStyles = (t: AccentTheme) =>
 
   // Option groups
   groupCard: {
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     marginHorizontal: Spacing.base,
-    marginTop: Spacing.base,
+    marginTop: Spacing.md,
     padding: Spacing.base,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    ...Elevation.card,
   },
   groupHeader: {
     flexDirection: 'row',
@@ -655,7 +646,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -666,7 +657,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -683,7 +674,7 @@ const makeStyles = (t: AccentTheme) =>
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     borderRadius: BorderRadius.full,
     paddingHorizontal: 4,
   },
@@ -710,6 +701,7 @@ const makeStyles = (t: AccentTheme) =>
     borderTopColor: Colors.foodBorder,
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.md,
+    ...Elevation.sticky,
   },
   footerHint: { fontSize: 12.5, color: t.accentDark, fontWeight: '700', marginBottom: Spacing.sm },
   footerError: { fontSize: 12.5, color: Colors.authDanger, fontWeight: '700', marginBottom: Spacing.sm },
@@ -725,11 +717,11 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: t.accent,
     shadowColor: t.accent,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.28,
     shadowRadius: 12,
     elevation: 4,
   },
-  ctaOff: { backgroundColor: Colors.foodBorder, shadowOpacity: 0, elevation: 0 },
+  ctaOff: { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
   ctaText: { fontSize: 15.5, fontWeight: '800', color: Colors.white },
   ctaPrice: { fontSize: 15.5, fontWeight: '800', color: Colors.white, opacity: 0.95 },
 
@@ -758,10 +750,10 @@ const makeStyles = (t: AccentTheme) =>
   errBtnText: { fontSize: 14, fontWeight: '800', color: Colors.white },
   errBack: { marginTop: Spacing.md, fontSize: 13, fontWeight: '700', color: Colors.foodTextSecondary },
 
-  skelBlock: { backgroundColor: Colors.foodSearchBg },
+  skelBlock: { backgroundColor: Colors.foodSkeleton },
   skelBody: { paddingHorizontal: Spacing.base, paddingTop: Spacing.xl, gap: 10 },
-  skelLine: { height: 14, borderRadius: 6, backgroundColor: Colors.foodSearchBg },
-  skelCard: { height: 120, borderRadius: BorderRadius.lg, backgroundColor: Colors.foodSearchBg, marginTop: Spacing.md },
+  skelLine: { height: 14, borderRadius: 6, backgroundColor: Colors.foodSkeleton },
+  skelCard: { height: 120, borderRadius: BorderRadius.lg, backgroundColor: Colors.foodSkeleton, marginTop: Spacing.md },
   });
 
 const styles = makeStyles(ORANGE_ACCENT);

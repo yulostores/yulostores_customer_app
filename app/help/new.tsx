@@ -26,7 +26,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 import {
   ORANGE_ACCENT,
@@ -315,7 +315,7 @@ const makeStyles = (t: AccentTheme) =>
     minHeight: 132,
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     backgroundColor: Colors.foodSurface,
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.md,
@@ -337,6 +337,7 @@ const makeStyles = (t: AccentTheme) =>
     borderColor: Colors.foodBorder,
     backgroundColor: Colors.foodSurface,
     overflow: 'hidden',
+    ...Elevation.card,
   },
   orderOption: {
     flexDirection: 'row',
@@ -392,6 +393,7 @@ const makeStyles = (t: AccentTheme) =>
     borderTopWidth: 1,
     borderTopColor: Colors.foodBorder,
     backgroundColor: Colors.foodSurface,
+    ...Elevation.sticky,
   },
   primaryBtn: {
     height: 52,
@@ -401,7 +403,7 @@ const makeStyles = (t: AccentTheme) =>
     justifyContent: 'center',
     ...Shadows.sm,
   },
-  primaryBtnDisabled: { backgroundColor: Colors.foodBorder, shadowOpacity: 0, elevation: 0 },
+  primaryBtnDisabled: { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
   primaryBtnText: { fontSize: 15, fontWeight: '800', color: Colors.white, letterSpacing: 0.3 },
 
   centered: {

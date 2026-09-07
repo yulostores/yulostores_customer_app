@@ -27,7 +27,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import {
   ORANGE_ACCENT,
@@ -328,7 +328,7 @@ export default function SavedAddressesScreen() {
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.foodSurface },
+  safe: { flex: 1, backgroundColor: Colors.foodBg },
 
   // Header
   header: {
@@ -449,16 +449,11 @@ const makeStyles = (t: AccentTheme) =>
     gap: Spacing.md,
     backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: Colors.foodBorder,
     padding: Spacing.base,
     overflow: 'hidden',
-    // Shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Elevation.card,
   },
   cardActive: {
     borderColor: t.accent,
@@ -521,11 +516,7 @@ const makeStyles = (t: AccentTheme) =>
     borderColor: Colors.foodBorder,
     minWidth: 160,
     zIndex: 99,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 10,
+    ...Elevation.raised,
   },
   dropItem: {
     flexDirection: 'row',
@@ -552,11 +543,7 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: Colors.foodSurface,
     borderTopWidth: 1,
     borderTopColor: Colors.foodBorder,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 8,
+    ...Elevation.sticky,
   },
   deliverBtn: {
     backgroundColor: t.accent,

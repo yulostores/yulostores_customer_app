@@ -38,7 +38,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ActionButton from '../../src/components/location/ActionButton';
 import LabelChips from '../../src/components/location/LabelChips';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import {
   ORANGE_ACCENT,
@@ -88,7 +88,7 @@ const makeFieldStyles = (t: AccentTheme) =>
     height: 52,
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     paddingHorizontal: Spacing.base,
     fontSize: 14.5,
     color: Colors.foodText,
@@ -157,7 +157,7 @@ const makeChipStyles = (t: AccentTheme) =>
     backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     paddingHorizontal: Spacing.sm + 2,
     paddingVertical: Spacing.sm,
     minHeight: 56,
@@ -723,6 +723,7 @@ const makeStyles = (t: AccentTheme) =>
     borderTopWidth: 1,
     borderTopColor: Colors.foodBorder,
     backgroundColor: Colors.foodSurface,
+    ...Elevation.sticky,
   },
   });
 

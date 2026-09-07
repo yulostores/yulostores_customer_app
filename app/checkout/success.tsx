@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import {
   ORANGE_ACCENT,
   useAccentTheme,
@@ -185,11 +185,12 @@ const makeStyles = (t: AccentTheme) =>
   card: {
     alignSelf: 'stretch',
     marginTop: Spacing.xl,
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     paddingHorizontal: Spacing.base,
+    ...Elevation.card,
   },
   row: {
     flexDirection: 'row',
@@ -210,6 +211,7 @@ const makeStyles = (t: AccentTheme) =>
     borderTopWidth: 1,
     borderTopColor: Colors.foodBorder,
     backgroundColor: Colors.foodSurface,
+    ...Elevation.sticky,
   },
   primaryBtn: {
     height: 52,

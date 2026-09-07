@@ -28,7 +28,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 import {
   ORANGE_ACCENT,
@@ -444,7 +444,7 @@ export default function PaymentScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
-      <View style={{ height: insets.top, backgroundColor: Colors.foodBg }} />
+      <View style={{ height: insets.top, backgroundColor: Colors.foodSurface }} />
 
       <View style={styles.header}>
         <Pressable onPress={goBack} hitSlop={8} style={styles.backBtn}>
@@ -520,11 +520,12 @@ const makeStyles = (t: AccentTheme) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     padding: Spacing.base,
+    ...Elevation.card,
   },
   addressText: { flex: 1, gap: 2 },
   addressTitle: { fontSize: 15, fontWeight: '800', color: Colors.foodText },
@@ -550,12 +551,13 @@ const makeStyles = (t: AccentTheme) =>
   },
   billToggleText: { fontSize: 13, fontWeight: '700', color: t.accent },
   billRows: {
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     padding: Spacing.base,
     marginBottom: Spacing.sm,
+    ...Elevation.card,
   },
   billRow: {
     flexDirection: 'row',
@@ -585,11 +587,12 @@ const makeStyles = (t: AccentTheme) =>
   // Groups
   groups: { marginTop: Spacing.md, gap: Spacing.md },
   groupCard: {
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     overflow: 'hidden',
+    ...Elevation.card,
   },
   groupHeader: {
     flexDirection: 'row',
@@ -623,7 +626,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -694,7 +697,7 @@ const makeStyles = (t: AccentTheme) =>
 
   // Skeleton
   skelWrap: { padding: Spacing.base, gap: Spacing.md },
-  skel: { backgroundColor: Colors.foodSearchBg, borderRadius: BorderRadius.md },
+  skel: { backgroundColor: Colors.foodSkeleton, borderRadius: BorderRadius.md },
   });
 
 const styles = makeStyles(ORANGE_ACCENT);

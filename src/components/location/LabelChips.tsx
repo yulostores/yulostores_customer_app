@@ -66,7 +66,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 42,
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     backgroundColor: Colors.foodSurface,
   },
   chipActive: { borderColor: t.accent, backgroundColor: t.accentLight },

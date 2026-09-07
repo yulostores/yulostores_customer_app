@@ -8,7 +8,7 @@ import ActionButton from '../../src/components/location/ActionButton';
 import CenterPin from '../../src/components/location/CenterPin';
 import MapCanvas, { type MapCanvasHandle } from '../../src/components/location/MapCanvas';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { Elevation, BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import {
   ORANGE_ACCENT,
@@ -195,14 +195,10 @@ const makeStyles = (t: AccentTheme) =>
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.foodSurface,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    ...Elevation.raised,
   },
   searchPill: {
     flex: 1,
@@ -213,11 +209,7 @@ const makeStyles = (t: AccentTheme) =>
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.white,
     paddingHorizontal: Spacing.base,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    ...Elevation.raised,
   },
   searchPillText: { flex: 1, fontSize: 13.5, color: Colors.foodText },
   sheet: {
@@ -230,11 +222,7 @@ const makeStyles = (t: AccentTheme) =>
     borderTopRightRadius: 24,
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 12,
+    ...Elevation.sticky,
   },
   locateBtn: {
     alignSelf: 'flex-start',

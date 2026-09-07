@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ActionButton from '../../src/components/location/ActionButton';
 import AddressRow from '../../src/components/location/AddressRow';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { Elevation, BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import {
   ORANGE_ACCENT,
@@ -214,11 +214,7 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 3,
+    ...Elevation.raised,
   },
   sheet: {
     flex: 1,
@@ -226,6 +222,7 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: Colors.foodSurface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    ...Elevation.raised,
   },
   sheetContent: {
     paddingHorizontal: Spacing.xl,
@@ -253,7 +250,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 52,
     borderRadius: BorderRadius.lg,
     borderWidth: 1.5,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     paddingHorizontal: Spacing.base,
     marginBottom: Spacing.lg,
   },

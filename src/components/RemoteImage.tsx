@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     borderStyle: 'dashed',
-    backgroundColor: Colors.foodSearchBg,
+    backgroundColor: Colors.foodBg,
     padding: 6,
     gap: 4,
   },

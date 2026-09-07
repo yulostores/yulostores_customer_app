@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.foodBorder,
+    borderBottomColor: Colors.foodBorderStrong,
   },
   backBtn: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
   inputWrap: {
@@ -197,6 +197,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: BorderRadius.md,
     backgroundColor: Colors.foodSearchBg,
+    borderWidth: 1,
+    borderColor: Colors.foodBorderStrong,
     paddingHorizontal: Spacing.md,
   },
   input: { flex: 1, fontSize: 14.5, color: Colors.foodText, padding: 0 },

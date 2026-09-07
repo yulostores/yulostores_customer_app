@@ -28,7 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ActionButton from '../../src/components/location/ActionButton';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import {
   ORANGE_ACCENT,
   useAccentTheme,
@@ -259,7 +259,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 52,
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     paddingHorizontal: Spacing.base,
     fontSize: 14.5,
     color: Colors.foodText,
@@ -276,6 +276,7 @@ const makeStyles = (t: AccentTheme) =>
     borderTopWidth: 1,
     borderTopColor: Colors.foodBorder,
     backgroundColor: Colors.foodSurface,
+    ...Elevation.sticky,
   },
   });
 

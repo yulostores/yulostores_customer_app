@@ -26,7 +26,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 import {
   ORANGE_ACCENT,
@@ -357,6 +357,7 @@ const makeStyles = (t: AccentTheme) =>
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     borderBottomLeftRadius: 4,
+    ...Elevation.card,
   },
   bubbleSender: {
     fontSize: 11,
@@ -407,6 +408,7 @@ const makeStyles = (t: AccentTheme) =>
     borderTopWidth: 1,
     borderTopColor: Colors.foodBorder,
     backgroundColor: Colors.foodSurface,
+    ...Elevation.sticky,
   },
   composerInput: {
     flex: 1,
@@ -414,8 +416,8 @@ const makeStyles = (t: AccentTheme) =>
     minHeight: 44,
     borderRadius: BorderRadius.lg,
     borderWidth: 1.5,
-    borderColor: Colors.foodBorder,
-    backgroundColor: Colors.foodBg,
+    borderColor: Colors.foodBorderStrong,
+    backgroundColor: Colors.foodSurface,
     paddingHorizontal: Spacing.base,
     paddingTop: Platform.OS === 'ios' ? 12 : 8,
     paddingBottom: Platform.OS === 'ios' ? 12 : 8,
@@ -432,7 +434,7 @@ const makeStyles = (t: AccentTheme) =>
     justifyContent: 'center',
     ...Shadows.sm,
   },
-  sendBtnDisabled: { backgroundColor: Colors.foodBorder },
+  sendBtnDisabled: { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
 
   centered: {
     flex: 1,

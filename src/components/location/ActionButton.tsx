@@ -95,8 +95,8 @@ const makeStyles = (t: AccentTheme) =>
     borderWidth: 1.5,
     borderColor: t.accent,
   },
-  solidInactive: { backgroundColor: Colors.foodBorder, shadowOpacity: 0, elevation: 0 },
-  outlineInactive: { borderColor: Colors.foodBorder },
+  solidInactive: { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
+  outlineInactive: { borderColor: Colors.foodBorderStrong },
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   });
 

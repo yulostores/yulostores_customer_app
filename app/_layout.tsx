@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BrandSplash from '../src/components/BrandSplash';
 import DemoSessionBanner from '../src/components/DemoSessionBanner';
 import ErrorBoundary from '../src/components/ErrorBoundary';
+import { Colors } from '../src/constants/Colors';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { CartProvider } from '../src/context/CartContext';
 import { DeliveryLocationProvider } from '../src/context/DeliveryLocationContext';
@@ -34,7 +35,14 @@ function RootNavigator() {
   // (tabs) and navigates to it, signing out falls back to the sign-in screen.
   // Finishing the intro drops `onboarding` and falls through to sign-in.
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        // Without this the navigator paints its own default white between
+        // screens, which flashes against the app canvas mid-transition.
+        contentStyle: { backgroundColor: Colors.foodBg },
+      }}
+    >
       <Stack.Protected guard={isAuthenticated}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="location" options={{ animation: 'slide_from_bottom' }} />

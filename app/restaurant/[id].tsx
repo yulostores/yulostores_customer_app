@@ -46,7 +46,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useCart } from '../../src/context/CartContext';
 import { confirmCartConflict } from '../../src/lib/cartConflict';
 import { useVegMode } from '../../src/context/VegModeContext';
@@ -1206,7 +1206,7 @@ export default function RestaurantDetailScreen() {
 
       {/* Solid status-bar strip so the hero and the sticky section headers both
           start below the notch. */}
-      <View style={{ height: insets.top, backgroundColor: Colors.foodBg }} />
+      <View style={{ height: insets.top, backgroundColor: Colors.foodSurface }} />
 
       {body}
 
@@ -1252,7 +1252,9 @@ const makeStyles = (t: AccentTheme) =>
   screen: { flex: 1, backgroundColor: Colors.foodBg },
   flex: { flex: 1 },
   listContent: { paddingBottom: 140 },
-  divider: { height: 1, backgroundColor: Colors.foodBorder, marginHorizontal: Spacing.base },
+  // Full-width, not inset: the list's own background is the page canvas, so an
+  // inset hairline let two 16px slivers of canvas show through between rows.
+  divider: { height: 1, backgroundColor: Colors.foodBorder },
 
   // ── Hero ──
   hero: { width: SCREEN_WIDTH, height: HERO_HEIGHT, backgroundColor: Colors.foodBgSecondary },
@@ -1270,7 +1272,7 @@ const makeStyles = (t: AccentTheme) =>
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(20,22,26,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1282,19 +1284,20 @@ const makeStyles = (t: AccentTheme) =>
     height: 38,
     borderRadius: 19,
     paddingHorizontal: Spacing.md,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.foodSurface,
+    ...Elevation.raised,
   },
   heroSearchText: { flex: 1, fontSize: 13, color: Colors.foodTextSecondary },
 
   // ── Info card ──
   infoCard: {
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     marginTop: -Spacing.lg,
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
     paddingHorizontal: Spacing.base,
     paddingTop: 46,
-    paddingBottom: Spacing.base,
+    paddingBottom: Spacing.lg,
     alignItems: 'center',
   },
   logoWrap: {
@@ -1304,16 +1307,12 @@ const makeStyles = (t: AccentTheme) =>
     width: 72,
     height: 72,
     borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     padding: 4,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    ...Elevation.raised,
   },
   logo: { width: 64, height: 64, borderRadius: BorderRadius.md },
-  name: { fontSize: 22, fontWeight: '800', color: Colors.foodText, textAlign: 'center' },
+  name: { fontSize: 22, fontWeight: '800', color: Colors.foodText, textAlign: 'center', letterSpacing: -0.4 },
   tagline: {
     fontSize: 13,
     color: Colors.foodTextSecondary,
@@ -1379,7 +1378,8 @@ const makeStyles = (t: AccentTheme) =>
 
   // ── Ratings & reviews ──
   reviewsSection: {
-    backgroundColor: Colors.foodBg,
+    backgroundColor: Colors.foodSurface,
+    marginTop: Spacing.sm,
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.sm,
@@ -1409,14 +1409,17 @@ const makeStyles = (t: AccentTheme) =>
 
   // ── Diet tabs ──
   dietWrap: {
-    backgroundColor: Colors.foodBg,
+    backgroundColor: Colors.foodSurface,
+    marginTop: Spacing.sm,
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingBottom: Spacing.md,
   },
   dietTabs: {
     flexDirection: 'row',
-    backgroundColor: Colors.foodBgSecondary,
+    backgroundColor: Colors.foodBg,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
     borderRadius: BorderRadius.full,
     padding: 4,
     gap: 4,
@@ -1438,7 +1441,7 @@ const makeStyles = (t: AccentTheme) =>
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.foodBg,
+    backgroundColor: Colors.foodSurface,
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
@@ -1453,6 +1456,7 @@ const makeStyles = (t: AccentTheme) =>
     justifyContent: 'center',
     gap: 6,
     paddingVertical: Spacing.md,
+    backgroundColor: Colors.foodSurface,
   },
   sectionFooterAction: { fontSize: 13, fontWeight: '700', color: t.accent },
   sectionFooterHint: {
@@ -1460,6 +1464,7 @@ const makeStyles = (t: AccentTheme) =>
     color: Colors.foodTextMuted,
     textAlign: 'center',
     paddingVertical: Spacing.md,
+    backgroundColor: Colors.foodSurface,
   },
 
   // ── Menu item row ──
@@ -1468,6 +1473,7 @@ const makeStyles = (t: AccentTheme) =>
     gap: Spacing.md,
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.base,
+    backgroundColor: Colors.foodSurface,
   },
   rowText: { flex: 1, gap: 4 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
@@ -1479,9 +1485,9 @@ const makeStyles = (t: AccentTheme) =>
     letterSpacing: 0.3,
   },
   badgeStrong: { color: t.accentDark },
-  rowName: { fontSize: 15, fontWeight: '700', color: Colors.foodText },
+  rowName: { fontSize: 15, fontWeight: '700', color: Colors.foodText, letterSpacing: -0.2 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  price: { fontSize: 14, fontWeight: '700', color: Colors.foodText },
+  price: { fontSize: 14.5, fontWeight: '800', color: Colors.foodText },
   priceStrike: {
     fontSize: 12.5,
     color: Colors.foodTextMuted,
@@ -1511,32 +1517,24 @@ const makeStyles = (t: AccentTheme) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.foodSurface,
     borderWidth: 1,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: BorderRadius.md,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
+    ...Elevation.raised,
   },
   addBtnText: { fontSize: 13, fontWeight: '800', color: t.accent, letterSpacing: 0.5 },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.foodSurface,
     borderWidth: 1,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     borderRadius: BorderRadius.md,
     paddingHorizontal: 4,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
+    ...Elevation.raised,
   },
   stepBtn: { width: 30, height: 34, alignItems: 'center', justifyContent: 'center' },
   stepValue: {
@@ -1559,7 +1557,7 @@ const makeStyles = (t: AccentTheme) =>
   dietDot: { width: 6, height: 6, borderRadius: 3 },
 
   // ── Skeleton ──
-  skel: { backgroundColor: Colors.foodSearchBg },
+  skel: { backgroundColor: Colors.foodSkeleton },
   skelInfo: { padding: Spacing.base, paddingTop: Spacing.lg },
   skelHeader: {
     paddingHorizontal: Spacing.base,
@@ -1588,7 +1586,7 @@ const makeStyles = (t: AccentTheme) =>
   statusBtnText: { fontSize: 14, fontWeight: '800', color: Colors.white },
   statusBack: { marginTop: Spacing.md, fontSize: 13, fontWeight: '700', color: Colors.foodTextSecondary },
 
-  emptyMenu: { alignItems: 'center', gap: 8, paddingVertical: 60 },
+  emptyMenu: { alignItems: 'center', gap: 8, paddingVertical: 60, backgroundColor: Colors.foodSurface },
   emptyMenuText: { fontSize: 15, fontWeight: '700', color: Colors.foodTextSecondary },
 
   // ── Search overlay ──
@@ -1598,7 +1596,7 @@ const makeStyles = (t: AccentTheme) =>
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: Colors.foodBg,
+    backgroundColor: Colors.foodSurface,
     zIndex: 20,
   },
   overlayHeader: {
@@ -1617,8 +1615,8 @@ const makeStyles = (t: AccentTheme) =>
     height: 44,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    borderColor: Colors.foodBorder,
-    backgroundColor: Colors.foodCardBg,
+    borderColor: Colors.foodBorderStrong,
+    backgroundColor: Colors.foodSearchBg,
     paddingHorizontal: Spacing.md,
   },
   overlayInput: { flex: 1, fontSize: 15, color: Colors.foodText, paddingVertical: 0 },
@@ -1629,7 +1627,8 @@ const makeStyles = (t: AccentTheme) =>
   // ── Category sheet ──
   sheetBackdrop: { flex: 1, backgroundColor: Colors.locScrim, justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
+    ...Elevation.sheet,
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
     paddingHorizontal: Spacing.lg,
@@ -1669,11 +1668,7 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: BorderRadius.full,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    ...Elevation.sheet,
     zIndex: 6,
   },
   menuFabText: { fontSize: 13, fontWeight: '800', color: Colors.white },
@@ -1691,6 +1686,7 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     zIndex: 10,
+    ...Elevation.sticky,
   },
   cartBarCount: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
   cartBarTotal: { fontSize: 16, fontWeight: '800', color: Colors.white },

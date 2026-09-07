@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Link, Stack } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../src/constants/Colors';
@@ -9,20 +8,26 @@ export default function NotFoundScreen() {
   return (
     <>
       <Stack.Screen options={{ title: 'Not Found' }} />
-      <LinearGradient colors={[Colors.bgDark, Colors.bgMid]} style={styles.container}>
-        <Ionicons name="warning-outline" size={64} color={Colors.primaryLight} />
-        <Text style={styles.title}>Page Not Found</Text>
-        <Text style={styles.sub}>The screen you're looking for doesn't exist.</Text>
+      <View style={styles.container}>
+        <View style={styles.iconBubble}>
+          <Ionicons name="compass-outline" size={44} color={Colors.foodAccent} />
+        </View>
+        <Text style={styles.title}>Page not found</Text>
+        <Text style={styles.sub}>
+          The screen you&apos;re looking for doesn&apos;t exist.
+        </Text>
         <Link href="/" asChild>
           <Pressable style={styles.btn}>
-            <Text style={styles.btnText}>Go Back Home</Text>
+            <Text style={styles.btnText}>Go back home</Text>
           </Pressable>
         </Link>
-      </LinearGradient>
+      </View>
     </>
   );
 }
 
+// This screen was the last one still painted in the retired dark-purple theme —
+// a customer who mistyped a link landed on a screen from a different app.
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -30,12 +35,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.base,
     padding: Spacing['2xl'],
+    backgroundColor: Colors.foodBg,
   },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.white },
-  sub: { fontSize: 14, color: Colors.textMuted, textAlign: 'center' },
+  iconBubble: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: Colors.foodAccentLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.foodText,
+    letterSpacing: -0.4,
+  },
+  sub: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.foodTextSecondary,
+    textAlign: 'center',
+  },
   btn: {
     marginTop: Spacing.md,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.foodAccent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.base,
     borderRadius: BorderRadius.full,

@@ -236,7 +236,7 @@ export default function AboutScreen() {
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.authBg },
+  safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
     flexDirection: 'row',
@@ -308,6 +308,8 @@ const makeStyles = (t: AccentTheme) =>
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
     ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
   },
 
   actionRow: {

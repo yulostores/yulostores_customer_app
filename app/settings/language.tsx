@@ -185,7 +185,7 @@ export default function LanguageScreen() {
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.authBg },
+  safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
     flexDirection: 'row',
@@ -253,6 +253,8 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
   },
   rowPressed: { backgroundColor: Colors.foodBgSecondary },
   rowDisabled: { opacity: 0.55 },
@@ -265,7 +267,7 @@ const makeStyles = (t: AccentTheme) =>
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
   },
   soonPill: {
     paddingHorizontal: 10,

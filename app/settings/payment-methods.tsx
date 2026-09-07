@@ -140,7 +140,7 @@ export default function PaymentMethodsScreen() {
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: Colors.authBg },
+  safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
     flexDirection: 'row',
@@ -203,6 +203,8 @@ const makeStyles = (t: AccentTheme) =>
     overflow: 'hidden',
     marginTop: Spacing.sm,
     ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
   },
   methodRow: {
     flexDirection: 'row',

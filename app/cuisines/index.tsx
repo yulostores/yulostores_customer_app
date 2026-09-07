@@ -109,7 +109,7 @@ export default function CuisinesScreen() {
 
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.foodSurface },
+  safe: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
     flexDirection: 'row',

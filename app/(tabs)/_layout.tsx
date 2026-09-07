@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { Animated, Image, Platform, StyleSheet, View } from 'react-native';
 import { Colors } from '../../src/constants/Colors';
+import { Elevation } from '../../src/constants/Theme';
 import { useAccentTheme } from '../../src/hooks/useAccentTheme';
 
 // The bottom bar slides itself out of the way after a few seconds of no
@@ -169,15 +170,11 @@ const styles = StyleSheet.create({
     height: TAB_BAR_HEIGHT,
     paddingBottom: Platform.OS === 'ios' ? 28 : 12,
     paddingTop: 8,
-    elevation: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    ...Elevation.sticky,
   },
   tabBarLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     marginTop: 2,
   },
   scanIconWrap: {

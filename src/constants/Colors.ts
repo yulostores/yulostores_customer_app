@@ -47,7 +47,7 @@ export const Colors = {
   splashLoader: 'rgba(255, 255, 255, 0.55)',
 
   // Auth / login screens (light surface, per design)
-  authBg: '#F7F5F2',
+  authBg: '#F2F0EC',
   authSurface: '#FFFFFF',
   authText: '#1A1A1A',
   authTextMuted: '#8A8A8A',
@@ -57,26 +57,84 @@ export const Colors = {
   authAccentText: '#FFFFFF',
   authDanger: '#D64545',
 
-  // ─── Food-delivery home screen (light theme) ───
-  foodBg: '#FFFFFF',
-  foodBgSecondary: '#F5F5F5',
+  // ─── Food-delivery app surfaces (light theme) ──────────────────────────────
+  // Three surface tiers carry the whole visual hierarchy, and every screen picks
+  // exactly one per element:
+  //
+  //   foodBg           the page canvas — the root of every screen, nothing else
+  //   foodSurface      the content plane — cards, sheets, sticky bars, list blocks
+  //   foodBgSecondary  a well *inside* a surface — image slot, pressed row, off pill
+  //
+  // The canvas is a warm off-white and the content plane is pure white, so a card
+  // reads as a card from its own tone first; the hairline and the soft shadow only
+  // finish the edge. That's what was missing while both were #FFFFFF — cards and
+  // page were the same colour and the eye had nothing to latch onto.
+  foodBg: '#F2F0EC',
+  foodBgSecondary: '#EAE7E0',
   foodSurface: '#FFFFFF',
-  foodText: '#1C1C1C',
-  foodTextSecondary: '#6B6B6B',
-  foodTextMuted: '#9E9E9E',
+  // Loading blocks. Deliberately darker than either surface tier — a skeleton has
+  // to read as "content pending" on the canvas *and* inside a white card.
+  foodSkeleton: '#E3DFD7',
+
+  // Text, in three steps of descending weight. Titles are near-black so they win
+  // the first look; supporting copy sits well below them; meta (ETA, distance,
+  // counts) sits below that again but stays legible at 11–12px, which the old
+  // #9E9E9E did not.
+  foodText: '#14161A',
+  foodTextSecondary: '#5A5F68',
+  foodTextMuted: '#8A8F99',
+
   foodAccent: '#FF5A00',
-  foodAccentLight: '#FFF0E6',
-  foodAccentDark: '#E04E00',
-  foodBorder: '#EEEEEE',
+  // Tinted chip/badge background, and the text colour that goes on top of it.
+  // accentDark is deliberately a deep burnt orange rather than a lighter one:
+  // 11–12px badge labels need ~4.5:1 against foodAccentLight, which the previous
+  // #E04E00 missed at 3.5:1.
+  foodAccentLight: '#FFEDE2',
+  foodAccentDark: '#B34700',
+  // The ring drawn around a round food photo (the "What's on your mind?" chips).
+  // A tinted peach rather than the grey card hairline: those circles sit directly
+  // on the canvas with no card behind them, so they need an edge with some colour
+  // in it to read as separate objects. foodVegRing is its pure-veg counterpart.
+  foodAccentRing: '#FFB98A',
+  foodVegRing: '#95CE99',
+
+  // The warm wash behind the home app bar — the peach the location row, the
+  // storefront tabs and the search pill all sit on. Three stops rather than two:
+  // the last one lands close to `foodBg` so the header dissolves into the canvas
+  // instead of ending on a seam. `*Veg` are the pure-veg counterparts, picked so
+  // the green theme gets the same amount of tint, not a green-grey.
+  foodWashTop: '#FDEBD9',
+  foodWashMid: '#FCE0C6',
+  foodWashEdge: '#F5F0E8',
+  foodWashTopVeg: '#E9F6EA',
+  foodWashMidVeg: '#DAEFDC',
+  foodWashEdgeVeg: '#EFF2EC',
+
+  // Icon tints for the storefronts Yulo sells through, on the home tab row.
+  // Food takes the accent (it's the selected one and fills with it); these two
+  // keep their own hue so the row reads as three destinations, not one repeated.
+  foodVerticalGift: '#E0453F',
+  foodVerticalBag: '#7C4522',
+
+  // Hairline around a card and dividers inside one; the strong tone is for shapes
+  // that must hold their own outline against white — inputs, unselected chips.
+  foodBorder: '#E7E3DC',
+  foodBorderStrong: '#D7D2C9',
+
   foodRating: '#FFB800',
-  foodRatingBg: '#2C6E1A',
-  foodCardBg: '#FFFFFF',
-  foodCardShadow: 'rgba(0,0,0,0.06)',
+  // Rating pill — a clean deep green, readable with white text and distinct from
+  // the pure #0D8A16 of the veg diet mark.
+  foodRatingBg: '#1F7A3D',
+  // Shadow ink for every lifted surface. Warm near-black rather than pure black:
+  // on a warm canvas a neutral-black shadow greys the surrounding pixels.
+  foodCardShadow: '#1A1712',
   foodDeliveryBadge: '#4CAF50',
   foodTabBar: '#FFFFFF',
   foodTabActive: '#FF5A00',
-  foodTabInactive: '#9E9E9E',
-  foodSearchBg: '#F2F2F2',
+  foodTabInactive: '#9096A1',
+  // Search fields are white pills outlined by foodBorderStrong — a grey fill would
+  // vanish now that the canvas is itself tinted.
+  foodSearchBg: '#FFFFFF',
   foodHeartRed: '#E53935',
   foodVegGreen: '#0D8A16',
   // Darker green, the veg-mode counterpart of foodAccentDark — used for text on
@@ -86,7 +144,7 @@ export const Colors = {
   foodNonVegRed: '#B0261A',
   // Toggle track for the "VEG Only" switch — off/grey vs on/green (the on-color
   // reuses foodVegGreen so the switch and every veg/non-veg dot read as one system).
-  toggleTrackOff: '#D8D8D8',
+  toggleTrackOff: '#D5D0C7',
   toggleThumb: '#FFFFFF',
 
   // ─── Location / address flow (app/location/*) ───

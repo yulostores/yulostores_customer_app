@@ -29,7 +29,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 import {
   ORANGE_ACCENT,
@@ -507,7 +507,7 @@ export default function CartScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
-      <View style={{ height: insets.top, backgroundColor: Colors.foodBg }} />
+      <View style={{ height: insets.top, backgroundColor: Colors.foodSurface }} />
 
       <View style={[styles.header, { justifyContent: 'space-between' }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
@@ -564,7 +564,7 @@ const makeStyles = (t: AccentTheme) =>
     paddingBottom: Spacing.md,
   },
   backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginLeft: -6 },
-  title: { fontSize: 22, fontWeight: '800', color: Colors.foodText },
+  title: { fontSize: 20, fontWeight: '800', color: Colors.foodText, letterSpacing: -0.4 },
 
   // Storefront
   storefront: {
@@ -578,19 +578,20 @@ const makeStyles = (t: AccentTheme) =>
 
   // Card shell
   card: {
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     marginHorizontal: Spacing.base,
+    marginTop: Spacing.md,
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.sm,
+    ...Elevation.card,
   },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: Colors.foodText },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: Colors.foodText, letterSpacing: -0.2 },
 
   // Coupon row
   couponCard: {
-    marginTop: Spacing.xs,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
@@ -639,9 +640,9 @@ const makeStyles = (t: AccentTheme) =>
     height: 32,
     justifyContent: 'space-between',
     paddingHorizontal: 4,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.foodSurface,
     borderWidth: 1,
-    borderColor: Colors.foodBorder,
+    borderColor: Colors.foodBorderStrong,
     borderRadius: BorderRadius.md,
   },
   stepBtn: { width: 28, height: 30, alignItems: 'center', justifyContent: 'center' },
@@ -665,7 +666,7 @@ const makeStyles = (t: AccentTheme) =>
   addMoreText: { fontSize: 13.5, fontWeight: '800' },
 
   // Bill
-  billCard: { marginTop: Spacing.xs, paddingVertical: Spacing.base },
+  billCard: { paddingVertical: Spacing.base },
   billStale: { opacity: 0.6 },
   billHeader: {
     flexDirection: 'row',
@@ -714,6 +715,7 @@ const makeStyles = (t: AccentTheme) =>
     borderTopColor: Colors.foodBorder,
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.md,
+    ...Elevation.sticky,
   },
   cta: {
     flexDirection: 'row',
@@ -755,7 +757,7 @@ const makeStyles = (t: AccentTheme) =>
 
   // Skeleton
   skelWrap: { padding: Spacing.base, gap: Spacing.md },
-  skel: { backgroundColor: Colors.foodSearchBg, borderRadius: BorderRadius.md },
+  skel: { backgroundColor: Colors.foodSkeleton, borderRadius: BorderRadius.md },
   skelCard: { height: 150, borderRadius: BorderRadius.lg },
   });
 

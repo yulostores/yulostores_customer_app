@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../constants/Colors';
-import { BorderRadius } from '../constants/Theme';
+import { BorderRadius, Elevation } from '../constants/Theme';
 import { useCart } from '../context/CartContext';
 import { useAccentTheme } from '../hooks/useAccentTheme';
 
@@ -148,12 +148,8 @@ const styles = StyleSheet.create({
   shadow: {
     marginHorizontal: 16,
     borderRadius: BAR_HEIGHT / 2,
-    backgroundColor: Colors.foodCardBg,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
+    backgroundColor: Colors.foodSurface,
+    ...Elevation.sheet,
   },
   pill: {
     height: BAR_HEIGHT,
@@ -162,7 +158,7 @@ const styles = StyleSheet.create({
     borderRadius: BAR_HEIGHT / 2,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
-    backgroundColor: Colors.foodCardBg,
+    backgroundColor: Colors.foodSurface,
     paddingHorizontal: 12,
     overflow: 'hidden',
   },

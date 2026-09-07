@@ -2,6 +2,7 @@ import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
+import { Elevation } from '../constants/Theme';
 import { useAuth } from '../context/AuthContext';
 
 export default function DemoSessionBanner() {
@@ -31,11 +32,7 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    ...Elevation.raised,
   },
   text: {
     color: '#FFFFFF',
