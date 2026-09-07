@@ -65,7 +65,19 @@
           "locationPermission": "Allow Yulo Stores to use your location to centre the map on where you are."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Yulo Stores accesses your photos so you can set a profile picture."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "extra": {
       "apiPort": 3000,

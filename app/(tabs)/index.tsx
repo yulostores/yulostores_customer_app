@@ -23,7 +23,15 @@ import { BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useCart } from '../../src/context/CartContext';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import { useVegMode, type VegScope } from '../../src/context/VegModeContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
+import { useFavoriteToggle } from '../../src/hooks/useFavoriteToggle';
 import { useHomeData } from '../../src/hooks/useHomeData';
+
 import type {
   CuisineCard,
   HomeBanner,
@@ -70,6 +78,7 @@ function formatDistance(distanceKm: number | undefined): string | null {
 
 /** Delivery address header */
 function LocationHeader() {
+  const styles = useThemedStyles(makeStyles);
   const { activeLocation } = useDeliveryLocation();
 
   const label = activeLocation
@@ -331,6 +340,7 @@ function SectionHeader({
   title: string;
   onSeeAll?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -367,8 +377,14 @@ function CuisineCardItem({ item }: { item: CuisineCard }) {
 
 /** "Recommended for you" item card */
 function RecommendedItemCard({ item }: { item: RecommendedItem }) {
+  const styles = useThemedStyles(makeStyles);
   const { menuItem, restaurant } = item;
   const eta = formatDeliveryTime(restaurant?.distanceKm);
+  const { favorited, toggle } = useFavoriteToggle(
+    'item',
+    menuItem._id,
+    menuItem.isFavorited,
+  );
 
   return (
     <Pressable
@@ -385,6 +401,23 @@ function RecommendedItemCard({ item }: { item: RecommendedItem }) {
           icon="fast-food-outline"
           iconSize={32}
         />
+        <Pressable
+          style={styles.cardHeartBtn}
+          onPress={toggle}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            favorited
+              ? `Remove ${menuItem.name} from favorites`
+              : `Save ${menuItem.name}`
+          }
+        >
+          <Ionicons
+            name={favorited ? 'heart' : 'heart-outline'}
+            size={15}
+            color={favorited ? Colors.foodHeartRed : Colors.white}
+          />
+        </Pressable>
       </View>
 
       {/* Info */}
@@ -435,6 +468,11 @@ function RecommendedItemCard({ item }: { item: RecommendedItem }) {
 /** Horizontal restaurant card (for "Recommended restaurants") */
 function RestaurantHCard({ restaurant }: { restaurant: Restaurant }) {
   const eta = formatDeliveryTime(restaurant.distanceKm);
+  const { favorited, toggle } = useFavoriteToggle(
+    'restaurant',
+    restaurant._id,
+    restaurant.isFavorited,
+  );
 
   return (
     <Pressable
@@ -448,6 +486,23 @@ function RestaurantHCard({ restaurant }: { restaurant: Restaurant }) {
           icon="restaurant-outline"
           iconSize={32}
         />
+        <Pressable
+          style={styles.cardHeartBtn}
+          onPress={toggle}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            favorited
+              ? `Remove ${restaurant.name} from favorites`
+              : `Add ${restaurant.name} to favorites`
+          }
+        >
+          <Ionicons
+            name={favorited ? 'heart' : 'heart-outline'}
+            size={15}
+            color={favorited ? Colors.foodHeartRed : Colors.white}
+          />
+        </Pressable>
       </View>
       <View style={styles.restHInfo}>
         <Text style={styles.restHName} numberOfLines={1}>
@@ -482,7 +537,11 @@ function RestaurantHCard({ restaurant }: { restaurant: Restaurant }) {
 
 /** Vertical restaurant card (for "Restaurants near you") */
 function RestaurantNearbyCard({ restaurant }: { restaurant: Restaurant }) {
-  const [liked, setLiked] = useState(false);
+  const { favorited: liked, toggle: toggleFavorite } = useFavoriteToggle(
+    'restaurant',
+    restaurant._id,
+    restaurant.isFavorited,
+  );
 
   const eta = formatDeliveryTime(restaurant.distanceKm);
   const distance = formatDistance(restaurant.distanceKm);
@@ -534,7 +593,7 @@ function RestaurantNearbyCard({ restaurant }: { restaurant: Restaurant }) {
         {/* Heart icon */}
         <Pressable
           style={styles.heartBtn}
-          onPress={() => setLiked((v) => !v)}
+          onPress={toggleFavorite}
         >
           <Ionicons
             name={liked ? 'heart' : 'heart-outline'}
@@ -671,6 +730,7 @@ function StatusView({
   actionLabel: string;
   onAction: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.errorContainer}>
       <Ionicons name={icon} size={64} color={Colors.foodBorder} />
@@ -686,6 +746,8 @@ function StatusView({
 // ─── Main Screen ───────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const t = useAccentTheme();
   const {
     cuisines,
     banner,
@@ -761,7 +823,7 @@ export default function HomeScreen() {
         {/* ── What's on your mind? ── */}
         {cuisines.length > 0 && (
           <>
-            <SectionHeader title="What's on your mind?" />
+            <SectionHeader title="What's on your mind?" onSeeAll={() => router.push('/cuisines')} />
             <FlatList
               data={cuisines}
               horizontal
@@ -835,8 +897,8 @@ export default function HomeScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={Colors.foodAccent}
-              colors={[Colors.foodAccent]}
+              tintColor={t.accent}
+              colors={[t.accent]}
             />
           }
         >
@@ -876,7 +938,8 @@ export default function HomeScreen() {
 const HORIZONTAL_CARD_WIDTH = SCREEN_WIDTH * 0.42;
 const RESTAURANT_H_CARD_WIDTH = SCREEN_WIDTH * 0.42;
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Colors.foodBg,
@@ -917,7 +980,7 @@ const styles = StyleSheet.create({
   },
   locationLabel: {
     fontSize: 12,
-    color: Colors.foodAccent,
+    color: t.accent,
     fontWeight: '600',
   },
   locationRow: {
@@ -952,7 +1015,7 @@ const styles = StyleSheet.create({
   voiceIcon: {
     width: 22,
     height: 22,
-    tintColor: Colors.foodAccent,
+    tintColor: t.accent,
   },
   // ── VEG Only switch ──
   vegToggle: {
@@ -1197,7 +1260,7 @@ const styles = StyleSheet.create({
   },
   seeAll: {
     fontSize: 13,
-    color: Colors.foodAccent,
+    color: t.accent,
     fontWeight: '600',
   },
 
@@ -1301,7 +1364,7 @@ const styles = StyleSheet.create({
   recItemPrice: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.foodAccent,
+    color: t.accent,
   },
 
   // ── Rating badge (shared) ──
@@ -1424,6 +1487,18 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Compact heart for the small scroller cards (recommended items / restaurants).
+  cardHeartBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1560,7 +1635,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   retryBtn: {
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: 28,
     paddingVertical: 12,
     borderRadius: BorderRadius.full,
@@ -1571,4 +1646,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFF',
   },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

@@ -13,8 +13,9 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { router, type Href } from 'expo-router';
-import type { ReactNode } from 'react';
+import { useCallback, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -31,6 +32,12 @@ import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useProfile } from '../../src/hooks/useProfile';
 import { useVegFleetPreference } from '../../src/hooks/useVegFleetPreference';
 import {
@@ -43,25 +50,27 @@ import {
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
-/** One menu row. `link` navigates, `toggle` is the veg-fleet switch, `soon` is a
- *  parked feature, `danger` is the sign-out action. */
+/** One menu row. `link` navigates, `toggle` is the veg-fleet switch, `danger` is
+ *  the sign-out action. */
 type MenuRow =
   | { key: string; label: string; icon: IoniconName; kind: 'link'; route: string }
-  | { key: string; label: string; icon: IoniconName; kind: 'toggle' | 'soon' | 'danger' };
+  | { key: string; label: string; icon: IoniconName; kind: 'toggle' | 'danger' };
 
 const MENU: readonly MenuRow[] = [
   { key: 'orders', label: 'Order history', icon: 'time-outline', kind: 'link', route: '/(tabs)/orders' },
   { key: 'favorites', label: 'Favorites', icon: 'heart-outline', kind: 'link', route: '/favorites' },
   { key: 'addresses', label: 'Saved addresses', icon: 'location-outline', kind: 'link', route: '/address' },
   { key: 'veg-fleet', label: 'Veg-fleet preference', icon: 'leaf-outline', kind: 'toggle' },
-  { key: 'settings', label: 'Settings', icon: 'settings-outline', kind: 'soon' },
+  { key: 'notifications', label: 'Notifications', icon: 'notifications-outline', kind: 'link', route: '/notifications' },
+  { key: 'settings', label: 'Settings', icon: 'settings-outline', kind: 'link', route: '/settings' },
   { key: 'help', label: 'Help & support', icon: 'help-buoy-outline', kind: 'link', route: '/help' },
   { key: 'logout', label: 'Log out', icon: 'log-out-outline', kind: 'danger' },
 ] as const;
 
 // ─── Identity card ───────────────────────────────────────────────────────────
 
-function IdentityCard({ profile }: { profile: CustomerProfile }) {
+function IdentityCard({ profile, onEdit }: { profile: CustomerProfile; onEdit: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const name = displayName(profile);
   const initials = initialsFor(profile);
   // Don't repeat the phone as the sub-line when it's already standing in for the name.
@@ -90,6 +99,16 @@ function IdentityCard({ profile }: { profile: CustomerProfile }) {
         {contact ? <Text style={styles.contact} numberOfLines={1}>{contact}</Text> : null}
         {since ? <Text style={styles.since}>{since}</Text> : null}
       </View>
+
+      <Pressable
+        style={styles.editBtn}
+        onPress={onEdit}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Edit profile"
+      >
+        <Ionicons name="create-outline" size={18} color={Colors.foodTextSecondary} />
+      </Pressable>
     </View>
   );
 }
@@ -98,9 +117,8 @@ function IdentityCard({ profile }: { profile: CustomerProfile }) {
 
 function Row({ row, onPress, right }: { row: MenuRow; onPress?: () => void; right: ReactNode }) {
   const danger = row.kind === 'danger';
-  const dim = row.kind === 'soon';
-  const iconColor = danger ? Colors.danger : dim ? Colors.foodTextMuted : Colors.foodText;
-  const labelColor = danger ? Colors.danger : dim ? Colors.foodTextSecondary : Colors.foodText;
+  const iconColor = danger ? Colors.danger : Colors.foodText;
+  const labelColor = danger ? Colors.danger : Colors.foodText;
 
   return (
     <Pressable
@@ -124,9 +142,21 @@ function Row({ row, onPress, right }: { row: MenuRow; onPress?: () => void; righ
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent, accentDark } = useAccentTheme();
   const { signOut } = useAuth();
   const { profile, isLoading, isRefreshing, error, refresh } = useProfile();
   const vegFleet = useVegFleetPreference();
+
+  // Pick up name/avatar changes made on the edit-profile screen — skip the
+  // very first focus, since useProfile already loads once on mount.
+  const mountedOnceRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (mountedOnceRef.current) refresh();
+      else mountedOnceRef.current = true;
+    }, [refresh]),
+  );
 
   const confirmSignOut = () => {
     Alert.alert('Log out?', 'You’ll need to sign in again to place orders.', [
@@ -143,7 +173,7 @@ export default function ProfileScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <Text style={styles.title}>Profile</Text>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.foodAccent} />
+          <ActivityIndicator size="large" color={accent} />
         </View>
       </SafeAreaView>
     );
@@ -160,20 +190,22 @@ export default function ProfileScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={refresh}
-            tintColor={Colors.foodAccent}
-            colors={[Colors.foodAccent]}
+            tintColor={accent}
+            colors={[accent]}
           />
         }
       >
         {error ? (
           <Pressable style={styles.errorBanner} onPress={refresh}>
-            <Ionicons name="cloud-offline-outline" size={16} color={Colors.foodAccentDark} />
+            <Ionicons name="cloud-offline-outline" size={16} color={accentDark} />
             <Text style={styles.errorText} numberOfLines={1}>Couldn’t refresh your profile</Text>
             <Text style={styles.errorRetry}>Retry</Text>
           </Pressable>
         ) : null}
 
-        {profile ? <IdentityCard profile={profile} /> : null}
+        {profile ? (
+          <IdentityCard profile={profile} onEdit={() => router.push('/profile/edit')} />
+        ) : null}
 
         <View style={styles.menu}>
           {MENU.map((row) => {
@@ -218,20 +250,6 @@ export default function ProfileScreen() {
               );
             }
 
-            if (row.kind === 'soon') {
-              return (
-                <Row
-                  key={row.key}
-                  row={row}
-                  right={
-                    <View style={styles.soonPill}>
-                      <Text style={styles.soonText}>Soon</Text>
-                    </View>
-                  }
-                />
-              );
-            }
-
             // danger — Log out
             return (
               <Row
@@ -252,7 +270,8 @@ export default function ProfileScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.authBg },
 
   title: {
@@ -274,14 +293,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.sm + 2,
     marginBottom: Spacing.md,
   },
-  errorText: { flex: 1, fontSize: 13, color: Colors.foodAccentDark, fontWeight: '600' },
-  errorRetry: { fontSize: 13, fontWeight: '800', color: Colors.foodAccentDark },
+  errorText: { flex: 1, fontSize: 13, color: t.accentDark, fontWeight: '600' },
+  errorRetry: { fontSize: 13, fontWeight: '800', color: t.accentDark },
 
   // Identity card
   identityCard: {
@@ -295,12 +314,20 @@ const styles = StyleSheet.create({
   },
   avatar: { width: 60, height: 60, borderRadius: BorderRadius.full },
   avatarFallback: {
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitials: { fontSize: 22, fontWeight: '800', color: Colors.white, letterSpacing: 0.5 },
   identityText: { flex: 1, gap: 3 },
+  editBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.foodBgSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   name: { fontSize: 20, fontWeight: '800', color: Colors.foodText, letterSpacing: -0.3 },
   contact: { fontSize: 14, color: Colors.foodTextSecondary },
   since: { fontSize: 12, color: Colors.foodTextMuted, marginTop: 1 },
@@ -323,12 +350,6 @@ const styles = StyleSheet.create({
   rowLabel: { flex: 1, fontSize: 15, fontWeight: '600' },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   rowMeta: { fontSize: 13, color: Colors.foodTextMuted },
+  });
 
-  soonPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodBgSecondary,
-  },
-  soonText: { fontSize: 11, fontWeight: '700', color: Colors.foodTextMuted, letterSpacing: 0.3 },
-});
+const styles = makeStyles(ORANGE_ACCENT);

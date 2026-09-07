@@ -7,6 +7,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { BorderRadius, Spacing } from '../../constants/Theme';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../hooks/useAccentTheme';
 import type { AddressLabel } from '../../types/address';
 
 const OPTIONS: { value: AddressLabel; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
@@ -21,6 +27,8 @@ interface Props {
 }
 
 export default function LabelChips({ value, onChange }: Props) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   return (
     <View style={styles.row}>
       {OPTIONS.map((opt) => {
@@ -36,7 +44,7 @@ export default function LabelChips({ value, onChange }: Props) {
             <Ionicons
               name={opt.icon}
               size={15}
-              color={active ? Colors.foodAccent : Colors.foodTextSecondary}
+              color={active ? accent : Colors.foodTextSecondary}
             />
             <Text style={[styles.label, active && styles.labelActive]}>{opt.label}</Text>
           </Pressable>
@@ -46,7 +54,8 @@ export default function LabelChips({ value, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   row: { flexDirection: 'row', gap: Spacing.sm },
   chip: {
     flex: 1,
@@ -60,7 +69,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.foodBorder,
     backgroundColor: Colors.foodSurface,
   },
-  chipActive: { borderColor: Colors.foodAccent, backgroundColor: Colors.foodAccentLight },
+  chipActive: { borderColor: t.accent, backgroundColor: t.accentLight },
   label: { fontSize: 13.5, fontWeight: '600', color: Colors.foodTextSecondary },
-  labelActive: { color: Colors.foodAccent },
-});
+  labelActive: { color: t.accent },
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

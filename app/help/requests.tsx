@@ -23,6 +23,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useSupportTickets } from '../../src/hooks/useSupportTickets';
 import {
   formatTicketDate,
@@ -47,6 +53,8 @@ const TONE_COLOR = {
 // ─── Ticket row ──────────────────────────────────────────────────────────────
 
 function TicketRow({ ticket }: { ticket: SupportTicket }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const status = ticketStatusMeta(ticket.status);
   const tone = TONE_COLOR[status.tone];
   const thread = threadOf(ticket);
@@ -64,7 +72,7 @@ function TicketRow({ ticket }: { ticket: SupportTicket }) {
     >
       <View style={styles.cardTop}>
         <View style={styles.topicIcon}>
-          <Ionicons name={topicFor(ticket.category).icon} size={16} color={Colors.foodAccent} />
+          <Ionicons name={topicFor(ticket.category).icon} size={16} color={accent} />
         </View>
         <Text style={styles.cardTitle} numberOfLines={1}>{ticket.subject}</Text>
         <View style={[styles.statusPill, { backgroundColor: tone + '1A' }]}>
@@ -113,6 +121,7 @@ function CenteredNotice({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.centered}>
       <Ionicons name={icon} size={48} color={Colors.foodBorder} />
@@ -130,6 +139,8 @@ function CenteredNotice({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function SupportRequestsScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const { signOut } = useAuth();
   const {
     tickets,
@@ -158,7 +169,7 @@ export default function SupportRequestsScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {header}
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.foodAccent} />
+          <ActivityIndicator size="large" color={accent} />
         </View>
       </SafeAreaView>
     );
@@ -225,15 +236,15 @@ export default function SupportRequestsScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={refresh}
-            tintColor={Colors.foodAccent}
-            colors={[Colors.foodAccent]}
+            tintColor={accent}
+            colors={[accent]}
           />
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.4}
         ListFooterComponent={
           isPaging ? (
-            <ActivityIndicator style={{ marginVertical: 16 }} color={Colors.foodAccent} />
+            <ActivityIndicator style={{ marginVertical: 16 }} color={accent} />
           ) : null
         }
       />
@@ -243,7 +254,8 @@ export default function SupportRequestsScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
@@ -269,7 +281,7 @@ const styles = StyleSheet.create({
   noticeTitle: { fontSize: 18, fontWeight: '800', color: Colors.foodText, marginTop: 4 },
   noticeText: { fontSize: 14, color: Colors.foodTextSecondary, textAlign: 'center', lineHeight: 20 },
   actionBtn: {
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
@@ -299,7 +311,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -339,4 +351,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 19, fontWeight: '800', color: Colors.foodText },
   emptySubtitle: { fontSize: 14, color: Colors.foodTextSecondary, textAlign: 'center', lineHeight: 20 },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

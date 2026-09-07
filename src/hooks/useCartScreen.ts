@@ -23,6 +23,7 @@ import { useCart as useCartCache } from '../context/CartContext';
 import { logger, reportError } from '../lib/logger';
 import { ApiError } from '../services/api';
 import {
+  applyPromo as applyPromoRequest,
   getCart,
   removeCartLine,
   toCartCachePayload,
@@ -42,10 +43,16 @@ interface UseCartScreenResult {
   pendingLineIds: Set<string>;
   /** Transient message for a mutation that failed (the load error uses `error`). */
   actionError: string | null;
+  /** The coupon code currently applied to the bill, or `null`. */
+  appliedCode: string | null;
+  /** A coupon apply is in flight. */
+  promoPending: boolean;
   refresh: () => Promise<void>;
   /** Set an absolute quantity for a line; `0` removes it. */
   setLineQty: (lineId: string, qty: number) => Promise<void>;
   removeLine: (lineId: string) => Promise<void>;
+  /** Apply a coupon code; resolves `true` on success, `false` on a rejected code. */
+  applyPromo: (code: string) => Promise<boolean>;
   dismissActionError: () => void;
 }
 
@@ -66,6 +73,8 @@ export function useCartScreen(): UseCartScreenResult {
   const [notSignedIn, setNotSignedIn] = useState(false);
   const [pendingLineIds, setPendingLineIds] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
+  const [appliedCode, setAppliedCode] = useState<string | null>(null);
+  const [promoPending, setPromoPending] = useState(false);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -191,6 +200,46 @@ export function useCartScreen(): UseCartScreenResult {
     [runLineMutation],
   );
 
+  const applyPromo = useCallback(
+    async (code: string): Promise<boolean> => {
+      const trimmed = code.trim();
+      if (!trimmed || promoPending) return false;
+      setActionError(null);
+      setPromoPending(true);
+      try {
+        const next = await applyPromoRequest(trimmed);
+        if (!mountedRef.current) return false;
+        applyServer(next);
+        // The wire cart carries `appliedDiscountId` but not the code text — keep the
+        // one the customer just entered so the screen can name it.
+        setAppliedCode(next.bill.discountAmount > 0 ? trimmed.toUpperCase() : null);
+        return next.bill.discountAmount > 0;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          if (mountedRef.current) {
+            setNotSignedIn(true);
+            setSnapshot(null);
+          }
+        } else if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+          logger.warn('cart', `Coupon rejected — ${err.status} ${err.code}`, {
+            status: err.status,
+            code: err.code,
+          });
+          if (mountedRef.current) {
+            setActionError(messageFor(err, 'That coupon code isn’t valid for this cart.'));
+          }
+        } else {
+          reportError('cart', 'Coupon apply failed', err);
+          if (mountedRef.current) setActionError('Something went wrong. Please try again.');
+        }
+        return false;
+      } finally {
+        if (mountedRef.current) setPromoPending(false);
+      }
+    },
+    [promoPending, applyServer],
+  );
+
   return {
     snapshot,
     isLoading,
@@ -199,9 +248,12 @@ export function useCartScreen(): UseCartScreenResult {
     billStale: pendingLineIds.size > 0,
     pendingLineIds,
     actionError,
+    appliedCode,
+    promoPending,
     refresh: load,
     setLineQty,
     removeLine,
+    applyPromo,
     dismissActionError: useCallback(() => setActionError(null), []),
   };
 }

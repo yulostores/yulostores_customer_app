@@ -41,6 +41,8 @@ function RootNavigator() {
         <Stack.Screen name="address" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="favorites" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="help" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="restaurant/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="checkout" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="item/[id]" options={{ animation: 'slide_from_bottom' }} />

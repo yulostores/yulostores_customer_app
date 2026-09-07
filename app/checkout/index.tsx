@@ -35,6 +35,12 @@ import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useCheckout } from '../../src/hooks/useCheckout';
 import type { CartLine, FoodType } from '../../src/services/cart';
 import type { CheckoutSummary, UpsellItem } from '../../src/services/checkout';
@@ -103,6 +109,8 @@ function Chip({
   active: boolean;
   onPress: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accentDark } = useAccentTheme();
   return (
     <Pressable
       style={[styles.chip, active && styles.chipActive]}
@@ -113,7 +121,7 @@ function Chip({
       <Ionicons
         name={icon}
         size={14}
-        color={active ? Colors.foodAccentDark : Colors.foodTextSecondary}
+        color={active ? accentDark : Colors.foodTextSecondary}
       />
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </Pressable>
@@ -131,11 +139,13 @@ function addressBits(a: SavedAddress): { label: string; line: string } {
 }
 
 function AddressBlock({ address }: { address: SavedAddress | null }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   if (!address) {
     return (
       <Pressable style={styles.addressCard} onPress={() => router.push('/location')}>
         <View style={styles.addrIcon}>
-          <Ionicons name="location-outline" size={20} color={Colors.foodAccent} />
+          <Ionicons name="location-outline" size={20} color={accent} />
         </View>
         <View style={styles.addrText}>
           <Text style={styles.addrTitle}>Add a delivery address</Text>
@@ -151,7 +161,7 @@ function AddressBlock({ address }: { address: SavedAddress | null }) {
   return (
     <Pressable style={styles.addressCard} onPress={() => router.push('/address')}>
       <View style={styles.addrIcon}>
-        <Ionicons name="location-sharp" size={20} color={Colors.foodAccent} />
+        <Ionicons name="location-sharp" size={20} color={accent} />
       </View>
       <View style={styles.addrText}>
         <View style={styles.addrTitleRow}>
@@ -192,6 +202,8 @@ function OrderLine({ line }: { line: CartLine }) {
 }
 
 function UpsellStrip({ items }: { items: UpsellItem[] }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   return (
     <View>
       <Text style={styles.sectionLabel}>You might also like</Text>
@@ -220,7 +232,7 @@ function UpsellStrip({ items }: { items: UpsellItem[] }) {
             <View style={styles.upsellFooter}>
               <Text style={styles.upsellPrice}>{formatPrice(it.price)}</Text>
               <View style={styles.upsellAdd}>
-                <Ionicons name="add" size={14} color={Colors.foodAccent} />
+                <Ionicons name="add" size={14} color={accent} />
               </View>
             </View>
           </Pressable>
@@ -245,6 +257,7 @@ function CenterState({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.center}>
       <Ionicons name={icon} size={60} color={Colors.foodBorder} />
@@ -273,6 +286,7 @@ function Skeleton() {
 // ─── Screen ────────────────────────────────────────────────────────────────
 
 export default function CheckoutReviewScreen() {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
   const { summary, isLoading, error, notSignedIn, refresh } = useCheckout();
@@ -520,7 +534,8 @@ export default function CheckoutReviewScreen() {
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
@@ -568,7 +583,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: BorderRadius.md,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -576,14 +591,14 @@ const styles = StyleSheet.create({
   addrTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   addrTitle: { fontSize: 14.5, fontWeight: '800', color: Colors.foodText },
   addrLine: { fontSize: 13, color: Colors.foodTextSecondary, lineHeight: 18 },
-  addrChange: { fontSize: 12, fontWeight: '800', color: Colors.foodAccent, letterSpacing: 0.5 },
+  addrChange: { fontSize: 12, fontWeight: '800', color: t.accent, letterSpacing: 0.5 },
 
   // Order summary
   summaryHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   editLink: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.foodAccent,
+    color: t.accent,
     letterSpacing: 0.5,
     marginBottom: Spacing.sm,
   },
@@ -615,7 +630,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
-    borderColor: Colors.foodAccent,
+    borderColor: t.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -648,9 +663,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.foodBorder,
     backgroundColor: Colors.foodBg,
   },
-  chipActive: { borderColor: Colors.foodAccent, backgroundColor: Colors.foodAccentLight },
+  chipActive: { borderColor: t.accent, backgroundColor: t.accentLight },
   chipText: { fontSize: 12.5, fontWeight: '700', color: Colors.foodTextSecondary },
-  chipTextActive: { color: Colors.foodAccentDark },
+  chipTextActive: { color: t.accentDark },
 
   // Tip
   tipCard: { flexDirection: 'row', gap: Spacing.sm, paddingVertical: Spacing.md },
@@ -663,9 +678,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.foodBorder,
     backgroundColor: Colors.foodBg,
   },
-  tipBtnActive: { borderColor: Colors.foodAccent, backgroundColor: Colors.foodAccentLight },
+  tipBtnActive: { borderColor: t.accent, backgroundColor: t.accentLight },
   tipBtnText: { fontSize: 13.5, fontWeight: '800', color: Colors.foodTextSecondary },
-  tipBtnTextActive: { color: Colors.foodAccentDark },
+  tipBtnTextActive: { color: t.accentDark },
 
   // Veg-only bag
   vegRow: {
@@ -735,7 +750,7 @@ const styles = StyleSheet.create({
   },
   footerHint: {
     fontSize: 12,
-    color: Colors.foodAccentDark,
+    color: t.accentDark,
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: Spacing.sm,
@@ -747,7 +762,7 @@ const styles = StyleSheet.create({
     height: 54,
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
   },
   ctaOff: { opacity: 0.5 },
   ctaAmount: { fontSize: 16, fontWeight: '800', color: Colors.white },
@@ -761,7 +776,7 @@ const styles = StyleSheet.create({
   centerMessage: { fontSize: 14, color: Colors.foodTextMuted, textAlign: 'center', lineHeight: 20 },
   centerBtn: {
     marginTop: Spacing.md,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
@@ -771,4 +786,6 @@ const styles = StyleSheet.create({
   // Skeleton
   skelWrap: { padding: Spacing.base, gap: Spacing.md },
   skel: { backgroundColor: Colors.foodSearchBg, borderRadius: BorderRadius.lg },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

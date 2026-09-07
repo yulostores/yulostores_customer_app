@@ -26,6 +26,12 @@ import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useFavoriteRestaurants } from '../../src/hooks/useFavoriteRestaurants';
 import type { Restaurant } from '../../src/types/restaurant';
 
@@ -115,6 +121,7 @@ function CenteredNotice({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.centered}>
       <Ionicons name={icon} size={48} color={Colors.foodBorder} />
@@ -132,6 +139,8 @@ function CenteredNotice({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function FavoritesScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const { signOut } = useAuth();
   const {
     restaurants,
@@ -161,7 +170,7 @@ export default function FavoritesScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {header}
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.foodAccent} />
+          <ActivityIndicator size="large" color={accent} />
         </View>
       </SafeAreaView>
     );
@@ -228,15 +237,15 @@ export default function FavoritesScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={refresh}
-            tintColor={Colors.foodAccent}
-            colors={[Colors.foodAccent]}
+            tintColor={accent}
+            colors={[accent]}
           />
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.4}
         ListFooterComponent={
           isPaging ? (
-            <ActivityIndicator style={{ marginVertical: 16 }} color={Colors.foodAccent} />
+            <ActivityIndicator style={{ marginVertical: 16 }} color={accent} />
           ) : null
         }
       />
@@ -246,7 +255,8 @@ export default function FavoritesScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
@@ -266,7 +276,7 @@ const styles = StyleSheet.create({
   noticeTitle: { fontSize: 18, fontWeight: '800', color: Colors.foodText, marginTop: 4 },
   noticeText: { fontSize: 14, color: Colors.foodTextSecondary, textAlign: 'center' },
   actionBtn: {
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
@@ -314,4 +324,6 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 72, paddingHorizontal: Spacing.xl, gap: Spacing.md },
   emptyTitle: { fontSize: 20, fontWeight: '800', color: Colors.foodText },
   emptySubtitle: { fontSize: 14, color: Colors.foodTextSecondary, textAlign: 'center' },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

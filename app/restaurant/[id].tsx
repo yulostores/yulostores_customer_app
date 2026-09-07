@@ -48,12 +48,21 @@ import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useCart } from '../../src/context/CartContext';
+import { confirmCartConflict } from '../../src/lib/cartConflict';
 import { useVegMode } from '../../src/context/VegModeContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
+import { useFavoriteToggle } from '../../src/hooks/useFavoriteToggle';
 import {
   useRestaurantDetail,
   type MenuDietFilter,
   type MenuSection,
 } from '../../src/hooks/useRestaurantDetail';
+import { useRestaurantReviews } from '../../src/hooks/useRestaurantReviews';
 import { ApiError } from '../../src/services/api';
 import {
   addItemToCart,
@@ -63,7 +72,7 @@ import {
   type CartSnapshot,
 } from '../../src/services/cart';
 import { formatBadge } from '../../src/services/items';
-import { fetchMenuSearch } from '../../src/services/restaurants';
+import { fetchMenuSearch, type RestaurantReview } from '../../src/services/restaurants';
 import { logger, reportError } from '../../src/lib/logger';
 import type { MenuItem, Restaurant } from '../../src/types/restaurant';
 
@@ -130,6 +139,8 @@ function AddControl({
   item: MenuItem;
   restaurant: Restaurant;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const { cart, syncFromServer } = useCart();
   const customizable = (item.optionGroupCount ?? 0) > 0;
 
@@ -163,7 +174,7 @@ function AddControl({
         (err.details as { currentRestaurantName?: string } | null)?.currentRestaurantName ??
         fallbackName ??
         null;
-      confirmSwitch(name);
+      confirmCartConflict(name, () => runAdd(true));
     } else if (err instanceof ApiError && err.status === 400) {
       // A required customization is missing — send them to choose it.
       openCustomizer();
@@ -191,17 +202,6 @@ function AddControl({
     }
   };
 
-  const confirmSwitch = (currentName: string | null) => {
-    Alert.alert(
-      'Start a new cart?',
-      `Your cart has items from ${currentName ?? 'another restaurant'}. Adding this dish will clear it.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Start new', style: 'destructive', onPress: () => runAdd(true) },
-      ],
-    );
-  };
-
   const onAdd = () => {
     if (busy) return;
     if (customizable) {
@@ -211,7 +211,7 @@ function AddControl({
     // Fast pre-check against the cache so the switch prompt needs no round-trip
     // (the server enforces it too — 409 CART_RESTAURANT_CONFLICT, handled above).
     if (cart && cart.lines.length > 0 && cart.restaurantId !== restaurant._id) {
-      confirmSwitch(cart.restaurantName);
+      confirmCartConflict(cart.restaurantName, () => runAdd(true));
       return;
     }
     runAdd(false);
@@ -246,14 +246,14 @@ function AddControl({
         accessibilityLabel={customizable ? `Customise and add ${item.name}` : `Add ${item.name}`}
       >
         {busy ? (
-          <ActivityIndicator size="small" color={Colors.foodAccent} />
+          <ActivityIndicator size="small" color={accent} />
         ) : (
           <>
             <Text style={styles.addBtnText}>ADD</Text>
             <Ionicons
               name={customizable ? 'options-outline' : 'add'}
               size={14}
-              color={Colors.foodAccent}
+              color={accent}
             />
           </>
         )}
@@ -270,10 +270,10 @@ function AddControl({
         onPress={() => changeQty(qty - 1)}
         accessibilityLabel={`Reduce ${item.name}`}
       >
-        <Ionicons name="remove" size={16} color={Colors.foodAccent} />
+        <Ionicons name="remove" size={16} color={accent} />
       </Pressable>
       {busy ? (
-        <ActivityIndicator size="small" color={Colors.foodAccent} style={{ minWidth: 22 }} />
+        <ActivityIndicator size="small" color={accent} style={{ minWidth: 22 }} />
       ) : (
         <Text style={styles.stepValue}>{qty}</Text>
       )}
@@ -284,7 +284,7 @@ function AddControl({
         onPress={() => changeQty(qty + 1)}
         accessibilityLabel={`Add another ${item.name}`}
       >
-        <Ionicons name="add" size={16} color={Colors.foodAccent} />
+        <Ionicons name="add" size={16} color={accent} />
       </Pressable>
     </View>
   );
@@ -301,6 +301,7 @@ function MenuItemRow({
   restaurant: Restaurant;
   onOpen: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const discounted =
     item.discountedPrice != null && item.discountedPrice < item.sellingPrice;
   const saving = discounted ? item.sellingPrice - (item.discountedPrice ?? 0) : 0;
@@ -405,12 +406,14 @@ function SectionFooter({
   section: MenuSection;
   onRetry: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   if (!section.expanded) return null;
 
   if (section.status === 'error') {
     return (
       <Pressable style={styles.sectionFooter} onPress={onRetry}>
-        <Ionicons name="refresh" size={15} color={Colors.foodAccent} />
+        <Ionicons name="refresh" size={15} color={accent} />
         <Text style={styles.sectionFooterAction}>
           {section.error ? 'Couldn’t load more — Retry' : 'Retry'}
         </Text>
@@ -422,7 +425,7 @@ function SectionFooter({
     // Covers the first page (nothing shown yet) and paging for more.
     return (
       <View style={styles.sectionFooter}>
-        <ActivityIndicator size="small" color={Colors.foodAccent} />
+        <ActivityIndicator size="small" color={accent} />
       </View>
     );
   }
@@ -463,6 +466,7 @@ function DietTabs({
   locked: boolean;
   onChange: (next: MenuDietFilter) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.dietWrap}>
       <View style={styles.dietTabs}>
@@ -507,6 +511,12 @@ function Hero({
   onShare: () => void;
   onSearch: () => void;
 }) {
+  const { favorited, toggle } = useFavoriteToggle(
+    'restaurant',
+    restaurant._id,
+    restaurant.isFavorited,
+  );
+
   return (
     <View style={styles.hero}>
       <RemoteImage
@@ -529,6 +539,23 @@ function Hero({
           <Text style={styles.heroSearchText} numberOfLines={1}>
             Search in menu
           </Text>
+        </Pressable>
+        <Pressable
+          style={styles.heroBtn}
+          onPress={toggle}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            favorited
+              ? `Remove ${restaurant.name} from favorites`
+              : `Add ${restaurant.name} to favorites`
+          }
+        >
+          <Ionicons
+            name={favorited ? 'heart' : 'heart-outline'}
+            size={20}
+            color={favorited ? Colors.foodHeartRed : Colors.white}
+          />
         </Pressable>
         <Pressable style={styles.heroBtn} onPress={onShare} hitSlop={8}>
           <Ionicons name="share-social-outline" size={20} color={Colors.white} />
@@ -633,6 +660,89 @@ function InfoCard({ restaurant }: { restaurant: Restaurant }) {
   );
 }
 
+// ─── Ratings & reviews ────────────────────────────────────────────────
+
+function formatReviewDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function ReviewRow({ review }: { review: RestaurantReview }) {
+  const styles = useThemedStyles(makeStyles);
+  const initials = review.userName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+
+  return (
+    <View style={styles.reviewRow}>
+      <View style={styles.reviewHeaderRow}>
+        {review.userAvatar ? (
+          <RemoteImage uri={review.userAvatar} style={styles.reviewAvatar} icon="person" iconSize={14} />
+        ) : (
+          <View style={[styles.reviewAvatar, styles.reviewAvatarFallback]}>
+            <Text style={styles.reviewAvatarText}>{initials || '?'}</Text>
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.reviewUserName} numberOfLines={1}>{review.userName}</Text>
+          <View style={styles.reviewStarsRow}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Ionicons
+                key={n}
+                name={n <= review.rating ? 'star' : 'star-outline'}
+                size={11}
+                color={Colors.foodRating}
+              />
+            ))}
+            {review.createdAt ? (
+              <Text style={styles.reviewDate}>· {formatReviewDate(review.createdAt)}</Text>
+            ) : null}
+          </View>
+        </View>
+      </View>
+      {review.comment ? <Text style={styles.reviewComment}>{review.comment}</Text> : null}
+    </View>
+  );
+}
+
+function ReviewsSection({ restaurant }: { restaurant: Restaurant }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
+  const { reviews, loading, loadingMore, hasMore, loadMore } = useRestaurantReviews(restaurant._id);
+
+  return (
+    <View style={styles.reviewsSection}>
+      <Text style={styles.reviewsSectionTitle}>Ratings & Reviews</Text>
+
+      {restaurant.totalRatings === 0 ? (
+        <Text style={styles.reviewsEmptyText}>No reviews yet — be the first to rate this restaurant.</Text>
+      ) : loading ? (
+        <ActivityIndicator size="small" color={accent} style={{ marginVertical: Spacing.md }} />
+      ) : (
+        <>
+          {reviews.map((r) => (
+            <ReviewRow key={r.id} review={r} />
+          ))}
+          {hasMore ? (
+            <Pressable style={styles.reviewsLoadMore} onPress={loadMore} disabled={loadingMore}>
+              {loadingMore ? (
+                <ActivityIndicator size="small" color={accent} />
+              ) : (
+                <Text style={styles.reviewsLoadMoreText}>Load more reviews</Text>
+              )}
+            </Pressable>
+          ) : null}
+        </>
+      )}
+    </View>
+  );
+}
+
 // ─── Skeleton / status ────────────────────────────────────────────────
 
 function MenuSkeleton() {
@@ -666,6 +776,7 @@ function StatusScreen({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.statusScreen}>
       <Ionicons name={icon} size={60} color={Colors.foodBorder} />
@@ -688,14 +799,19 @@ function StatusScreen({
 function SearchOverlay({
   restaurantId,
   restaurant,
+  diet,
   topInset,
   onClose,
 }: {
   restaurantId: string;
   restaurant: Restaurant;
+  /** Diet filter the storefront is on — Veg Mode forces 'veg'; sent to the server. */
+  diet: MenuDietFilter;
   topInset: number;
   onClose: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<MenuItem[]>([]);
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
@@ -712,7 +828,7 @@ function SearchOverlay({
     setStatus('loading');
     const timer = setTimeout(async () => {
       try {
-        const items = await fetchMenuSearch(restaurantId, q);
+        const items = await fetchMenuSearch(restaurantId, q, diet);
         if (reqRef.current !== reqId) return;
         setResults(items);
         setStatus('done');
@@ -730,7 +846,7 @@ function SearchOverlay({
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [query, restaurantId]);
+  }, [query, restaurantId, diet]);
 
   return (
     <View style={[styles.overlay, { paddingTop: topInset }]}>
@@ -739,7 +855,7 @@ function SearchOverlay({
           <Ionicons name="arrow-back" size={22} color={Colors.foodText} />
         </Pressable>
         <View style={styles.overlaySearch}>
-          <Ionicons name="search" size={18} color={Colors.foodAccent} />
+          <Ionicons name="search" size={18} color={accent} />
           <TextInput
             style={styles.overlayInput}
             placeholder={`Search ${restaurant.name}'s menu`}
@@ -761,7 +877,7 @@ function SearchOverlay({
 
       {status === 'loading' && (
         <View style={styles.overlayCentre}>
-          <ActivityIndicator color={Colors.foodAccent} />
+          <ActivityIndicator color={accent} />
         </View>
       )}
       {status === 'error' && (
@@ -846,6 +962,7 @@ function CategorySheet({
 // ─── Cart footer ──────────────────────────────────────────────────
 
 function CartFooterBar({ bottomInset }: { bottomInset: number }) {
+  const styles = useThemedStyles(makeStyles);
   const { cart, itemCount, subtotal } = useCart();
   if (!cart || itemCount === 0) return null;
   return (
@@ -867,6 +984,8 @@ function CartFooterBar({ bottomInset }: { bottomInset: number }) {
 // ─── Screen ─────────────────────────────────────────────────────────
 
 export default function RestaurantDetailScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { enabled: vegMode } = useVegMode();
@@ -1029,8 +1148,8 @@ export default function RestaurantDetailScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.foodAccent}
-            colors={[Colors.foodAccent]}
+            tintColor={accent}
+            colors={[accent]}
           />
         }
         ListHeaderComponent={
@@ -1041,6 +1160,7 @@ export default function RestaurantDetailScreen() {
               onSearch={() => setSearchOpen(true)}
             />
             <InfoCard restaurant={restaurant} />
+            <ReviewsSection restaurant={restaurant} />
             <DietTabs
               value={effectiveDiet}
               locked={vegMode}
@@ -1116,6 +1236,7 @@ export default function RestaurantDetailScreen() {
         <SearchOverlay
           restaurantId={id}
           restaurant={restaurant}
+          diet={effectiveDiet}
           topInset={insets.top}
           onClose={() => setSearchOpen(false)}
         />
@@ -1126,7 +1247,8 @@ export default function RestaurantDetailScreen() {
 
 // ─── Styles ─────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.foodBg },
   flex: { flex: 1 },
   listContent: { paddingBottom: 140 },
@@ -1255,6 +1377,36 @@ const styles = StyleSheet.create({
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   flagStatusText: { fontSize: 11.5, fontWeight: '800' },
 
+  // ── Ratings & reviews ──
+  reviewsSection: {
+    backgroundColor: Colors.foodBg,
+    paddingHorizontal: Spacing.base,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+  },
+  reviewsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.foodText,
+    marginBottom: Spacing.md,
+  },
+  reviewsEmptyText: { fontSize: 13, color: Colors.foodTextMuted },
+  reviewRow: {
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.foodBorder,
+  },
+  reviewHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  reviewAvatar: { width: 32, height: 32, borderRadius: 16 },
+  reviewAvatarFallback: { backgroundColor: t.accent, alignItems: 'center', justifyContent: 'center' },
+  reviewAvatarText: { fontSize: 12, fontWeight: '800', color: Colors.white },
+  reviewUserName: { fontSize: 13.5, fontWeight: '700', color: Colors.foodText },
+  reviewStarsRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 },
+  reviewDate: { fontSize: 11, color: Colors.foodTextMuted, marginLeft: 4 },
+  reviewComment: { fontSize: 13, color: Colors.foodTextSecondary, lineHeight: 18, marginTop: 6 },
+  reviewsLoadMore: { alignItems: 'center', paddingVertical: Spacing.md },
+  reviewsLoadMoreText: { fontSize: 13, fontWeight: '700', color: t.accent },
+
   // ── Diet tabs ──
   dietWrap: {
     backgroundColor: Colors.foodBg,
@@ -1275,7 +1427,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: BorderRadius.full,
   },
-  dietTabOn: { backgroundColor: Colors.foodAccent },
+  dietTabOn: { backgroundColor: t.accent },
   dietTabOff: { opacity: 0.4 },
   dietTabText: { fontSize: 13, fontWeight: '700', color: Colors.foodTextSecondary },
   dietTabTextOn: { color: Colors.white },
@@ -1302,7 +1454,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: Spacing.md,
   },
-  sectionFooterAction: { fontSize: 13, fontWeight: '700', color: Colors.foodAccent },
+  sectionFooterAction: { fontSize: 13, fontWeight: '700', color: t.accent },
   sectionFooterHint: {
     fontSize: 11.5,
     color: Colors.foodTextMuted,
@@ -1326,7 +1478,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
-  badgeStrong: { color: Colors.foodAccentDark },
+  badgeStrong: { color: t.accentDark },
   rowName: { fontSize: 15, fontWeight: '700', color: Colors.foodText },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   price: { fontSize: 14, fontWeight: '700', color: Colors.foodText },
@@ -1371,7 +1523,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 3,
   },
-  addBtnText: { fontSize: 13, fontWeight: '800', color: Colors.foodAccent, letterSpacing: 0.5 },
+  addBtnText: { fontSize: 13, fontWeight: '800', color: t.accent, letterSpacing: 0.5 },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1392,7 +1544,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.foodAccent,
+    color: t.accent,
   },
 
   // ── Diet mark ──
@@ -1428,7 +1580,7 @@ const styles = StyleSheet.create({
   statusMessage: { fontSize: 14, color: Colors.foodTextMuted, textAlign: 'center' },
   statusBtn: {
     marginTop: Spacing.md,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
@@ -1535,7 +1687,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
     zIndex: 10,
@@ -1544,4 +1696,6 @@ const styles = StyleSheet.create({
   cartBarTotal: { fontSize: 16, fontWeight: '800', color: Colors.white },
   cartBarBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   cartBarBtnText: { fontSize: 15, fontWeight: '800', color: Colors.white },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

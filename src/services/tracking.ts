@@ -11,7 +11,7 @@
  * All money values are plain rupee numbers (not paise).
  */
 
-import { apiGet } from './api';
+import { apiGet, apiPost } from './api';
 
 // ─── Timeline ───────────────────────────────────────────────────────────────
 
@@ -140,6 +140,57 @@ interface RawTrackingResponse {
 export async function getOrderTracking(orderId: string): Promise<TrackingData> {
   const raw = await apiGet<RawTrackingResponse>(`/api/orders/${orderId}/tracking`);
   return raw;
+}
+
+// ─── Veg-only fleet assignment ────────────────────────────────────────────
+//
+// A *different* concept from `assignmentStatus` above: this tracks whether the
+// order opted into the veg-only delivery fleet at checkout, and — while the
+// server is still searching for one — lets the customer choose to keep
+// waiting or fall back to any available partner. `not_requested` covers every
+// order that didn't opt in, so it's safe to fetch this for every order and
+// simply render nothing in that case.
+
+export type VegFleetStatus = 'not_requested' | 'searching' | 'assigned' | 'fallback_any_partner';
+
+export interface VegFleetState {
+  status: VegFleetStatus;
+  /** Seconds left in the current search window, or null when not searching. */
+  remainingSeconds: number | null;
+}
+
+interface RawVegFleetState {
+  status?: string;
+  remainingSeconds?: number | null;
+}
+
+function toVegFleetState(raw: RawVegFleetState): VegFleetState {
+  const status: VegFleetStatus =
+    raw.status === 'searching' || raw.status === 'assigned' || raw.status === 'fallback_any_partner'
+      ? raw.status
+      : 'not_requested';
+  return {
+    status,
+    remainingSeconds: typeof raw.remainingSeconds === 'number' ? raw.remainingSeconds : null,
+  };
+}
+
+/** `GET /api/orders/:id/veg-fleet/status`. */
+export async function getVegFleetStatus(orderId: string): Promise<VegFleetState> {
+  const raw = await apiGet<RawVegFleetState>(`/api/orders/${orderId}/veg-fleet/status`);
+  return toVegFleetState(raw);
+}
+
+/** `POST /api/orders/:id/veg-fleet/keep-waiting` — resets the search window. */
+export async function keepWaitingVegFleet(orderId: string): Promise<VegFleetState> {
+  const raw = await apiPost<RawVegFleetState>(`/api/orders/${orderId}/veg-fleet/keep-waiting`);
+  return toVegFleetState(raw);
+}
+
+/** `POST /api/orders/:id/veg-fleet/fallback` — accepts any available partner. */
+export async function vegFleetFallback(orderId: string): Promise<VegFleetState> {
+  const raw = await apiPost<RawVegFleetState>(`/api/orders/${orderId}/veg-fleet/fallback`);
+  return toVegFleetState(raw);
 }
 
 // ─── Display helpers ─────────────────────────────────────────────────────────

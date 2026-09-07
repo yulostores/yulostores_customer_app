@@ -29,6 +29,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { reportError } from '../../src/lib/logger';
 import {
   removeAddress,
@@ -60,6 +66,7 @@ interface AddressCardProps {
   address: SavedAddress;
   isActive: boolean;
   onChoose: () => void;
+  onEdit: () => void;
   onDelete: () => void;
   onSetDefault: () => void;
   actionLoading: boolean;
@@ -69,19 +76,24 @@ function AddressCard({
   address,
   isActive,
   onChoose,
+  onEdit,
   onDelete,
   onSetDefault,
   actionLoading,
 }: AddressCardProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent, accentLight } = useAccentTheme();
   const { primary, secondary } = formatAddressLines(address);
-  const meta = LABEL_META[address.label] ?? LABEL_META.other;
+  const base = LABEL_META[address.label] ?? LABEL_META.other;
+  // The "home" pin follows the app-wide accent; work/other keep their own hues.
+  const meta = address.label === 'home' ? { ...base, tint: accent } : base;
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <Pressable
       style={[styles.card, isActive && styles.cardActive]}
       onPress={() => { setMenuOpen(false); onChoose(); }}
-      android_ripple={{ color: Colors.foodAccentLight }}
+      android_ripple={{ color: accentLight }}
     >
       {/* Left icon bubble */}
       <View style={[styles.iconBubble, { backgroundColor: meta.tint + '18' }]}>
@@ -109,7 +121,7 @@ function AddressCard({
           style={styles.dotBtn}
         >
           {actionLoading ? (
-            <ActivityIndicator size="small" color={Colors.foodAccent} />
+            <ActivityIndicator size="small" color={accent} />
           ) : (
             <Ionicons name="ellipsis-vertical" size={18} color={Colors.foodTextMuted} />
           )}
@@ -117,6 +129,13 @@ function AddressCard({
 
         {menuOpen ? (
           <View style={styles.dropMenu}>
+            <Pressable
+              style={styles.dropItem}
+              onPress={() => { setMenuOpen(false); onEdit(); }}
+            >
+              <Ionicons name="create-outline" size={15} color={Colors.foodText} />
+              <Text style={styles.dropLabel}>Edit</Text>
+            </Pressable>
             {!address.isDefault ? (
               <Pressable
                 style={styles.dropItem}
@@ -146,6 +165,8 @@ function AddressCard({
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function SavedAddressesScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent, accentLight } = useAccentTheme();
   const {
     savedAddresses,
     activeLocation,
@@ -162,6 +183,10 @@ export default function SavedAddressesScreen() {
     },
     [chooseSaved],
   );
+
+  const handleEdit = useCallback((a: SavedAddress) => {
+    router.push({ pathname: '/location/confirm', params: { editId: a._id } });
+  }, []);
 
   const handleSetDefault = useCallback(
     async (a: SavedAddress) => {
@@ -238,29 +263,29 @@ export default function SavedAddressesScreen() {
         <Pressable
           style={styles.addBtn}
           onPress={() => router.push('/location')}
-          android_ripple={{ color: Colors.foodAccentLight }}
+          android_ripple={{ color: accentLight }}
         >
           <View style={styles.addIconWrap}>
-            <Ionicons name="add" size={20} color={Colors.foodAccent} />
+            <Ionicons name="add" size={20} color={accent} />
           </View>
           <Text style={styles.addBtnText}>Add a new address</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.foodAccent} />
+          <Ionicons name="chevron-forward" size={16} color={accent} />
         </Pressable>
 
         {/* Loading state */}
         {loadingSaved ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color={Colors.foodAccent} />
+            <ActivityIndicator size="large" color={accent} />
             <Text style={styles.loadingText}>Loading your addresses…</Text>
           </View>
         ) : isEmpty ? (
           /* Empty state */
           <View style={styles.emptyWrap}>
             <LinearGradient
-              colors={[Colors.foodAccentLight, '#FFF']}
+              colors={[accentLight, '#FFF']}
               style={styles.emptyIllustration}
             >
-              <Ionicons name="location-outline" size={56} color={Colors.foodAccent} />
+              <Ionicons name="location-outline" size={56} color={accent} />
             </LinearGradient>
             <Text style={styles.emptyTitle}>No saved addresses</Text>
             <Text style={styles.emptySub}>
@@ -277,6 +302,7 @@ export default function SavedAddressesScreen() {
                 address={a}
                 isActive={activeLocation?.id === a._id}
                 onChoose={() => handleChoose(a)}
+                onEdit={() => handleEdit(a)}
                 onDelete={() => handleDelete(a)}
                 onSetDefault={() => handleSetDefault(a)}
                 actionLoading={actionId === a._id}
@@ -300,7 +326,8 @@ export default function SavedAddressesScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.foodSurface },
 
   // Header
@@ -343,15 +370,15 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.base,
     borderRadius: BorderRadius.xl,
     borderWidth: 1.5,
-    borderColor: Colors.foodAccent,
+    borderColor: t.accent,
     borderStyle: 'dashed',
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
   },
   addIconWrap: {
     width: 32,
     height: 32,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccent + '20',
+    backgroundColor: t.accent + '20',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -359,7 +386,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.foodAccent,
+    color: t.accent,
   },
 
   // Loading
@@ -434,8 +461,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardActive: {
-    borderColor: Colors.foodAccent,
-    backgroundColor: Colors.foodAccentLight,
+    borderColor: t.accent,
+    backgroundColor: t.accentLight,
   },
   activeBar: {
     position: 'absolute',
@@ -443,7 +470,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     borderTopLeftRadius: BorderRadius.lg,
     borderBottomLeftRadius: BorderRadius.lg,
   },
@@ -465,7 +492,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   defaultBadge: {
-    backgroundColor: Colors.foodAccent + '18',
+    backgroundColor: t.accent + '18',
     borderRadius: BorderRadius.full,
     paddingHorizontal: 7,
     paddingVertical: 2,
@@ -473,7 +500,7 @@ const styles = StyleSheet.create({
   defaultBadgeText: {
     fontSize: 9,
     fontWeight: '800',
-    color: Colors.foodAccent,
+    color: t.accent,
     letterSpacing: 0.8,
   },
 
@@ -532,11 +559,11 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   deliverBtn: {
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     borderRadius: BorderRadius.full,
     paddingVertical: Spacing.base,
     alignItems: 'center',
-    shadowColor: Colors.foodAccent,
+    shadowColor: t.accent,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -548,4 +575,6 @@ const styles = StyleSheet.create({
     color: Colors.white,
     letterSpacing: 0.3,
   },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

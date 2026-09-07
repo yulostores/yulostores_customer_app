@@ -88,6 +88,41 @@ interface MenuSearchResponse {
   items: RawMenuItem[];
 }
 
+interface RawReview {
+  _id: string;
+  userId?: { name?: string | null; profilePicture?: string | null } | null;
+  rating?: number;
+  comment?: string | null;
+  createdAt?: string | null;
+}
+
+interface ReviewsResponse {
+  reviews?: RawReview[];
+  total?: number;
+  page?: number;
+}
+
+/** One customer review on a restaurant's storefront. */
+export interface RestaurantReview {
+  id: string;
+  userName: string;
+  userAvatar: string | null;
+  rating: number;
+  comment: string;
+  createdAt: string | null;
+}
+
+function toReview(raw: RawReview): RestaurantReview {
+  return {
+    id: String(raw._id),
+    userName: raw.userId?.name?.trim() || 'Yulo customer',
+    userAvatar: raw.userId?.profilePicture?.trim() || null,
+    rating: typeof raw.rating === 'number' ? raw.rating : 0,
+    comment: raw.comment?.trim() || '',
+    createdAt: raw.createdAt ?? null,
+  };
+}
+
 /** Filters for one page of {@link fetchMenuItemsPage}. */
 export interface MenuItemsParams {
   /** Restrict to one category. Omit for the whole menu. */
@@ -216,14 +251,35 @@ export async function fetchMenuItemsPage(
 /**
  * Menu-scoped text search ("Search in menu" bar). Returns a flat list — the
  * backend matches name and description against the query.
+ *
+ * `foodType` mirrors the diet filter the storefront screen is on (Veg Mode forces
+ * `'veg'`), so this bar is filtered server-side like the rest of the menu rather
+ * than in the client. `'all'` / undefined is sent as no filter.
  */
 export async function fetchMenuSearch(
   restaurantId: string,
   q: string,
+  foodType?: 'all' | 'veg' | 'non_veg' | 'egg',
 ): Promise<MenuItem[]> {
   const data = await apiGet<MenuSearchResponse>(
     `/api/restaurants/${restaurantId}/menu/search`,
-    { q },
+    { q, foodType: foodType && foodType !== 'all' ? foodType : undefined },
   );
   return (data.items ?? []).map(toMenuItem);
+}
+
+/**
+ * One page (20) of a restaurant's reviews, newest first
+ * (`GET /api/restaurants/:id/reviews`, public — no auth required).
+ */
+export async function fetchRestaurantReviews(
+  restaurantId: string,
+  page = 1,
+): Promise<{ reviews: RestaurantReview[]; total: number; page: number }> {
+  const data = await apiGet<ReviewsResponse>(`/api/restaurants/${restaurantId}/reviews`, { page });
+  return {
+    reviews: (data.reviews ?? []).map(toReview),
+    total: data.total ?? 0,
+    page: data.page ?? page,
+  };
 }

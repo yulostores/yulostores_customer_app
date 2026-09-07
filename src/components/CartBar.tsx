@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { BorderRadius } from '../constants/Theme';
 import { useCart } from '../context/CartContext';
-import { useVegMode } from '../context/VegModeContext';
+import { useAccentTheme } from '../hooks/useAccentTheme';
 
 /**
  * Floating "sticky cart" pill for the Home screen — a port of the Figma
@@ -17,9 +17,9 @@ import { useVegMode } from '../context/VegModeContext';
  * down here" rather than as a layout jump.
  *
  * Self-contained — it reads the cart from context and paints its accent from
- * veg mode (orange normally, green while "VEG ONLY" is on, same as the veg
- * banner and diet marks), so the screen only has to drop `<CartBar />` above
- * the tab bar.
+ * the app-wide veg theme (orange normally, green while "Pure veg restaurants
+ * only" is on, same as the tab bar and every CTA), so the screen only has to
+ * drop `<CartBar />` above the tab bar.
  *
  * `View cart` and `View menu` are logged TODOs for now: neither the cart screen
  * nor a restaurant menu route exists yet.
@@ -29,14 +29,23 @@ const BAR_HEIGHT = 80;
 
 export default function CartBar() {
   const { cart, itemCount, clear } = useCart();
-  const { enabled: vegMode } = useVegMode();
-  const accent = vegMode ? Colors.foodVegGreen : Colors.foodAccent;
+  const accent = useAccentTheme().accent;
 
   const anim = useRef(new Animated.Value(0)).current;
   const hasCart = !!cart && itemCount > 0;
 
+  const [dismissed, setDismissed] = useState(false);
+  const prevCount = useRef(itemCount);
+
   useEffect(() => {
-    if (!hasCart) return;
+    if (itemCount !== prevCount.current) {
+      setDismissed(false);
+      prevCount.current = itemCount;
+    }
+  }, [itemCount]);
+
+  useEffect(() => {
+    if (!hasCart || dismissed) return;
     Animated.spring(anim, {
       toValue: 1,
       useNativeDriver: true,
@@ -44,19 +53,16 @@ export default function CartBar() {
       stiffness: 240,
       mass: 0.7,
     }).start();
-  }, [hasCart, anim]);
+  }, [hasCart, anim, dismissed]);
 
-  if (!hasCart || !cart) return null;
+  if (!hasCart || !cart || dismissed) return null;
 
   const handleDismiss = () => {
-    // Slide back down, then empty the cart — with no cart screen or tab badge
-    // yet, the "X" is the only visible control on the order, so it clears
-    // rather than parking the cart somewhere the customer can't get back to.
     Animated.timing(anim, {
       toValue: 0,
       duration: 160,
       useNativeDriver: true,
-    }).start(() => clear());
+    }).start(() => setDismissed(true));
   };
 
   const handleViewCart = () => router.push('/cart');

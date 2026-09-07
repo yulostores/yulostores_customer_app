@@ -79,6 +79,9 @@ export const Colors = {
   foodSearchBg: '#F2F2F2',
   foodHeartRed: '#E53935',
   foodVegGreen: '#0D8A16',
+  // Darker green, the veg-mode counterpart of foodAccentDark — used for text on
+  // foodPureVegBg and for pressed states while the app-wide "Pure veg" theme is on.
+  foodVegGreenDark: '#0A6E11',
   foodPureVegBg: '#E8F5E9',
   foodNonVegRed: '#B0261A',
   // Toggle track for the "VEG Only" switch — off/grey vs on/green (the on-color

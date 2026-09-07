@@ -12,7 +12,7 @@
  * on the in-memory session instead.
  */
 
-import { apiGet } from './api';
+import { apiGet, apiPatch } from './api';
 
 interface RawUser {
   _id: string;
@@ -54,6 +54,38 @@ function reshape(u: RawUser): CustomerProfile {
 /** The current customer's profile. Throws `ApiError` 401 on a bypass session. */
 export async function fetchMyProfile(): Promise<CustomerProfile> {
   const data = await apiGet<{ user: RawUser }>('/api/users/me');
+  return reshape(data.user);
+}
+
+/** A picked photo, ready to attach to the avatar upload. */
+export interface AvatarFile {
+  uri: string;
+  name: string;
+  type: string;
+}
+
+/**
+ * Update the customer's name / phone and, optionally, their avatar
+ * (`PATCH /api/users/me`). The backend takes both a JSON body and — in the same
+ * request — an `avatar` multipart file (Cloudinary upload, wins over any other
+ * avatar field sent in the same call). `apiSend` leaves `Content-Type` to
+ * `fetch` for a `FormData` body, so no extra plumbing is needed here.
+ */
+export async function updateProfile(
+  payload: { name?: string; phone?: string },
+  avatar?: AvatarFile,
+): Promise<CustomerProfile> {
+  let data: { user: RawUser };
+  if (avatar) {
+    const form = new FormData();
+    if (payload.name !== undefined) form.append('name', payload.name);
+    if (payload.phone !== undefined) form.append('phone', payload.phone);
+    // React Native's FormData accepts this {uri, name, type} shape directly.
+    form.append('avatar', { uri: avatar.uri, name: avatar.name, type: avatar.type } as unknown as Blob);
+    data = await apiPatch<{ user: RawUser }>('/api/users/me', form);
+  } else {
+    data = await apiPatch<{ user: RawUser }>('/api/users/me', payload);
+  }
   return reshape(data.user);
 }
 

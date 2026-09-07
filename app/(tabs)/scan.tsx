@@ -10,8 +10,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 
 export default function ScanScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.container}>
@@ -44,12 +52,12 @@ export default function ScanScreen() {
         {/* Info cards */}
         <View style={styles.infoRow}>
           <View style={styles.infoCard}>
-            <Ionicons name="flash-outline" size={22} color={Colors.foodAccent} />
+            <Ionicons name="flash-outline" size={22} color={accent} />
             <Text style={styles.infoTitle}>Quick Order</Text>
             <Text style={styles.infoSubtext}>No waiting for a waiter</Text>
           </View>
           <View style={styles.infoCard}>
-            <Ionicons name="shield-checkmark-outline" size={22} color={Colors.foodAccent} />
+            <Ionicons name="shield-checkmark-outline" size={22} color={accent} />
             <Text style={styles.infoTitle}>Secure</Text>
             <Text style={styles.infoSubtext}>Safe & verified orders</Text>
           </View>
@@ -59,7 +67,8 @@ export default function ScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.foodBg },
   container: {
     flex: 1,
@@ -88,18 +97,18 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 28,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.foodAccent,
+    borderColor: t.accent,
     borderStyle: 'dashed',
     marginBottom: 12,
   },
   qrIcon: {
     width: 64,
     height: 64,
-    tintColor: Colors.foodAccent,
+    tintColor: t.accent,
   },
   scanTitle: {
     fontSize: 20,
@@ -118,7 +127,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: BorderRadius.full,
@@ -152,4 +161,6 @@ const styles = StyleSheet.create({
     color: Colors.foodTextMuted,
     textAlign: 'center',
   },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

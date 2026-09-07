@@ -148,7 +148,7 @@ async function fetchAuthed(
   method: string,
   url: string,
   buildHeaders: () => Record<string, string>,
-  body?: string,
+  body?: string | FormData,
 ): Promise<Response> {
   const send = () =>
     fetchWithTimeout(url, { method, headers: buildHeaders(), body, timeoutMs: API_TIMEOUT_MS });
@@ -238,8 +238,13 @@ export interface SendOptions {
 }
 
 /**
- * Perform an authenticated request with an optional JSON body.
+ * Perform an authenticated request with an optional body.
  * Returns the unwrapped `data` from the response envelope.
+ *
+ * The body is JSON-encoded unless it is a `FormData` instance, in which case it
+ * is passed through untouched and the `Content-Type` header is left unset so the
+ * platform's `fetch` can add the `multipart/form-data` boundary itself (the one
+ * multipart caller today is the avatar upload in `PATCH /api/users/me`).
  *
  * Shares {@link apiGet}'s contract: `ApiError('NETWORK_ERROR', 0)` when the
  * server is unreachable, `ApiError('TIMEOUT', 0)` when it is too slow, and
@@ -251,9 +256,12 @@ export async function apiSend<T>(
   body?: unknown,
   opts?: SendOptions,
 ): Promise<T> {
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+
   const buildHeaders = (): Record<string, string> => {
     const headers: Record<string, string> = { Accept: 'application/json' };
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    // Let `fetch` set `Content-Type` (with its boundary) for a multipart body.
+    if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
 
     const token = getAccessToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -268,7 +276,8 @@ export async function apiSend<T>(
     return headers;
   };
 
-  const payload = body !== undefined ? JSON.stringify(body) : undefined;
+  const payload =
+    body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body);
 
   let res: Response;
   try {

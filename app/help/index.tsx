@@ -22,6 +22,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useSupportTickets } from '../../src/hooks/useSupportTickets';
 import {
   ORDER_ISSUE_TOPICS,
@@ -51,6 +57,8 @@ function HelpRow({
   onPress: () => void;
   first?: boolean;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   return (
     <Pressable
       style={({ pressed }) => [
@@ -63,7 +71,7 @@ function HelpRow({
       accessibilityLabel={title}
     >
       <View style={styles.rowIcon}>
-        <Ionicons name={icon} size={19} color={Colors.foodAccent} />
+        <Ionicons name={icon} size={19} color={accent} />
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{title}</Text>
@@ -151,7 +159,8 @@ export default function HelpAndSupportScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
@@ -209,14 +218,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rowText: { flex: 1, gap: 2 },
   rowTitle: { fontSize: 15, fontWeight: '700', color: Colors.foodText },
   rowSubtitle: { fontSize: 12.5, color: Colors.foodTextSecondary, lineHeight: 17 },
-  rowMeta: { fontSize: 12, fontWeight: '700', color: Colors.foodAccent },
+  rowMeta: { fontSize: 12, fontWeight: '700', color: t.accent },
 
   footNote: {
     fontSize: 12,
@@ -224,4 +233,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     paddingHorizontal: Spacing.xs,
   },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

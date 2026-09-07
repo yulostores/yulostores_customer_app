@@ -39,9 +39,17 @@ import {
 } from '../../src/lib/itemPricing';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
-import { addItemToCart } from '../../src/services/cart';
-import { favoriteItem, formatBadge, unfavoriteItem } from '../../src/services/items';
+import { addItemToCart, clearCart } from '../../src/services/cart';
+import { formatBadge } from '../../src/services/items';
+import { confirmCartConflict } from '../../src/lib/cartConflict';
 import { useCart } from '../../src/context/CartContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
+import { useFavoriteToggle } from '../../src/hooks/useFavoriteToggle';
 import { useItemDetail } from '../../src/hooks/useItemDetail';
 import type { ItemDetail, ItemOptionGroup } from '../../src/types/restaurant';
 
@@ -98,6 +106,8 @@ function QtyStepper({
   onChange: (next: number) => void;
   compact?: boolean;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const canDec = value > min;
   const canInc = value < max;
   const size = compact ? 26 : 34;
@@ -109,7 +119,7 @@ function QtyStepper({
         hitSlop={6}
         style={[styles.stepBtn, { width: size, height: size }, !canDec && styles.stepBtnOff]}
       >
-        <Ionicons name="remove" size={compact ? 14 : 18} color={canDec ? Colors.foodAccent : Colors.foodTextMuted} />
+        <Ionicons name="remove" size={compact ? 14 : 18} color={canDec ? accent : Colors.foodTextMuted} />
       </Pressable>
       <Text style={[styles.stepValue, compact && styles.stepValueCompact]}>{value}</Text>
       <Pressable
@@ -118,7 +128,7 @@ function QtyStepper({
         hitSlop={6}
         style={[styles.stepBtn, { width: size, height: size }, !canInc && styles.stepBtnOff]}
       >
-        <Ionicons name="add" size={compact ? 14 : 18} color={canInc ? Colors.foodAccent : Colors.foodTextMuted} />
+        <Ionicons name="add" size={compact ? 14 : 18} color={canInc ? accent : Colors.foodTextMuted} />
       </Pressable>
     </View>
   );
@@ -135,6 +145,7 @@ function OptionGroupCard({
   selections: Selections;
   onChange: (next: Selections) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const picked = selections[group._id] ?? {};
   const isSingle = group.type === 'single_choice';
   const required = group.required || group.minSelect > 0;
@@ -245,6 +256,7 @@ function LoadingState() {
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.centre}>
       <Ionicons name="fast-food-outline" size={64} color={Colors.foodBorder} />
@@ -263,6 +275,7 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 // ─── Screen ─────────────────────────────────────────────────────────────
 
 export default function ItemDetailScreen() {
+  const styles = useThemedStyles(makeStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { item, isLoading, error, refresh } = useItemDetail(id);
@@ -279,16 +292,22 @@ export default function ItemDetailScreen() {
   const selections = overrides ?? seededSelections;
 
   const [qty, setQty] = useState(1);
-  const [favorite, setFavorite] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  // Favorite state / persistence is shared with every other heart in the app —
+  // the hook re-seeds itself from `item.isFavorited` when a fresh dish lands.
+  const { favorited: favorite, toggle: toggleFavorite } = useFavoriteToggle(
+    'item',
+    item?._id,
+    item?.isFavorited,
+  );
 
   // Reset everything that's specific to one dish when a fresh item lands
   // (first load, a retry after an error, or the route id changing).
   useEffect(() => {
     setOverrides(null);
     setQty(1);
-    setFavorite(!!item?.isFavorited);
     setAddError(null);
   }, [item]);
 
@@ -303,27 +322,12 @@ export default function ItemDetailScreen() {
     ? [item.category?.name, item.restaurant?.name].filter(Boolean).join('  •  ')
     : '';
 
-  const toggleFavorite = async () => {
-    if (!item) return;
-    const next = !favorite;
-    setFavorite(next);
-    try {
-      await (next ? favoriteItem(item._id) : unfavoriteItem(item._id));
-    } catch (err) {
-      setFavorite(!next); // roll back the optimistic flip
-      if (err instanceof ApiError && (err.status === 401 || err.status === 0)) {
-        logger.warn('item', 'Favorite toggle skipped', { code: err.code, status: err.status });
-      } else {
-        reportError('item', 'Failed to toggle item favorite', err, { id: item._id });
-      }
-    }
-  };
-
-  const onAdd = async () => {
+  const runAdd = async (freshCart: boolean = false) => {
     if (!item || adding || validationErrors.length > 0) return;
     setAdding(true);
     setAddError(null);
     try {
+      if (freshCart) await clearCart();
       await addItemToCart({
         menuItemId: item._id,
         qty,
@@ -341,7 +345,10 @@ export default function ItemDetailScreen() {
       );
       router.replace('/cart');
     } catch (err) {
-      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+      if (err instanceof ApiError && err.code === 'CART_RESTAURANT_CONFLICT') {
+        const name = (err.details as { currentRestaurantName?: string } | null)?.currentRestaurantName ?? null;
+        confirmCartConflict(name, () => runAdd(true));
+      } else if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
         logger.warn('item', `Add to cart rejected — ${err.status} ${err.code}`, {
           status: err.status,
           code: err.code,
@@ -359,6 +366,8 @@ export default function ItemDetailScreen() {
       setAdding(false);
     }
   };
+
+  const onAdd = () => runAdd(false);
 
   const headerBtnTop = insets.top + Spacing.sm;
 
@@ -498,7 +507,8 @@ export default function ItemDetailScreen() {
 
 // ─── Styles ─────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.foodBg },
   flex: { flex: 1 },
   flexShrink: { flexShrink: 1 },
@@ -513,7 +523,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
@@ -553,13 +563,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: BorderRadius.full,
   },
-  badgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.foodAccent },
-  badgeText: { fontSize: 11.5, fontWeight: '800', color: Colors.foodAccentDark },
+  badgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: t.accent },
+  badgeText: { fontSize: 11.5, fontWeight: '800', color: t.accentDark },
 
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   name: { flexShrink: 1, fontSize: 25, fontWeight: '800', color: Colors.foodText },
@@ -624,10 +634,10 @@ const styles = StyleSheet.create({
   groupTitle: { fontSize: 17, fontWeight: '800', color: Colors.foodText },
   groupHint: { fontSize: 12, color: Colors.foodTextMuted, marginTop: 3, fontWeight: '600' },
   reqPill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: BorderRadius.full },
-  reqPillOn: { backgroundColor: Colors.foodAccentLight },
+  reqPillOn: { backgroundColor: t.accentLight },
   reqPillOff: { backgroundColor: Colors.foodBgSecondary },
   reqPillText: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.3 },
-  reqPillTextOn: { color: Colors.foodAccentDark },
+  reqPillTextOn: { color: t.accentDark },
   reqPillTextOff: { color: Colors.foodTextMuted },
 
   optionRow: {
@@ -639,7 +649,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     marginHorizontal: -4,
   },
-  optionRowOn: { backgroundColor: Colors.foodAccentLight },
+  optionRowOn: { backgroundColor: t.accentLight },
   radio: {
     width: 22,
     height: 22,
@@ -649,8 +659,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioOn: { borderColor: Colors.foodAccent },
-  radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: Colors.foodAccent },
+  radioOn: { borderColor: t.accent },
+  radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: t.accent },
   checkbox: {
     width: 22,
     height: 22,
@@ -660,7 +670,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxOn: { borderColor: Colors.foodAccent, backgroundColor: Colors.foodAccent },
+  checkboxOn: { borderColor: t.accent, backgroundColor: t.accent },
   optionBody: { flex: 1 },
   optionName: { fontSize: 14.5, fontWeight: '700', color: Colors.foodText },
   optionDesc: { fontSize: 12.5, color: Colors.foodTextMuted, marginTop: 2, lineHeight: 17 },
@@ -677,7 +687,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     paddingHorizontal: 4,
   },
-  stepperCompact: { borderColor: Colors.foodAccent },
+  stepperCompact: { borderColor: t.accent },
   stepBtn: { alignItems: 'center', justifyContent: 'center' },
   stepBtnOff: { opacity: 0.5 },
   stepValue: {
@@ -701,7 +711,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base,
     paddingTop: Spacing.md,
   },
-  footerHint: { fontSize: 12.5, color: Colors.foodAccentDark, fontWeight: '700', marginBottom: Spacing.sm },
+  footerHint: { fontSize: 12.5, color: t.accentDark, fontWeight: '700', marginBottom: Spacing.sm },
   footerError: { fontSize: 12.5, color: Colors.authDanger, fontWeight: '700', marginBottom: Spacing.sm },
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   cta: {
@@ -712,8 +722,8 @@ const styles = StyleSheet.create({
     gap: 8,
     height: 54,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccent,
-    shadowColor: Colors.foodAccent,
+    backgroundColor: t.accent,
+    shadowColor: t.accent,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -740,7 +750,7 @@ const styles = StyleSheet.create({
   errMsg: { fontSize: 14, color: Colors.foodTextMuted, textAlign: 'center' },
   errBtn: {
     marginTop: Spacing.md,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
@@ -752,4 +762,6 @@ const styles = StyleSheet.create({
   skelBody: { paddingHorizontal: Spacing.base, paddingTop: Spacing.xl, gap: 10 },
   skelLine: { height: 14, borderRadius: 6, backgroundColor: Colors.foodSearchBg },
   skelCard: { height: 120, borderRadius: BorderRadius.lg, backgroundColor: Colors.foodSearchBg, marginTop: Spacing.md },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

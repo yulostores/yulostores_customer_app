@@ -17,6 +17,7 @@ import AddressRow from '../../src/components/location/AddressRow';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
+import { useAccentTheme } from '../../src/hooks/useAccentTheme';
 import { DEFAULT_REGION, getCurrentCoordinates, LocationError } from '../../src/lib/geo';
 import { logger, reportError } from '../../src/lib/logger';
 import { searchPlaces, type PlaceSuggestion } from '../../src/lib/placesSearch';
@@ -25,6 +26,7 @@ import type { LatLng } from '../../src/types/address';
 const DEBOUNCE_MS = 350;
 
 export default function LocationSearchScreen() {
+  const { accent } = useAccentTheme();
   const { activeLocation } = useDeliveryLocation();
   const near: LatLng = activeLocation?.coordinates ?? DEFAULT_REGION;
 
@@ -115,7 +117,7 @@ export default function LocationSearchScreen() {
             autoCorrect={false}
           />
           {searching ? (
-            <ActivityIndicator size="small" color={Colors.foodAccent} />
+            <ActivityIndicator size="small" color={accent} />
           ) : query.length > 0 ? (
             <Pressable onPress={() => setQuery('')} hitSlop={10}>
               <Ionicons name="close-circle" size={18} color={Colors.foodTextMuted} />

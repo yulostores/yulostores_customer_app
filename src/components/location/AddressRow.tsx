@@ -7,6 +7,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Spacing } from '../../constants/Theme';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../hooks/useAccentTheme';
 
 interface Props {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -27,6 +33,8 @@ export default function AddressRow({
   loading = false,
   chevron = false,
 }: Props) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -35,9 +43,9 @@ export default function AddressRow({
     >
       <View style={[styles.iconWrap, tint && styles.iconWrapTint]}>
         {loading ? (
-          <ActivityIndicator size="small" color={Colors.foodAccent} />
+          <ActivityIndicator size="small" color={accent} />
         ) : (
-          <Ionicons name={icon} size={18} color={tint ? Colors.foodAccent : Colors.foodTextSecondary} />
+          <Ionicons name={icon} size={18} color={tint ? accent : Colors.foodTextSecondary} />
         )}
       </View>
 
@@ -59,7 +67,8 @@ export default function AddressRow({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -75,9 +84,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Colors.foodBgSecondary,
   },
-  iconWrapTint: { backgroundColor: Colors.foodAccentLight },
+  iconWrapTint: { backgroundColor: t.accentLight },
   body: { flex: 1 },
   primary: { fontSize: 14.5, fontWeight: '600', color: Colors.foodText },
-  primaryTint: { color: Colors.foodAccent },
+  primaryTint: { color: t.accent },
   secondary: { fontSize: 12.5, color: Colors.foodTextSecondary, marginTop: 2, lineHeight: 17 },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

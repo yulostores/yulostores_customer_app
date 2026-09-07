@@ -13,6 +13,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { useAccentTheme } from '../../hooks/useAccentTheme';
 
 const PIN = 46;
 
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export default function CenterPin({ moving = false, caption }: Props) {
+  const { accent } = useAccentTheme();
   const lift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -53,7 +55,7 @@ export default function CenterPin({ moving = false, caption }: Props) {
       <Animated.View
         style={[styles.pin, { transform: [{ translateY: pinTranslate }] }]}
       >
-        <Ionicons name="location" size={PIN} color={Colors.foodAccent} />
+        <Ionicons name="location" size={PIN} color={accent} />
       </Animated.View>
 
       <Animated.View

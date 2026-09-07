@@ -10,6 +10,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { BorderRadius, Spacing } from '../../constants/Theme';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../hooks/useAccentTheme';
 
 type Variant = 'solid' | 'outline';
 
@@ -32,9 +38,11 @@ export default function ActionButton({
   disabled = false,
   style,
 }: Props) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const isSolid = variant === 'solid';
   const inactive = disabled || loading;
-  const fg = isSolid ? Colors.authAccentText : Colors.foodAccent;
+  const fg = isSolid ? Colors.authAccentText : accent;
 
   return (
     <Pressable
@@ -62,7 +70,8 @@ export default function ActionButton({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   base: {
     height: 54,
     borderRadius: BorderRadius.full,
@@ -74,8 +83,8 @@ const styles = StyleSheet.create({
   icon: { marginRight: Spacing.sm },
   label: { fontSize: 15.5, fontWeight: '700', letterSpacing: 0.2 },
   solid: {
-    backgroundColor: Colors.foodAccent,
-    shadowColor: Colors.foodAccent,
+    backgroundColor: t.accent,
+    shadowColor: t.accent,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.32,
     shadowRadius: 14,
@@ -84,9 +93,11 @@ const styles = StyleSheet.create({
   outline: {
     backgroundColor: Colors.foodSurface,
     borderWidth: 1.5,
-    borderColor: Colors.foodAccent,
+    borderColor: t.accent,
   },
   solidInactive: { backgroundColor: Colors.foodBorder, shadowOpacity: 0, elevation: 0 },
   outlineInactive: { borderColor: Colors.foodBorder },
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

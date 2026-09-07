@@ -40,10 +40,17 @@ import LabelChips from '../../src/components/location/LabelChips';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { buildAddressPayload } from '../../src/lib/address';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
-import type { AddressLabel, LatLng, ResolvedPlace } from '../../src/types/address';
+import { updateAddress } from '../../src/services/addresses';
+import type { AddressLabel, AddressPayload, LatLng, ResolvedPlace } from '../../src/types/address';
 
 // ─── Small presentational components ─────────────────────────────────────────
 
@@ -53,12 +60,14 @@ function Field({
   required,
   ...input
 }: { label: string; required?: boolean } & React.ComponentProps<typeof TextInput>) {
+  const fieldStyles = useThemedStyles(makeFieldStyles);
+  const { accent } = useAccentTheme();
   const [focused, setFocused] = useState(false);
   return (
     <View style={fieldStyles.wrap}>
       <Text style={fieldStyles.label}>
         {label}
-        {required ? <Text style={{ color: Colors.foodAccent }}> *</Text> : null}
+        {required ? <Text style={{ color: accent }}> *</Text> : null}
       </Text>
       <TextInput
         style={[fieldStyles.input, focused && fieldStyles.inputFocused]}
@@ -71,7 +80,8 @@ function Field({
   );
 }
 
-const fieldStyles = StyleSheet.create({
+const makeFieldStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   wrap: { marginBottom: Spacing.base },
   label: { fontSize: 12, fontWeight: '700', color: Colors.foodTextSecondary, marginBottom: 6, letterSpacing: 0.3 },
   input: {
@@ -84,8 +94,10 @@ const fieldStyles = StyleSheet.create({
     color: Colors.foodText,
     backgroundColor: Colors.foodSurface,
   },
-  inputFocused: { borderColor: Colors.foodAccent },
-});
+  inputFocused: { borderColor: t.accent },
+  });
+
+const fieldStyles = makeFieldStyles(ORANGE_ACCENT);
 
 /** Editable "chip" — shows a pre-filled value with a pencil icon; tapping focuses a TextInput */
 function EditableChip({
@@ -105,13 +117,15 @@ function EditableChip({
   keyboardType?: React.ComponentProps<typeof TextInput>['keyboardType'];
   maxLength?: number;
 }) {
+  const chipStyles = useThemedStyles(makeChipStyles);
+  const { accent } = useAccentTheme();
   const inputRef = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
   const hasValue = value.trim().length > 0;
 
   return (
     <Pressable style={[chipStyles.chip, focused && chipStyles.chipFocused]} onPress={() => inputRef.current?.focus()}>
-      <Ionicons name={icon} size={14} color={focused ? Colors.foodAccent : Colors.foodTextMuted} style={{ marginTop: 1 }} />
+      <Ionicons name={icon} size={14} color={focused ? accent : Colors.foodTextMuted} style={{ marginTop: 1 }} />
       <View style={chipStyles.inner}>
         <Text style={chipStyles.chipLabel}>{label}</Text>
         <TextInput
@@ -128,12 +142,13 @@ function EditableChip({
           returnKeyType="done"
         />
       </View>
-      <Ionicons name="create-outline" size={13} color={hasValue || focused ? Colors.foodAccent : Colors.foodBorder} />
+      <Ionicons name="create-outline" size={13} color={hasValue || focused ? accent : Colors.foodBorder} />
     </Pressable>
   );
 }
 
-const chipStyles = StyleSheet.create({
+const makeChipStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -147,11 +162,13 @@ const chipStyles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     minHeight: 56,
   },
-  chipFocused: { borderColor: Colors.foodAccent, backgroundColor: Colors.foodAccentLight + '60' },
+  chipFocused: { borderColor: t.accent, backgroundColor: t.accentLight + '60' },
   inner: { flex: 1 },
   chipLabel: { fontSize: 10, fontWeight: '700', color: Colors.foodTextMuted, letterSpacing: 0.3, marginBottom: 2 },
   chipInput: { fontSize: 13.5, fontWeight: '600', color: Colors.foodText, padding: 0 },
-});
+  });
+
+const chipStyles = makeChipStyles(ORANGE_ACCENT);
 
 /** Collapsible section header */
 function SectionToggle({
@@ -185,12 +202,22 @@ const sectionStyles = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function LocationConfirmScreen() {
-  const { lat, lng, place: placeRaw } = useLocalSearchParams<{
+  const styles = useThemedStyles(makeStyles);
+  const fieldStyles = useThemedStyles(makeFieldStyles);
+  const { accent } = useAccentTheme();
+  const { lat, lng, place: placeRaw, editId } = useLocalSearchParams<{
     lat?: string;
     lng?: string;
     place?: string;
+    editId?: string;
   }>();
-  const { saveAddress } = useDeliveryLocation();
+  const { saveAddress, savedAddresses, refreshSaved } = useDeliveryLocation();
+
+  const isEdit = !!editId;
+  const existing = useMemo(
+    () => (editId ? savedAddresses.find((a) => a._id === editId) ?? null : null),
+    [editId, savedAddresses],
+  );
 
   const coordinates: LatLng = {
     latitude: Number(lat ?? 0),
@@ -209,25 +236,28 @@ export default function LocationConfirmScreen() {
     }
   }, [placeRaw]);
 
-  // ── Pre-fill all fields from reverse geocode ──────────────────────────────
+  // ── Pre-fill all fields — from an existing saved address in edit mode, or
+  // from the reverse geocode when adding a new one ──────────────────────────
   const [house, setHouse] = useState('');
   const [floor, setFloor] = useState('');
   const [landmark, setLandmark] = useState('');
 
   // Address sub-components — individually editable
-  const [street, setStreet] = useState(place?.street ?? '');
-  const [pincode, setPincode] = useState(place?.pincode ?? '');
-  const [city, setCity] = useState(place?.city ?? '');
-  const [state, setState] = useState(place?.region ?? '');
+  const [street, setStreet] = useState(existing?.street ?? place?.street ?? '');
+  const [pincode, setPincode] = useState(existing?.pincode ?? place?.pincode ?? '');
+  const [city, setCity] = useState(existing?.city ?? place?.city ?? '');
+  const [state, setState] = useState(existing?.state ?? place?.region ?? '');
 
-  const [label, setLabel] = useState<AddressLabel>('home');
-  const [customLabel, setCustomLabel] = useState('');
-  const [isDefault, setIsDefault] = useState(false);
+  const [label, setLabel] = useState<AddressLabel>(existing?.label ?? 'home');
+  const [customLabel, setCustomLabel] = useState(existing?.customLabel ?? '');
+  const [isDefault, setIsDefault] = useState(existing?.isDefault ?? false);
 
   // Optional receiver section
-  const [receiverOpen, setReceiverOpen] = useState(false);
-  const [contactName, setContactName] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
+  const [receiverOpen, setReceiverOpen] = useState(
+    !!(existing?.contactName || existing?.contactPhone),
+  );
+  const [contactName, setContactName] = useState(existing?.contactName ?? '');
+  const [contactPhone, setContactPhone] = useState(existing?.contactPhone ?? '');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -244,16 +274,38 @@ export default function LocationConfirmScreen() {
     }).start();
   };
 
-  const canSave =
-    house.trim().length > 0 &&
-    (label !== 'other' || customLabel.trim().length > 0) &&
-    !saving;
+  const canSave = isEdit
+    ? street.trim().length > 0 &&
+      (label !== 'other' || customLabel.trim().length > 0) &&
+      !saving
+    : house.trim().length > 0 &&
+      (label !== 'other' || customLabel.trim().length > 0) &&
+      !saving;
 
   const onSave = async () => {
     if (!canSave) return;
     setSaving(true);
     setError(null);
     try {
+      if (isEdit && existing) {
+        const payload: Partial<AddressPayload> = {
+          label,
+          street: street.trim(),
+          city: city.trim() || undefined,
+          state: state.trim() || undefined,
+          pincode: pincode.trim() || undefined,
+          contactName: contactName.trim() || undefined,
+          contactPhone: contactPhone.trim() || undefined,
+          isDefault,
+        };
+        if (label === 'other' && customLabel.trim()) payload.customLabel = customLabel.trim();
+
+        await updateAddress(existing._id, payload);
+        await refreshSaved();
+        router.replace('/address');
+        return;
+      }
+
       // Build the payload manually so each field is sent as a separate DB column
       const streetLine = [
         house.trim(),
@@ -287,6 +339,7 @@ export default function LocationConfirmScreen() {
       reportError('location', 'Address save failed on confirm screen', err, {
         label,
         isDefault,
+        isEdit,
       });
       setError(
         err instanceof ApiError
@@ -312,7 +365,7 @@ export default function LocationConfirmScreen() {
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={Colors.foodText} />
         </Pressable>
-        <Text style={styles.headerTitle}>Add address details</Text>
+        <Text style={styles.headerTitle}>{isEdit ? 'Edit address' : 'Add address details'}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -326,19 +379,21 @@ export default function LocationConfirmScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.body}
         >
-          {/* ① Resolved location card */}
-          <View style={styles.locCard}>
-            <View style={styles.locIconWrap}>
-              <Ionicons name="location" size={18} color={Colors.foodAccent} />
+          {/* ① Resolved location card — add mode only; editing keeps the existing pin */}
+          {!isEdit ? (
+            <View style={styles.locCard}>
+              <View style={styles.locIconWrap}>
+                <Ionicons name="location" size={18} color={accent} />
+              </View>
+              <View style={styles.flex}>
+                <Text style={styles.locTitle} numberOfLines={1}>{resolvedTitle}</Text>
+                <Text style={styles.locSub} numberOfLines={2}>{resolvedSub}</Text>
+              </View>
+              <Pressable onPress={() => router.back()} hitSlop={8} style={styles.changeBtn}>
+                <Text style={styles.changeBtnText}>Change</Text>
+              </Pressable>
             </View>
-            <View style={styles.flex}>
-              <Text style={styles.locTitle} numberOfLines={1}>{resolvedTitle}</Text>
-              <Text style={styles.locSub} numberOfLines={2}>{resolvedSub}</Text>
-            </View>
-            <Pressable onPress={() => router.back()} hitSlop={8} style={styles.changeBtn}>
-              <Text style={styles.changeBtnText}>Change</Text>
-            </Pressable>
-          </View>
+          ) : null}
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -388,41 +443,46 @@ export default function LocationConfirmScreen() {
           {/* Divider */}
           <View style={styles.divider} />
 
-          {/* ③ House / flat details */}
-          <Text style={styles.sectionTitle}>FLAT / HOUSE DETAILS</Text>
+          {/* ③ House / flat details — add mode only; editing corrects the single
+              street line above instead of re-composing it from parts. */}
+          {!isEdit ? (
+            <>
+              <Text style={styles.sectionTitle}>FLAT / HOUSE DETAILS</Text>
 
-          <Field
-            label="House / Flat / Block no."
-            required
-            value={house}
-            onChangeText={setHouse}
-            placeholder="e.g. B-402, Sunrise Apartments"
-            autoFocus={pincode.length > 0}
-            returnKeyType="next"
-          />
-
-          <View style={styles.pairRow}>
-            <View style={styles.flex}>
               <Field
-                label="Floor (optional)"
-                value={floor}
-                onChangeText={setFloor}
-                placeholder="e.g. 4th"
-                keyboardType="default"
+                label="House / Flat / Block no."
+                required
+                value={house}
+                onChangeText={setHouse}
+                placeholder="e.g. B-402, Sunrise Apartments"
+                autoFocus={pincode.length > 0}
+                returnKeyType="next"
               />
-            </View>
-            <View style={styles.flex}>
-              <Field
-                label="Landmark (optional)"
-                value={landmark}
-                onChangeText={setLandmark}
-                placeholder="e.g. Near City Mall"
-              />
-            </View>
-          </View>
 
-          {/* Divider */}
-          <View style={styles.divider} />
+              <View style={styles.pairRow}>
+                <View style={styles.flex}>
+                  <Field
+                    label="Floor (optional)"
+                    value={floor}
+                    onChangeText={setFloor}
+                    placeholder="e.g. 4th"
+                    keyboardType="default"
+                  />
+                </View>
+                <View style={styles.flex}>
+                  <Field
+                    label="Landmark (optional)"
+                    value={landmark}
+                    onChangeText={setLandmark}
+                    placeholder="e.g. Near City Mall"
+                  />
+                </View>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.divider} />
+            </>
+          ) : null}
 
           {/* ④ Address label */}
           <Text style={styles.sectionTitle}>SAVE ADDRESS AS</Text>
@@ -474,7 +534,7 @@ export default function LocationConfirmScreen() {
           {/* ⑥ Set as default */}
           <Pressable style={styles.defaultRow} onPress={() => setIsDefault((v) => !v)}>
             <View style={styles.defaultIconWrap}>
-              <Ionicons name="star" size={18} color={isDefault ? Colors.foodAccent : Colors.foodTextMuted} />
+              <Ionicons name="star" size={18} color={isDefault ? accent : Colors.foodTextMuted} />
             </View>
             <View style={styles.flex}>
               <Text style={styles.defaultTitle}>Set as default address</Text>
@@ -483,14 +543,16 @@ export default function LocationConfirmScreen() {
             <Switch
               value={isDefault}
               onValueChange={setIsDefault}
-              trackColor={{ true: Colors.foodAccent, false: Colors.foodBorder }}
+              trackColor={{ true: accent, false: Colors.foodBorder }}
               thumbColor={Colors.white}
             />
           </Pressable>
 
-          {!canSave && house.trim().length === 0 ? (
+          {!canSave && (isEdit ? street.trim().length === 0 : house.trim().length === 0) ? (
             <Text style={styles.requiredHint}>
-              * House / Flat number is required to save this address
+              {isEdit
+                ? '* Street / area is required to save this address'
+                : '* House / Flat number is required to save this address'}
             </Text>
           ) : null}
         </ScrollView>
@@ -498,7 +560,7 @@ export default function LocationConfirmScreen() {
         {/* ── Footer CTA ── */}
         <View style={styles.footer}>
           <ActionButton
-            label="Save address"
+            label={isEdit ? 'Save changes' : 'Save address'}
             onPress={onSave}
             loading={saving}
             disabled={!canSave}
@@ -511,7 +573,8 @@ export default function LocationConfirmScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.foodSurface },
   flex: { flex: 1 },
 
@@ -552,7 +615,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -563,11 +626,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
     alignSelf: 'flex-start',
     marginTop: 2,
   },
-  changeBtnText: { fontSize: 12.5, fontWeight: '800', color: Colors.foodAccent },
+  changeBtnText: { fontSize: 12.5, fontWeight: '800', color: t.accent },
 
   // Error
   errorText: {
@@ -661,4 +724,6 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.foodBorder,
     backgroundColor: Colors.foodSurface,
   },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

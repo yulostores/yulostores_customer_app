@@ -43,6 +43,7 @@ export interface RawRestaurant {
     openTime: number;
     closeTime: number;
   }[];
+  isFavorited?: boolean;
 }
 
 /** The fields we read off a wire menu item — the raw MenuItem document plus its
@@ -163,5 +164,6 @@ export function toRestaurant(
     startingPrice: r.startingPrice ?? null,
     isPureVeg: r.isPureVeg ?? false,
     distanceKm,
+    isFavorited: r.isFavorited,
   };
 }

@@ -30,6 +30,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useCheckout } from '../../src/hooks/useCheckout';
 import {
   getMethod,
@@ -74,10 +80,12 @@ function AddressCard({
   overrideLabel?: string;
   overrideLine?: string;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   if (!address && !overrideLabel) {
     return (
       <Pressable style={styles.addressCard} onPress={() => router.push('/location')}>
-        <Ionicons name="location-outline" size={20} color={Colors.foodAccent} />
+        <Ionicons name="location-outline" size={20} color={accent} />
         <View style={styles.addressText}>
           <Text style={styles.addressTitle}>Add a delivery address</Text>
           <Text style={styles.addressDetail} numberOfLines={1}>
@@ -123,6 +131,8 @@ function BillBreakdown({
   /** `bill.grandTotal + tip` — what the customer actually pays. */
   grandTotal: number;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const [open, setOpen] = useState(false);
   return (
     <View style={styles.billWrap}>
@@ -131,7 +141,7 @@ function BillBreakdown({
         <Ionicons
           name={open ? 'chevron-up' : 'chevron-down'}
           size={14}
-          color={Colors.foodAccent}
+          color={accent}
         />
       </Pressable>
       {open && (
@@ -192,6 +202,7 @@ function MethodRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <Pressable style={styles.methodRow} onPress={onSelect}>
       <View style={[styles.methodBadge, { backgroundColor: method.tint + '18' }]}>
@@ -211,6 +222,8 @@ function MethodRow({
 // ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function PaymentScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
 
@@ -445,7 +458,7 @@ export default function PaymentScreen() {
       {busy && (
         <View style={styles.overlay}>
           <View style={styles.overlayCard}>
-            <ActivityIndicator size="large" color={Colors.foodAccent} />
+            <ActivityIndicator size="large" color={accent} />
             <Text style={styles.overlayText}>
               {phase === 'placing' ? 'Placing your order…' : 'Processing payment…'}
             </Text>
@@ -470,6 +483,7 @@ function CenterState({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.center}>
       <Ionicons name={icon} size={60} color={Colors.foodBorder} />
@@ -486,7 +500,8 @@ function CenterState({
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
@@ -533,7 +548,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: Spacing.sm,
   },
-  billToggleText: { fontSize: 13, fontWeight: '700', color: Colors.foodAccent },
+  billToggleText: { fontSize: 13, fontWeight: '700', color: t.accent },
   billRows: {
     backgroundColor: Colors.foodCardBg,
     borderRadius: BorderRadius.md,
@@ -612,8 +627,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioOn: { borderColor: Colors.foodAccent },
-  radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: Colors.foodAccent },
+  radioOn: { borderColor: t.accent },
+  radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: t.accent },
 
   // Inline pay button
   payBtn: {
@@ -622,10 +637,10 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
     marginBottom: Spacing.md,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.foodAccent,
+    shadowColor: t.accent,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 14,
@@ -670,7 +685,7 @@ const styles = StyleSheet.create({
   centerMessage: { fontSize: 14, color: Colors.foodTextMuted, textAlign: 'center', lineHeight: 20 },
   centerBtn: {
     marginTop: Spacing.md,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
@@ -680,4 +695,6 @@ const styles = StyleSheet.create({
   // Skeleton
   skelWrap: { padding: Spacing.base, gap: Spacing.md },
   skel: { backgroundColor: Colors.foodSearchBg, borderRadius: BorderRadius.md },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

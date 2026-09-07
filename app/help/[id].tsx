@@ -28,6 +28,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useSupportTicket } from '../../src/hooks/useSupportTicket';
 import {
   formatMessageTime,
@@ -55,6 +61,7 @@ const TONE_COLOR = {
 // ─── Message bubble ──────────────────────────────────────────────────────────
 
 function Bubble({ message }: { message: TicketMessage }) {
+  const styles = useThemedStyles(makeStyles);
   const mine = message.from === 'you';
   return (
     <View style={[styles.bubbleRow, mine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
@@ -84,6 +91,7 @@ function CenteredNotice({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.centered}>
       <Ionicons name={icon} size={46} color={Colors.foodBorder} />
@@ -101,6 +109,8 @@ function CenteredNotice({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function SupportTicketScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { signOut } = useAuth();
   const {
@@ -149,7 +159,7 @@ export default function SupportTicketScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {header('Request')}
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.foodAccent} />
+          <ActivityIndicator size="large" color={accent} />
         </View>
       </SafeAreaView>
     );
@@ -231,8 +241,8 @@ export default function SupportTicketScreen() {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={refresh}
-              tintColor={Colors.foodAccent}
-              colors={[Colors.foodAccent]}
+              tintColor={accent}
+              colors={[accent]}
             />
           }
           ListFooterComponent={
@@ -288,7 +298,8 @@ export default function SupportTicketScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.foodBg },
   flex: { flex: 1 },
 
@@ -338,7 +349,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm + 2,
   },
   bubbleMine: {
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     borderBottomRightRadius: 4,
   },
   bubbleTheirs: {
@@ -416,7 +427,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     alignItems: 'center',
     justifyContent: 'center',
     ...Shadows.sm,
@@ -433,11 +444,13 @@ const styles = StyleSheet.create({
   noticeTitle: { fontSize: 17, fontWeight: '800', color: Colors.foodText, marginTop: 4 },
   noticeText: { fontSize: 13.5, color: Colors.foodTextSecondary, textAlign: 'center', lineHeight: 19 },
   actionBtn: {
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
     marginTop: Spacing.sm,
   },
   actionBtnText: { fontSize: 14, fontWeight: '700', color: Colors.white },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

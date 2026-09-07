@@ -143,3 +143,11 @@ export function favoriteItem(id: string): Promise<unknown> {
 export function unfavoriteItem(id: string): Promise<unknown> {
   return apiDelete(`/api/users/me/favorites/items/${id}`);
 }
+
+export function favoriteRestaurant(id: string): Promise<unknown> {
+  return apiPost(`/api/users/me/favorites/restaurants/${id}`);
+}
+
+export function unfavoriteRestaurant(id: string): Promise<unknown> {
+  return apiDelete(`/api/users/me/favorites/restaurants/${id}`);
+}

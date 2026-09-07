@@ -32,6 +32,12 @@ import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 import { useCart } from '../../src/context/CartContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useOrders } from '../../src/hooks/useOrders';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
@@ -110,6 +116,8 @@ function OrderCard({
   onReorder: () => void;
   reordering: boolean;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const isActive = ACTIVE_STATUSES.has(order.status);
   const meta = statusMeta(order.status);
   const toneColor = TONE_COLOR[meta.tone] ?? Colors.foodTextMuted;
@@ -171,7 +179,7 @@ function OrderCard({
           {isActive ? (
             <View style={styles.trackBtn}>
               <Text style={styles.trackBtnText}>Track order</Text>
-              <Ionicons name="chevron-forward" size={13} color={Colors.foodAccent} />
+              <Ionicons name="chevron-forward" size={13} color={accent} />
             </View>
           ) : order.canReorder ? (
             <Pressable
@@ -183,10 +191,10 @@ function OrderCard({
               accessibilityLabel={`Reorder from ${heading}`}
             >
               {reordering ? (
-                <ActivityIndicator size="small" color={Colors.foodAccent} />
+                <ActivityIndicator size="small" color={accent} />
               ) : (
                 <>
-                  <Ionicons name="repeat" size={15} color={Colors.foodAccent} />
+                  <Ionicons name="repeat" size={15} color={accent} />
                   <Text style={styles.reorderBtnText}>Reorder</Text>
                 </>
               )}
@@ -201,6 +209,7 @@ function OrderCard({
 // ─── Empty state ─────────────────────────────────────────────────────────────
 
 function EmptyState() {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.emptyState}>
       <Ionicons name="bag-outline" size={64} color={Colors.foodBorder} />
@@ -228,6 +237,7 @@ function CenteredNotice({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.centered}>
       <Ionicons name={icon} size={48} color={Colors.foodBorder} />
@@ -245,6 +255,8 @@ function CenteredNotice({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function OrdersScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const { signOut } = useAuth();
   const { syncFromServer } = useCart();
   const {
@@ -336,7 +348,7 @@ export default function OrdersScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {header}
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.foodAccent} />
+          <ActivityIndicator size="large" color={accent} />
         </View>
       </SafeAreaView>
     );
@@ -401,15 +413,15 @@ export default function OrdersScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={refresh}
-            tintColor={Colors.foodAccent}
-            colors={[Colors.foodAccent]}
+            tintColor={accent}
+            colors={[accent]}
           />
         }
         onEndReached={loadMore}
         onEndReachedThreshold={0.4}
         ListFooterComponent={
           isPaging ? (
-            <ActivityIndicator style={{ marginVertical: 16 }} color={Colors.foodAccent} />
+            <ActivityIndicator style={{ marginVertical: 16 }} color={accent} />
           ) : null
         }
       />
@@ -419,7 +431,8 @@ export default function OrdersScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
@@ -444,7 +457,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
   },
   retryBtn: {
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
@@ -505,9 +518,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
   },
-  trackBtnText: { fontSize: 13, fontWeight: '800', color: Colors.foodAccent },
+  trackBtnText: { fontSize: 13, fontWeight: '800', color: t.accent },
   reorderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -518,10 +531,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: BorderRadius.full,
     borderWidth: 1.5,
-    borderColor: Colors.foodAccent,
+    borderColor: t.accent,
   },
-  reorderBtnPressed: { backgroundColor: Colors.foodAccentLight },
-  reorderBtnText: { fontSize: 13, fontWeight: '800', color: Colors.foodAccent },
+  reorderBtnPressed: { backgroundColor: t.accentLight },
+  reorderBtnText: { fontSize: 13, fontWeight: '800', color: t.accent },
 
   // Empty state
   emptyState: {
@@ -534,11 +547,13 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontWeight: '800', color: Colors.foodText },
   emptySubtitle: { fontSize: 14, color: Colors.foodTextSecondary, textAlign: 'center' },
   browseBtn: {
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
     marginTop: Spacing.sm,
   },
   browseBtnText: { fontSize: 14, fontWeight: '700', color: Colors.white },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

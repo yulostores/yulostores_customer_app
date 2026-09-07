@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -18,6 +18,13 @@ import CartBar from '../../src/components/CartBar';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import { useVegMode } from '../../src/context/VegModeContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useSearchDiscovery } from '../../src/hooks/useSearchDiscovery';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
@@ -91,6 +98,7 @@ function StatusBlock({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.centerBox}>
       <Ionicons name={icon} size={56} color={Colors.foodBorder} />
@@ -126,6 +134,16 @@ function DiscoverySkeleton() {
 // ─── Screen ────────────────────────────────────────────────────────────────
 
 export default function SearchScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const t = useAccentTheme();
+  const { enabled: vegEnabled, scope: vegScope } = useVegMode();
+  // Pure-veg mode filters the restaurant list itself (backend `vegOnly=true` →
+  // `isPureVeg`); "all restaurants" scope leaves the list alone, same as Home.
+  const vegOnly = vegEnabled && vegScope === 'pure_veg_only';
+
+  // A cuisine chip (Home, or Browse by cuisine) links here with `?query=`.
+  const { query: initialQuery } = useLocalSearchParams<{ query?: string }>();
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Restaurant[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -162,7 +180,12 @@ export default function SearchScreen() {
         // `q` — not `cuisine`: the list endpoint has no cuisine filter, and any
         // request without `q` is treated as a geo-browse and 400s without lat/lng.
         // `q` already matches cuisine names as well as restaurant names.
-        const { restaurants } = await fetchRestaurants({ q: term });
+        // `vegOnly` mirrors the app-wide "Pure veg restaurants only" scope so the
+        // results are filtered server-side, never in the client.
+        const { restaurants } = await fetchRestaurants({
+          q: term,
+          vegOnly: vegOnly || undefined,
+        });
         setResults(restaurants);
       } catch (err) {
         // Per the app-wide split: an expected 4xx is a warn, a 5xx / unreachable
@@ -187,8 +210,18 @@ export default function SearchScreen() {
         setIsSearching(false);
       }
     },
-    [refreshRecent],
+    [refreshRecent, vegOnly],
   );
+
+  // Run an incoming `?query=` exactly once per distinct value — a fresh tap on
+  // a cuisine chip re-triggers this even while already on the Search tab.
+  const appliedInitialQueryRef = useRef<string | null>(null);
+  useEffect(() => {
+    const q = initialQuery?.trim();
+    if (!q || appliedInitialQueryRef.current === q) return;
+    appliedInitialQueryRef.current = q;
+    runSearch(q);
+  }, [initialQuery, runSearch]);
 
   const clearSearch = useCallback(() => {
     setQuery('');
@@ -214,7 +247,7 @@ export default function SearchScreen() {
     if (isSearching) {
       return (
         <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color={Colors.foodAccent} />
+          <ActivityIndicator size="large" color={t.accent} />
         </View>
       );
     }
@@ -353,7 +386,7 @@ export default function SearchScreen() {
             <Ionicons name="chevron-back" size={26} color={Colors.foodText} />
           </Pressable>
           <View style={styles.searchBar}>
-            <Ionicons name="search" size={20} color={Colors.foodAccent} />
+            <Ionicons name="search" size={20} color={t.accent} />
             <TextInput
               style={styles.input}
               placeholder="Search for restaurants and dishes"
@@ -392,7 +425,8 @@ export default function SearchScreen() {
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.foodBg },
   container: { flex: 1, backgroundColor: Colors.foodBg },
 
@@ -437,7 +471,7 @@ const styles = StyleSheet.create({
   voiceIcon: {
     width: 22,
     height: 22,
-    tintColor: Colors.foodAccent,
+    tintColor: t.accent,
   },
 
   // ── Discovery ──
@@ -516,7 +550,7 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     marginTop: Spacing.md,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
@@ -614,4 +648,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: Spacing.md,
   },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

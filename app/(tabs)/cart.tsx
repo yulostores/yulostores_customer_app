@@ -16,22 +16,30 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useCartScreen } from '../../src/hooks/useCartScreen';
 import { logger } from '../../src/lib/logger';
-import type { CartBill, CartLine, FoodType } from '../../src/services/cart';
+import { clearCart, type CartBill, type CartLine, type FoodType } from '../../src/services/cart';
 
 const formatPrice = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
 
@@ -62,10 +70,12 @@ function Stepper({
   busy: boolean;
   onChange: (next: number) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   if (busy) {
     return (
       <View style={styles.stepper}>
-        <ActivityIndicator size="small" color={Colors.foodAccent} />
+        <ActivityIndicator size="small" color={accent} />
       </View>
     );
   }
@@ -81,7 +91,7 @@ function Stepper({
         <Ionicons
           name={atMin ? 'trash-outline' : 'remove'}
           size={atMin ? 14 : 16}
-          color={Colors.foodAccent}
+          color={accent}
         />
       </Pressable>
       <Text style={styles.stepValue}>{qty}</Text>
@@ -92,7 +102,7 @@ function Stepper({
         disabled={qty >= 20}
         accessibilityLabel="Increase quantity"
       >
-        <Ionicons name="add" size={16} color={qty >= 20 ? Colors.foodTextMuted : Colors.foodAccent} />
+        <Ionicons name="add" size={16} color={qty >= 20 ? Colors.foodTextMuted : accent} />
       </Pressable>
     </View>
   );
@@ -107,6 +117,7 @@ function LineRow({
   busy: boolean;
   onChangeQty: (qty: number) => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const optionText = line.options
     .map((o) => o.name)
     .filter((n): n is string => !!n)
@@ -167,6 +178,102 @@ function BillRow({
   );
 }
 
+/**
+ * "Apply coupon" — a collapsed link that opens an inline code field. Once a code
+ * takes (the server fills in `bill.discountAmount`), it flips to a confirmed
+ * state. There is no "remove": the backend keeps the discount on the cart and
+ * re-validates it per read — see `applyPromo` in src/services/cart.ts.
+ */
+function CouponRow({
+  appliedCode,
+  discountAmount,
+  pending,
+  accent,
+  onApply,
+}: {
+  appliedCode: string | null;
+  discountAmount: number;
+  pending: boolean;
+  accent: string;
+  onApply: (code: string) => Promise<boolean>;
+}) {
+  const styles = useThemedStyles(makeStyles);
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const applied = !!appliedCode && discountAmount > 0;
+
+  if (applied) {
+    return (
+      <View style={[styles.card, styles.couponCard, styles.couponApplied]}>
+        <Ionicons name="pricetag" size={16} color={Colors.foodVegGreen} />
+        <Text style={styles.couponAppliedText} numberOfLines={1}>
+          <Text style={styles.couponCode}>{appliedCode}</Text> applied — you saved{' '}
+          {formatPrice(discountAmount)}
+        </Text>
+      </View>
+    );
+  }
+
+  if (!open) {
+    return (
+      <Pressable
+        style={[styles.card, styles.couponCard]}
+        onPress={() => setOpen(true)}
+        hitSlop={6}
+      >
+        <Ionicons name="pricetag-outline" size={16} color={accent} />
+        <Text style={[styles.couponLink, { color: accent }]}>Apply coupon</Text>
+        <Ionicons name="chevron-forward" size={16} color={Colors.foodTextMuted} />
+      </Pressable>
+    );
+  }
+
+  const submit = async () => {
+    const ok = await onApply(code);
+    if (ok) {
+      setCode('');
+      setOpen(false);
+    }
+  };
+
+  return (
+    <View style={[styles.card, styles.couponCard, styles.couponOpen]}>
+      <Ionicons name="pricetag-outline" size={16} color={accent} />
+      <TextInput
+        style={styles.couponInput}
+        value={code}
+        onChangeText={(t) => setCode(t.toUpperCase())}
+        placeholder="Enter coupon code"
+        placeholderTextColor={Colors.foodTextMuted}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        editable={!pending}
+        returnKeyType="done"
+        onSubmitEditing={submit}
+      />
+      <Pressable
+        onPress={submit}
+        disabled={pending || code.trim().length === 0}
+        hitSlop={6}
+        style={styles.couponApplyBtn}
+      >
+        {pending ? (
+          <ActivityIndicator size="small" color={accent} />
+        ) : (
+          <Text
+            style={[
+              styles.couponApplyText,
+              { color: code.trim().length === 0 ? Colors.foodTextMuted : accent },
+            ]}
+          >
+            APPLY
+          </Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 function BillDetails({ bill, stale }: { bill: CartBill; stale: boolean }) {
   return (
     <View style={[styles.card, styles.billCard, stale && styles.billStale]}>
@@ -212,6 +319,7 @@ function CenterState({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.center}>
       <Ionicons name={icon} size={64} color={Colors.foodBorder} />
@@ -239,6 +347,8 @@ function Skeleton() {
 // ─── Screen ──────────────────────────────────────────────────────────────
 
 export default function CartScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const theme = useAccentTheme();
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
   const {
@@ -249,15 +359,20 @@ export default function CartScreen() {
     billStale,
     pendingLineIds,
     actionError,
+    appliedCode,
+    promoPending,
     refresh,
     setLineQty,
+    applyPromo,
     dismissActionError,
   } = useCartScreen();
 
   const cart = snapshot?.cart ?? null;
   const bill = snapshot?.bill ?? null;
   const hasItems = !!cart && cart.lines.length > 0;
-  const accent = cart?.isAllVeg ? Colors.foodVegGreen : Colors.foodAccent;
+  // Green when the app-wide "Pure veg" theme is on, or when every line in this
+  // cart is vegetarian (`cart.isAllVeg`); the brand accent otherwise.
+  const accent = theme.isPureVeg || cart?.isAllVeg ? Colors.foodVegGreen : theme.accent;
   const checkoutDisabled = !hasItems || billStale || isLoading;
 
   const handleCheckout = () => {
@@ -273,6 +388,30 @@ export default function CartScreen() {
   const handleAddMore = () => {
     if (cart?.restaurantId) router.push(`/restaurant/${cart.restaurantId}`);
     else router.navigate('/(tabs)');
+  };
+
+  const handleEmptyCart = () => {
+    Alert.alert(
+      'Empty cart?',
+      'Are you sure you want to remove all items from your cart?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Empty', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await clearCart();
+              refresh();
+            } catch (err) {
+              logger.warn('cart', 'Failed to empty cart', {
+                reason: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+        }
+      ]
+    );
   };
 
   // ── Body ──
@@ -345,6 +484,14 @@ export default function CartScreen() {
           <Text style={[styles.addMoreText, { color: accent }]}>Add more items</Text>
         </Pressable>
 
+        <CouponRow
+          appliedCode={appliedCode}
+          discountAmount={bill.discountAmount}
+          pending={promoPending}
+          accent={accent}
+          onApply={applyPromo}
+        />
+
         <BillDetails bill={bill} stale={billStale} />
 
         {!!actionError && (
@@ -362,11 +509,18 @@ export default function CartScreen() {
       <StatusBar style="dark" />
       <View style={{ height: insets.top, backgroundColor: Colors.foodBg }} />
 
-      <View style={styles.header}>
-        <Pressable onPress={goBack} hitSlop={8} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.foodText} />
-        </Pressable>
-        <Text style={styles.title}>Your cart</Text>
+      <View style={[styles.header, { justifyContent: 'space-between' }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+          <Pressable onPress={goBack} hitSlop={8} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={Colors.foodText} />
+          </Pressable>
+          <Text style={styles.title}>Your cart</Text>
+        </View>
+        {hasItems && (
+          <Pressable onPress={handleEmptyCart} hitSlop={8} style={{ padding: 4 }}>
+            <Ionicons name="trash-outline" size={22} color={Colors.foodTextMuted} />
+          </Pressable>
+        )}
       </View>
 
       {body}
@@ -397,7 +551,8 @@ export default function CartScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
@@ -433,6 +588,22 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 16, fontWeight: '800', color: Colors.foodText },
 
+  // Coupon row
+  couponCard: {
+    marginTop: Spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  couponApplied: { borderColor: Colors.foodVegGreen, backgroundColor: Colors.foodPureVegBg },
+  couponAppliedText: { flex: 1, fontSize: 13, color: Colors.foodText },
+  couponCode: { fontWeight: '800', color: Colors.foodText },
+  couponLink: { flex: 1, fontSize: 14, fontWeight: '700' },
+  couponOpen: { paddingVertical: Spacing.xs },
+  couponInput: { flex: 1, fontSize: 14, color: Colors.foodText, paddingVertical: Spacing.sm },
+  couponApplyBtn: { paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm },
+  couponApplyText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
+
   // Line item
   line: {
     flexDirection: 'row',
@@ -447,12 +618,12 @@ const styles = StyleSheet.create({
     height: 30,
     paddingHorizontal: 6,
     borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
   },
-  qtyBadgeText: { fontSize: 12.5, fontWeight: '800', color: Colors.foodAccentDark },
+  qtyBadgeText: { fontSize: 12.5, fontWeight: '800', color: t.accentDark },
   lineMain: { flex: 1, gap: 3 },
   lineNameRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
   lineName: { flex: 1, fontSize: 14.5, fontWeight: '600', color: Colors.foodText, lineHeight: 19 },
@@ -479,7 +650,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 13.5,
     fontWeight: '800',
-    color: Colors.foodAccent,
+    color: t.accent,
   },
 
   // Add more
@@ -575,7 +746,7 @@ const styles = StyleSheet.create({
   centerMessage: { fontSize: 14, color: Colors.foodTextMuted, textAlign: 'center', lineHeight: 20 },
   centerBtn: {
     marginTop: Spacing.md,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
@@ -586,4 +757,6 @@ const styles = StyleSheet.create({
   skelWrap: { padding: Spacing.base, gap: Spacing.md },
   skel: { backgroundColor: Colors.foodSearchBg, borderRadius: BorderRadius.md },
   skelCard: { height: 150, borderRadius: BorderRadius.lg },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

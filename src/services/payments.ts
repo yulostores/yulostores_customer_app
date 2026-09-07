@@ -21,9 +21,17 @@
  * already `pending_cod` the moment it is placed).
  *
  * ── The catalogue ────────────────────────────────────────────────────────
- * {@link PAYMENT_GROUPS} / {@link PAYMENT_METHODS} describe what the screen
- * renders. `wire` is all the backend ever sees; `gatewayMethod` is the
- * Razorpay method-hint used once the real gateway is on.
+ * {@link PAYMENT_GROUPS} / {@link PAYMENT_METHODS} describe what the checkout
+ * Payment screen renders. `wire` is all the backend ever sees; `gatewayMethod`
+ * is the Razorpay method-hint used once the real gateway is on.
+ *
+ * The canonical copy of this catalogue is the backend's
+ * `server/config/appConfig.config.js`, served at `GET /api/app/config` and shown
+ * on the read-only Settings → "Payment methods" screen (src/services/appConfig.ts).
+ * This list is a deliberate synchronous twin of it — checkout can't wait on a
+ * fetch to draw the picker — kept in step by hand, the same arrangement as the
+ * backend's store-settings config and the restaurant portal's fieldRules.js.
+ * Change one, change the other.
  */
 
 import { apiPost } from './api';

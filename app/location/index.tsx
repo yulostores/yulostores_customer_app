@@ -17,6 +17,12 @@ import AddressRow from '../../src/components/location/AddressRow';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { getCurrentCoordinates, LocationError } from '../../src/lib/geo';
 import { logger, reportError } from '../../src/lib/logger';
 import type { SavedAddress } from '../../src/types/address';
@@ -27,6 +33,8 @@ const MAP_H = Math.round(SCREEN_H * 0.42);
 const LABEL_ICON = { home: 'home', work: 'briefcase', other: 'bookmark' } as const;
 
 export default function LocationEntryScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const { savedAddresses, chooseSaved } = useDeliveryLocation();
   const [locating, setLocating] = useState(false);
   const [permHint, setPermHint] = useState(false);
@@ -87,7 +95,7 @@ export default function LocationEntryScreen() {
           ))}
         </View>
         <View style={styles.pinBlock}>
-          <Ionicons name="location-outline" size={40} color={Colors.foodAccent} />
+          <Ionicons name="location-outline" size={40} color={accent} />
           <View style={styles.pinDot} />
         </View>
 
@@ -161,7 +169,8 @@ export default function LocationEntryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.locMapWash },
   mapArea: { width: '100%', overflow: 'hidden' },
   grid: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
@@ -192,7 +201,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     marginTop: -4,
     opacity: 0.5,
   },
@@ -265,4 +274,6 @@ const styles = StyleSheet.create({
     color: Colors.foodTextMuted,
     marginBottom: Spacing.xs,
   },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

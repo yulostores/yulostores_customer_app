@@ -54,6 +54,12 @@ export interface Restaurant {
   distanceKm?: number;
   /** Every dish on this restaurant's menu is vegetarian. */
   isPureVeg?: boolean;
+  /**
+   * Whether the signed-in customer has favorited this restaurant. Annotated by
+   * the backend per request from their own `Favorite` collection — present only
+   * when the request carried a valid customer token (same as `MenuItem`).
+   */
+  isFavorited?: boolean;
 }
 
 export interface MenuItem {

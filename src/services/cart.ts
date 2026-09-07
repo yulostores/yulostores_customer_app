@@ -274,3 +274,21 @@ export function removeCartLine(lineItemId: string): Promise<CartSnapshot> {
 export function clearCart(): Promise<CartSnapshot> {
   return apiDelete<RawCartResponse>('/api/cart').then(toSnapshot);
 }
+
+/**
+ * Apply a coupon code to the open cart (`POST /api/cart/apply-promo`). The server
+ * looks the code up against the cart's restaurant, validates it (min order value,
+ * expiry, …) and returns a fresh `{ cart, bill }` with `bill.discountAmount`
+ * filled in — the caller swaps that in like any other mutation.
+ *
+ * An invalid / ineligible code comes back as `ApiError` 400 with a human message
+ * from `discountService.validateDiscountForOrder`; the caller surfaces it inline.
+ *
+ * Note: there is no "remove promo" endpoint — the backend keeps `appliedDiscountId`
+ * on the cart and re-validates it on every read, so it simply stops applying if
+ * the cart later stops qualifying, and resumes if it qualifies again. Clearing the
+ * cart is the only way to drop a code outright.
+ */
+export function applyPromo(code: string): Promise<CartSnapshot> {
+  return apiPost<RawCartResponse>('/api/cart/apply-promo', { code: code.trim() }).then(toSnapshot);
+}

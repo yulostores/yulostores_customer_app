@@ -28,6 +28,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
+import {
+  ORANGE_ACCENT,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { useOrders } from '../../src/hooks/useOrders';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
@@ -60,6 +65,7 @@ function OrderOption({
   selected: boolean;
   onPress: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const { label } = statusMeta(order.status);
   return (
     <Pressable
@@ -87,7 +93,12 @@ function OrderOption({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function NewSupportRequestScreen() {
-  const { category } = useLocalSearchParams<{ category?: string }>();
+  const styles = useThemedStyles(makeStyles);
+  const { category, orderId: initialOrderId } = useLocalSearchParams<{
+    category?: string;
+    /** Pre-selects a specific order — e.g. the "Chat" button on tracking. */
+    orderId?: string;
+  }>();
   const topic = useMemo(() => topicFor(category ?? 'other'), [category]);
 
   const { signOut, isAuthenticated, session } = useAuth();
@@ -96,7 +107,7 @@ export default function NewSupportRequestScreen() {
   const { orders, isLoading: ordersLoading } = useOrders();
 
   const [description, setDescription] = useState('');
-  const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(initialOrderId ?? null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -252,7 +263,8 @@ export default function NewSupportRequestScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.foodBg },
   flex: { flex: 1 },
 
@@ -335,7 +347,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.foodBorder,
   },
-  orderOptionSelected: { backgroundColor: Colors.foodAccentLight },
+  orderOptionSelected: { backgroundColor: t.accentLight },
   orderRadio: {
     width: 20,
     height: 20,
@@ -349,7 +361,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
   },
   orderOptionTitle: { fontSize: 14, fontWeight: '600', color: Colors.foodText },
   orderOptionMeta: { fontSize: 12, color: Colors.foodTextMuted, marginTop: 2 },
@@ -384,7 +396,7 @@ const styles = StyleSheet.create({
   primaryBtn: {
     height: 52,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     alignItems: 'center',
     justifyContent: 'center',
     ...Shadows.sm,
@@ -407,4 +419,6 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginBottom: Spacing.md,
   },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

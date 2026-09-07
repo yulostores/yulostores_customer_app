@@ -53,6 +53,16 @@ export function setAccessToken(token: string): void {
   setSession({ ...current, accessToken: token });
 }
 
+/**
+ * Merge a patch into the persisted `user` (e.g. after `PATCH /api/users/me`
+ * changes the name / avatar), keeping the tokens. Notifies subscribers so the
+ * Profile tab's seeded identity re-renders without a fresh sign-in.
+ */
+export function updateSessionUser(patch: Partial<AuthUser>): void {
+  if (!current) return;
+  setSession({ ...current, user: { ...current.user, ...patch } });
+}
+
 export function subscribe(fn: () => void): () => void {
   listeners.add(fn);
   return () => {

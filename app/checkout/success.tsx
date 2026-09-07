@@ -14,6 +14,12 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
 import { reportError } from '../../src/lib/logger';
 import { getOrder, type OrderView } from '../../src/services/orders';
 
@@ -28,6 +34,8 @@ function etaText(iso: string | null): string | null {
 }
 
 export default function OrderSuccessScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     orderId?: string;
@@ -95,7 +103,7 @@ export default function OrderSuccessScreen() {
         </Text>
 
         {!loaded ? (
-          <ActivityIndicator style={{ marginTop: Spacing.lg }} color={Colors.foodAccent} />
+          <ActivityIndicator style={{ marginTop: Spacing.lg }} color={accent} />
         ) : (
           <View style={styles.card}>
             <Row label="Order ID" value={`#${(order?.id ?? orderId).slice(-8).toUpperCase()}`} />
@@ -140,6 +148,7 @@ function Row({
   value: string;
   highlight?: boolean;
 }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -150,7 +159,8 @@ function Row({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.foodBg },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl },
 
@@ -204,11 +214,13 @@ const styles = StyleSheet.create({
   primaryBtn: {
     height: 52,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryBtnText: { fontSize: 16, fontWeight: '800', color: Colors.white },
   secondaryBtn: { height: 46, alignItems: 'center', justifyContent: 'center' },
   secondaryBtnText: { fontSize: 14, fontWeight: '700', color: Colors.foodTextSecondary },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

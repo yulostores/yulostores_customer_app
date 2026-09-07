@@ -34,7 +34,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -48,18 +48,28 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../../src/constants/Colors';
 import { BorderRadius, Shadows, Spacing } from '../../../src/constants/Theme';
+import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../../src/hooks/useAccentTheme';
 import { useOrderTracking } from '../../../src/hooks/useOrderTracking';
+import { ApiError } from '../../../src/services/api';
+import { submitReview } from '../../../src/services/orders';
 import {
   formatRupees,
   shortOrderId,
   stageLabel,
   trackingStatusLabel,
   type TrackingStage,
+  type VegFleetState,
 } from '../../../src/services/tracking';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -139,14 +149,226 @@ function PendingDot() {
   return <View style={styles.dotPending} />;
 }
 
+// ─── Veg-fleet search card ────────────────────────────────────────────────
+
+function formatCountdown(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r.toString().padStart(2, '0')}`;
+}
+
+function VegFleetCard({
+  vegFleet,
+  onKeepWaiting,
+  onUseAnyPartner,
+}: {
+  vegFleet: VegFleetState;
+  onKeepWaiting: () => Promise<void>;
+  onUseAnyPartner: () => Promise<void>;
+}) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
+  const [secondsLeft, setSecondsLeft] = useState(vegFleet.remainingSeconds ?? 0);
+  const [busy, setBusy] = useState<'keep' | 'any' | null>(null);
+
+  // Resync the local ticking countdown whenever the server sends a fresh value
+  // (a socket update, or the response from one of the two actions below).
+  useEffect(() => {
+    setSecondsLeft(vegFleet.remainingSeconds ?? 0);
+  }, [vegFleet.remainingSeconds]);
+
+  useEffect(() => {
+    if (vegFleet.status !== 'searching') return;
+    const timer = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [vegFleet.status]);
+
+  if (vegFleet.status === 'fallback_any_partner') {
+    return (
+      <View style={styles.card}>
+        <View style={styles.vegFleetNoteRow}>
+          <Ionicons name="information-circle" size={18} color={Colors.info} />
+          <Text style={styles.vegFleetNoteText}>
+            We’ve assigned any available partner to get your order there faster.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (vegFleet.status !== 'searching') return null;
+
+  const handleKeepWaiting = async () => {
+    if (busy) return;
+    setBusy('keep');
+    try {
+      await onKeepWaiting();
+    } catch {
+      Alert.alert('Could not extend the search', 'Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleUseAnyPartner = () => {
+    if (busy) return;
+    Alert.alert(
+      'Switch to any partner?',
+      'Your order may then be delivered by a partner who isn’t on the veg-only fleet.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Switch',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy('any');
+            try {
+              await onUseAnyPartner();
+            } catch {
+              Alert.alert('Could not switch partners', 'Please try again.');
+            } finally {
+              setBusy(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.vegFleetHeaderRow}>
+        <Ionicons name="leaf" size={18} color={Colors.foodVegGreen} />
+        <Text style={styles.sectionTitle}>Looking for a veg-only partner</Text>
+      </View>
+      <Text style={styles.vegFleetCountdown}>{formatCountdown(secondsLeft)}</Text>
+      <Text style={styles.vegFleetHint}>
+        We’re finding a delivery partner from our veg-only fleet for this order.
+      </Text>
+      <View style={styles.vegFleetActions}>
+        <Pressable
+          style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+          onPress={handleKeepWaiting}
+          disabled={busy !== null}
+        >
+          {busy === 'keep' ? (
+            <ActivityIndicator size="small" color={accent} />
+          ) : (
+            <Text style={styles.actionBtnText}>Keep waiting</Text>
+          )}
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+          onPress={handleUseAnyPartner}
+          disabled={busy !== null}
+        >
+          {busy === 'any' ? (
+            <ActivityIndicator size="small" color={accent} />
+          ) : (
+            <Text style={styles.actionBtnText}>Switch to any partner</Text>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ─── Rate-your-order card ──────────────────────────────────────────────────
+
+function ReviewCard({ orderId }: { orderId: string }) {
+  const styles = useThemedStyles(makeStyles);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'done' | 'already'>('idle');
+
+  const submit = async () => {
+    if (rating === 0 || status === 'submitting') return;
+    setStatus('submitting');
+    try {
+      await submitReview(orderId, rating, comment);
+      setStatus('done');
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'ALREADY_REVIEWED') {
+        setStatus('already');
+      } else {
+        setStatus('idle');
+        Alert.alert(
+          'Could not submit your rating',
+          err instanceof ApiError ? err.message : 'Please try again.',
+        );
+      }
+    }
+  };
+
+  if (status === 'done' || status === 'already') {
+    return (
+      <View style={styles.card}>
+        <View style={styles.reviewDoneRow}>
+          <Ionicons
+            name={status === 'done' ? 'checkmark-circle' : 'star'}
+            size={20}
+            color={status === 'done' ? Colors.success : Colors.foodRating}
+          />
+          <Text style={styles.reviewDoneText}>
+            {status === 'done'
+              ? 'Thanks for rating your order!'
+              : 'You’ve already rated this order — thanks!'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.sectionTitle}>Rate your order</Text>
+      <View style={styles.starRow}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Pressable key={n} onPress={() => setRating(n)} hitSlop={6}>
+            <Ionicons
+              name={n <= rating ? 'star' : 'star-outline'}
+              size={30}
+              color={n <= rating ? Colors.foodRating : Colors.foodBorder}
+            />
+          </Pressable>
+        ))}
+      </View>
+      <TextInput
+        style={styles.reviewInput}
+        value={comment}
+        onChangeText={(t) => setComment(t.slice(0, 1000))}
+        placeholder="Tell us about the food or delivery (optional)"
+        placeholderTextColor={Colors.foodTextMuted}
+        multiline
+        textAlignVertical="top"
+      />
+      <Pressable
+        style={[styles.reviewSubmitBtn, rating === 0 && styles.reviewSubmitBtnDisabled]}
+        onPress={submit}
+        disabled={rating === 0 || status === 'submitting'}
+      >
+        {status === 'submitting' ? (
+          <ActivityIndicator size="small" color={Colors.white} />
+        ) : (
+          <Text style={styles.reviewSubmitText}>Submit rating</Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function TrackingScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { tracking, partnerLocation, loading, error, refetch } = useOrderTracking(id ?? '');
+  const { tracking, partnerLocation, loading, error, refetch, vegFleet, keepWaiting, useAnyPartner } =
+    useOrderTracking(id ?? '');
 
-  const [refreshing, setRefreshing] = require('react').useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -169,15 +391,12 @@ export default function TrackingScreen() {
   }, [tracking]);
 
   const handleChat = useCallback(() => {
-    // Placeholder: navigate to support. A real implementation opens an in-app
-    // chat channel (Zomato-style, not partner DM). Wire to the support ticket
-    // flow when it is built.
-    Alert.alert(
-      'Chat support',
-      'In-app chat with support coming soon. You can call the delivery partner instead.',
-      [{ text: 'OK' }]
-    );
-  }, []);
+    if (!tracking) return;
+    router.push({
+      pathname: '/help/new',
+      params: { category: 'order_delayed', orderId: tracking.orderId },
+    });
+  }, [tracking]);
 
   // ─── Loading / error states ───────────────────────────────────────────────
 
@@ -185,7 +404,7 @@ export default function TrackingScreen() {
     return (
       <View style={[styles.centered, { paddingTop: insets.top }]}>
         <StatusBar style="dark" />
-        <ActivityIndicator size="large" color={Colors.foodAccent} />
+        <ActivityIndicator size="large" color={accent} />
         <Text style={styles.loadingText}>Loading tracking…</Text>
       </View>
     );
@@ -207,7 +426,7 @@ export default function TrackingScreen() {
     );
   }
 
-  const statusColor = STATUS_COLOR[tracking.status] ?? Colors.foodAccent;
+  const statusColor = STATUS_COLOR[tracking.status] ?? accent;
   const statusLabel = trackingStatusLabel(tracking.status, tracking.assignmentStatus);
   const isOnTheWay = tracking.status === 'out_for_delivery';
   const isDelivered = tracking.status === 'delivered';
@@ -262,7 +481,7 @@ export default function TrackingScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.foodAccent} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={accent} />
         }
       >
         {/* ── STATUS CARD ──────────────────────────────────────────────────── */}
@@ -301,7 +520,7 @@ export default function TrackingScreen() {
           {tracking.restaurant.name && (
             <View style={styles.restaurantRow}>
               <View style={styles.restaurantIconBox}>
-                <Ionicons name="storefront-outline" size={16} color={Colors.foodAccent} />
+                <Ionicons name="storefront-outline" size={16} color={accent} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.restaurantName}>{tracking.restaurant.name}</Text>
@@ -315,6 +534,14 @@ export default function TrackingScreen() {
             </View>
           )}
         </View>
+
+        {/* ── VEG-FLEET SEARCH ─────────────────────────────────────────────── */}
+        {vegFleet && vegFleet.status !== 'not_requested' && (
+          <VegFleetCard vegFleet={vegFleet} onKeepWaiting={keepWaiting} onUseAnyPartner={useAnyPartner} />
+        )}
+
+        {/* ── RATE YOUR ORDER ──────────────────────────────────────────────── */}
+        {isDelivered && <ReviewCard orderId={tracking.orderId} />}
 
         {/* ── DELIVERY TIMELINE ─────────────────────────────────────────────── */}
         <View style={styles.card}>
@@ -347,7 +574,7 @@ export default function TrackingScreen() {
                     <Text
                       style={[
                         styles.timelineLabel,
-                        isCurrent && { color: Colors.foodAccent, fontWeight: '700' },
+                        isCurrent && { color: accent, fontWeight: '700' },
                         isPending && { color: Colors.foodTextMuted },
                       ]}
                     >
@@ -356,7 +583,7 @@ export default function TrackingScreen() {
                     {timeStr ? (
                       <Text style={styles.timelineTime}>{timeStr}</Text>
                     ) : isCurrent ? (
-                      <Text style={[styles.timelineTime, { color: Colors.foodAccent }]}>Tracking live</Text>
+                      <Text style={[styles.timelineTime, { color: accent }]}>Tracking live</Text>
                     ) : null}
                   </View>
                 </View>
@@ -481,7 +708,8 @@ export default function TrackingScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.foodBg },
 
   // ── Centered states ──
@@ -496,7 +724,7 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 14, color: Colors.foodTextSecondary, marginTop: Spacing.sm },
   errorText: { fontSize: 15, color: Colors.foodText, textAlign: 'center' },
   retryBtn: {
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
@@ -550,7 +778,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     borderWidth: 3,
     borderColor: Colors.white,
     ...Shadows.sm,
@@ -632,7 +860,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: BorderRadius.md,
-    backgroundColor: Colors.foodAccentLight,
+    backgroundColor: t.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -719,7 +947,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: Colors.foodAccent,
+    backgroundColor: t.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -826,4 +1054,58 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 4,
   },
-});
+
+  // ── Veg-fleet search card ──
+  vegFleetHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 0 },
+  vegFleetCountdown: {
+    fontSize: 30,
+    fontWeight: '900',
+    color: Colors.foodText,
+    letterSpacing: -0.5,
+    marginTop: Spacing.sm,
+  },
+  vegFleetHint: {
+    fontSize: 12.5,
+    color: Colors.foodTextSecondary,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  vegFleetActions: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  vegFleetNoteRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  vegFleetNoteText: { flex: 1, fontSize: 13, color: Colors.foodTextSecondary, lineHeight: 18 },
+
+  // ── Rate-your-order card ──
+  starRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.base,
+  },
+  reviewInput: {
+    minHeight: 72,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    fontSize: 13.5,
+    color: Colors.foodText,
+    backgroundColor: Colors.foodBg,
+    marginBottom: Spacing.base,
+  },
+  reviewSubmitBtn: {
+    backgroundColor: t.accent,
+    borderRadius: BorderRadius.full,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+  },
+  reviewSubmitBtnDisabled: { backgroundColor: Colors.foodBorder },
+  reviewSubmitText: { fontSize: 14, fontWeight: '800', color: Colors.white },
+  reviewDoneRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  reviewDoneText: { flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foodText },
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

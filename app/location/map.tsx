@@ -11,6 +11,12 @@ import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Spacing } from '../../src/constants/Theme';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import {
+  ORANGE_ACCENT,
+  useAccentTheme,
+  useThemedStyles,
+  type AccentTheme,
+} from '../../src/hooks/useAccentTheme';
+import {
   DEFAULT_REGION,
   getCurrentCoordinates,
   LocationError,
@@ -20,6 +26,8 @@ import { logger, reportError } from '../../src/lib/logger';
 import type { LatLng, ResolvedPlace } from '../../src/types/address';
 
 export default function LocationMapScreen() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
   const params = useLocalSearchParams<{ lat?: string; lng?: string; source?: string }>();
   const { activeLocation } = useDeliveryLocation();
 
@@ -121,9 +129,9 @@ export default function LocationMapScreen() {
       <View style={styles.sheet}>
         <Pressable style={styles.locateBtn} onPress={recenterToGps}>
           {locating ? (
-            <ActivityIndicator size="small" color={Colors.foodAccent} />
+            <ActivityIndicator size="small" color={accent} />
           ) : (
-            <Ionicons name="locate" size={18} color={Colors.foodAccent} />
+            <Ionicons name="locate" size={18} color={accent} />
           )}
           <Text style={styles.locateText}>Use current location</Text>
         </Pressable>
@@ -131,7 +139,7 @@ export default function LocationMapScreen() {
         <SafeAreaView edges={['bottom']}>
           <Text style={styles.kicker}>DELIVERING YOUR ORDER TO</Text>
           <View style={styles.addrRow}>
-            <Ionicons name="location" size={20} color={Colors.foodAccent} style={{ marginTop: 2 }} />
+            <Ionicons name="location" size={20} color={accent} style={{ marginTop: 2 }} />
             <View style={styles.addrText}>
               {resolving ? (
                 <Text style={styles.addrTitle}>Getting address…</Text>
@@ -160,7 +168,8 @@ export default function LocationMapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (t: AccentTheme) =>
+  StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.locMapWash },
   pinLayer: {
     position: 'absolute',
@@ -235,7 +244,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     marginBottom: Spacing.xs,
   },
-  locateText: { fontSize: 13, fontWeight: '700', color: Colors.foodAccent },
+  locateText: { fontSize: 13, fontWeight: '700', color: t.accent },
   kicker: {
     fontSize: 10.5,
     fontWeight: '700',
@@ -248,4 +257,6 @@ const styles = StyleSheet.create({
   addrTitle: { fontSize: 16, fontWeight: '700', color: Colors.foodText },
   addrSub: { fontSize: 13, color: Colors.foodTextSecondary, marginTop: 2, lineHeight: 18 },
   confirm: { marginTop: Spacing.base, marginBottom: Spacing.sm },
-});
+  });
+
+const styles = makeStyles(ORANGE_ACCENT);

@@ -18,9 +18,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { getAccessToken } from '../services/session';
-import { getOrderTracking, type DeliveryPartnerInfo, type PartnerLocation, type TrackingData } from '../services/tracking';
+import {
+  getOrderTracking,
+  getVegFleetStatus,
+  keepWaitingVegFleet,
+  vegFleetFallback,
+  type DeliveryPartnerInfo,
+  type PartnerLocation,
+  type TrackingData,
+  type VegFleetState,
+} from '../services/tracking';
 import { getSocket } from '../lib/socket';
-import { logger } from '../lib/logger';
+import { logger, reportError } from '../lib/logger';
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -32,6 +41,13 @@ interface UseOrderTrackingResult {
   error: string | null;
   /** Pull-to-refresh: re-runs the REST fetch. */
   refetch: () => Promise<void>;
+  /** Veg-only-fleet search state — `null` until the first fetch resolves.
+   *  `status: 'not_requested'` covers every order that didn't opt in. */
+  vegFleet: VegFleetState | null;
+  /** Resets the veg-fleet search window (`searching` state only). */
+  keepWaiting: () => Promise<void>;
+  /** Accepts any available partner instead of waiting (`searching` state only). */
+  useAnyPartner: () => Promise<void>;
 }
 
 export function useOrderTracking(orderId: string): UseOrderTrackingResult {
@@ -39,6 +55,7 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
   const [partnerLocation, setPartnerLocation] = useState<PartnerLocation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [vegFleet, setVegFleet] = useState<VegFleetState | null>(null);
 
   // Ref to the polling timer so we can cancel it when a socket update arrives.
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -58,6 +75,19 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
       const message = err instanceof Error ? err.message : 'Failed to load tracking';
       logger.warn('useOrderTracking', 'fetchTracking failed', { orderId, message });
       setError(message);
+    }
+
+    // A cheap single GET, safe to run for every order — `not_requested` covers
+    // the common case of an order that never opted into the veg-only fleet.
+    // Kept out of the try/catch above so a hiccup here never blocks the main
+    // tracking display.
+    try {
+      setVegFleet(await getVegFleetStatus(orderId));
+    } catch (err) {
+      logger.warn('useOrderTracking', 'veg-fleet status fetch failed', {
+        orderId,
+        reason: err instanceof Error ? err.message : String(err),
+      });
     }
   }, [orderId]);
 
@@ -141,6 +171,30 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     };
     socket.on('partner_location_updated', onLocationUpdate);
 
+    // ── veg_fleet_status_updated ──────────────────────────────────────────────
+    // Same room as the listeners above — the server emits this whenever the
+    // veg-only-fleet search status changes (found a partner, window renewed,
+    // customer fell back to any partner, background sweep expired the window).
+    const onVegFleetUpdate = (payload: {
+      orderId: string;
+      status?: string;
+      remainingSeconds?: number | null;
+    }) => {
+      if (String(payload.orderId) !== orderId) return;
+      logger.debug('useOrderTracking', 'veg_fleet_status_updated', payload);
+      const status =
+        payload.status === 'searching' ||
+        payload.status === 'assigned' ||
+        payload.status === 'fallback_any_partner'
+          ? payload.status
+          : 'not_requested';
+      setVegFleet({
+        status,
+        remainingSeconds: typeof payload.remainingSeconds === 'number' ? payload.remainingSeconds : null,
+      });
+    };
+    socket.on('veg_fleet_status_updated', onVegFleetUpdate);
+
     // ─── Polling fallback ──────────────────────────────────────────────────────
     // Starts 30 s after mount. If the socket fires first, the timer is cleared
     // (see the cancel calls above). If the socket is silent (dropped, app
@@ -164,6 +218,7 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
       socket.off('connect', joinRoom);
       socket.off('order_status_updated', onStatusUpdate);
       socket.off('partner_location_updated', onLocationUpdate);
+      socket.off('veg_fleet_status_updated', onVegFleetUpdate);
       appStateSub.remove();
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
@@ -176,5 +231,32 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     await fetchTracking();
   }, [fetchTracking]);
 
-  return { tracking, partnerLocation, loading, error, refetch };
+  const keepWaiting = useCallback(async () => {
+    try {
+      setVegFleet(await keepWaitingVegFleet(orderId));
+    } catch (err) {
+      reportError('useOrderTracking', 'keep-waiting failed', err, { orderId });
+      throw err;
+    }
+  }, [orderId]);
+
+  const useAnyPartner = useCallback(async () => {
+    try {
+      setVegFleet(await vegFleetFallback(orderId));
+    } catch (err) {
+      reportError('useOrderTracking', 'veg-fleet fallback failed', err, { orderId });
+      throw err;
+    }
+  }, [orderId]);
+
+  return {
+    tracking,
+    partnerLocation,
+    loading,
+    error,
+    refetch,
+    vegFleet,
+    keepWaiting,
+    useAnyPartner,
+  };
 }

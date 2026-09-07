@@ -222,12 +222,12 @@ export function placeOrder(input: PlaceOrderInput): Promise<PlacedOrder> {
   };
 
   return apiPost<RawCheckoutResponse>('/api/orders/checkout', body, opts).then((res) => ({
-    orderId: res.orderId ?? res.order._id,
+    orderId: res.orderId ?? res.order?._id,
     restaurantName: res.restaurantName ?? null,
-    status: res.status ?? res.order.status ?? 'placed',
-    paymentMethod: res.order.paymentMethod ?? (paymentMethod === 'cod' ? 'cash' : 'online'),
-    paymentStatus: res.order.paymentStatus ?? (paymentMethod === 'cod' ? 'pending_cod' : 'pending'),
-    grandTotal: num(res.order.grandTotal),
+    status: res.status ?? res.order?.status ?? 'placed',
+    paymentMethod: res.order?.paymentMethod ?? (paymentMethod === 'cod' ? 'cash' : 'online'),
+    paymentStatus: res.order?.paymentStatus ?? (paymentMethod === 'cod' ? 'pending_cod' : 'pending'),
+    grandTotal: num(res.order?.grandTotal),
     gatewayOrder: res.razorpayOrder ?? null,
   }));
 }
