@@ -14,8 +14,8 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -272,6 +272,18 @@ export default function OrdersScreen() {
   } = useOrders();
 
   const [reorderingId, setReorderingId] = useState<string | null>(null);
+
+  // Refresh whenever this tab regains focus (e.g. returning from the live tracking
+  // screen after a restaurant/delivery-partner status change) so status pills don't
+  // go stale until a manual pull-to-refresh. Skips the very first focus — the mount
+  // effect inside useOrders() already covers the initial load.
+  const hasFocusedOnceRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (hasFocusedOnceRef.current) refresh();
+      hasFocusedOnceRef.current = true;
+    }, [refresh]),
+  );
 
   const handleReorder = useCallback(
     async (order: OrderSummary) => {

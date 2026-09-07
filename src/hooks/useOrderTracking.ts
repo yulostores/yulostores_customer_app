@@ -5,6 +5,7 @@
  *  1. Initial REST fetch: GET /api/orders/:id/tracking
  *  2. Socket.IO real-time updates:
  *     - `order_status_updated`    → status, etaMinutes, timeline update
+ *     - `delivery_assignment_updated` → assignmentStatus + partner details (accepted/picked up/delivered)
  *     - `partner_location_updated` → live lat/lng of the partner bike icon
  *  3. 30-second polling fallback in case the socket drops while the app is
  *     foregrounded (e.g. spotty wifi). The polling interval is cancelled the
@@ -24,6 +25,7 @@ import {
   keepWaitingVegFleet,
   vegFleetFallback,
   type DeliveryPartnerInfo,
+  type OrderAssignmentStatus,
   type PartnerLocation,
   type TrackingData,
   type VegFleetState,
@@ -154,6 +156,51 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     };
     socket.on('order_status_updated', onStatusUpdate);
 
+    // ── delivery_assignment_updated ────────────────────────────────────────────
+    // Fired by the delivery-partner app's accept/verify-pickup/deliver actions —
+    // these change Order.deliveryAssignment.status without necessarily changing
+    // Order.status, so they need their own event rather than riding along on
+    // order_status_updated. Patches assignmentStatus and merges the partner
+    // snapshot in place so "Partner assigned" / "Picked up" show live.
+    const onAssignmentUpdate = (payload: {
+      orderId: string;
+      assignmentStatus: OrderAssignmentStatus;
+      partner: Pick<DeliveryPartnerInfo, 'id' | 'name' | 'vehicleType' | 'vehicleNumber'> & {
+        maskedPhone: string | null;
+      } | null;
+    }) => {
+      if (String(payload.orderId) !== orderId) return;
+      logger.debug('useOrderTracking', 'delivery_assignment_updated', payload);
+
+      setTracking((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          assignmentStatus: payload.assignmentStatus,
+          // Merge onto whatever partner snapshot the last REST fetch had — this event's
+          // payload only ever carries the fields that can change over the partner's
+          // lifecycle (name/phone/vehicle), not rating/avatar/delivery-count, which the
+          // next poll or foreground refetch fills in as usual.
+          deliveryPartner: payload.partner
+            ? {
+                avatarUrl: prev.deliveryPartner?.avatarUrl ?? null,
+                rating: prev.deliveryPartner?.rating ?? 0,
+                totalDeliveries: prev.deliveryPartner?.totalDeliveries ?? 0,
+                usesVegOnlyFleetBag: prev.deliveryPartner?.usesVegOnlyFleetBag ?? false,
+                currentLocation: prev.deliveryPartner?.currentLocation,
+                ...payload.partner,
+              }
+            : prev.deliveryPartner,
+        };
+      });
+
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+    socket.on('delivery_assignment_updated', onAssignmentUpdate);
+
     // ── partner_location_updated ──────────────────────────────────────────────
     const onLocationUpdate = (payload: {
       orderId: string;
@@ -217,6 +264,7 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     return () => {
       socket.off('connect', joinRoom);
       socket.off('order_status_updated', onStatusUpdate);
+      socket.off('delivery_assignment_updated', onAssignmentUpdate);
       socket.off('partner_location_updated', onLocationUpdate);
       socket.off('veg_fleet_status_updated', onVegFleetUpdate);
       appStateSub.remove();

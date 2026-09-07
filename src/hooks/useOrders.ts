@@ -138,6 +138,8 @@ export function useOrders(): UseOrdersResult {
     fetchPage(page + 1);
   }, [isLoading, isPaging, hasMore, page, fetchPage]);
 
+  const refresh = useCallback(() => fetchPage(1), [fetchPage]);
+
   return {
     orders,
     total,
@@ -147,7 +149,7 @@ export function useOrders(): UseOrdersResult {
     error,
     notSignedIn,
     hasMore,
-    refresh: () => fetchPage(1),
+    refresh,
     loadMore,
   };
 }
