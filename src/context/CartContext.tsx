@@ -65,6 +65,19 @@ interface CartValue {
   setQty: (itemId: string, qty: number) => void;
   /** Empty the cart. */
   clear: () => void;
+  /**
+   * Replace the local cache with the backend cart (`GET /api/cart`), so the tab
+   * badge and Home `CartBar` agree with what the cart screen shows. The backend
+   * can hold several lines for one dish (different customizations); this cache
+   * keys by dish id, so those are summed into one line — the count stays right,
+   * which is all the badge needs. Pass `null` for an empty backend cart.
+   */
+  syncFromServer: (next: {
+    restaurantId: string;
+    restaurantName: string;
+    restaurantImage?: string;
+    lines: { itemId: string; name: string; price: number; qty: number }[];
+  } | null) => void;
 }
 
 const Ctx = createContext<CartValue | null>(null);
@@ -143,6 +156,25 @@ export function CartProvider({ children }: PropsWithChildren) {
 
   const clear = useCallback(() => setCart(null), []);
 
+  const syncFromServer = useCallback<CartValue['syncFromServer']>((next) => {
+    if (!next || next.lines.length === 0) {
+      setCart(null);
+      return;
+    }
+    const byItem = new Map<string, CartLine>();
+    for (const l of next.lines) {
+      const existing = byItem.get(l.itemId);
+      if (existing) existing.qty += l.qty;
+      else byItem.set(l.itemId, { itemId: l.itemId, name: l.name, price: l.price, qty: l.qty });
+    }
+    setCart({
+      restaurantId: next.restaurantId,
+      restaurantName: next.restaurantName,
+      restaurantImage: next.restaurantImage,
+      lines: [...byItem.values()],
+    });
+  }, []);
+
   const itemCount = useMemo(
     () => (cart ? cart.lines.reduce((n, l) => n + l.qty, 0) : 0),
     [cart],
@@ -153,8 +185,8 @@ export function CartProvider({ children }: PropsWithChildren) {
   );
 
   const value = useMemo<CartValue>(
-    () => ({ cart, itemCount, subtotal, hydrated, addItem, setQty, clear }),
-    [cart, itemCount, subtotal, hydrated, addItem, setQty, clear],
+    () => ({ cart, itemCount, subtotal, hydrated, addItem, setQty, clear, syncFromServer }),
+    [cart, itemCount, subtotal, hydrated, addItem, setQty, clear, syncFromServer],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

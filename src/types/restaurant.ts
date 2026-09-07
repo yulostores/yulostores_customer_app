@@ -66,8 +66,25 @@ export interface MenuItem {
   effectivePrice: number;
   prepTime?: number;
   ingredients?: string[];
+  /** Free-form catalogue tags, e.g. `bestseller`, `highly_reordered`. */
+  badges?: string[];
   image?: string;
   isAvailable: boolean;
+  /** Present only when the request carried a valid customer token. */
+  isFavorited?: boolean;
+}
+
+/**
+ * One row of the collapsed menu on the restaurant screen — served by
+ * `GET /api/restaurants/:id/menu/categories`. Carries the name and item count so
+ * the section list renders with zero item data; items for a section are pulled
+ * lazily from `GET /api/restaurants/:id/menu-items` when it is expanded.
+ */
+export interface MenuCategorySummary {
+  id: string;
+  name: string;
+  itemCount: number;
+  subCategories: { id: string; name: string }[];
 }
 
 export interface SubCategory {

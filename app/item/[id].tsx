@@ -268,18 +268,27 @@ export default function ItemDetailScreen() {
   const { item, isLoading, error, refresh } = useItemDetail(id);
   const localCart = useCart();
 
-  const [selections, setSelections] = useState<Selections>({});
+  // Default selection is derived from the item itself, so it's correct on the
+  // very first render the item is present — no seeding flash. `overrides` holds
+  // the customer's own taps and wins once they start choosing.
+  const seededSelections = useMemo<Selections>(
+    () => (item ? seedSelections(item.optionGroups) : {}),
+    [item],
+  );
+  const [overrides, setOverrides] = useState<Selections | null>(null);
+  const selections = overrides ?? seededSelections;
+
   const [qty, setQty] = useState(1);
   const [favorite, setFavorite] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  // Re-seed whenever a fresh item lands (first load, or a retry).
+  // Reset everything that's specific to one dish when a fresh item lands
+  // (first load, a retry after an error, or the route id changing).
   useEffect(() => {
-    if (!item) return;
-    setSelections(seedSelections(item.optionGroups));
+    setOverrides(null);
     setQty(1);
-    setFavorite(!!item.isFavorited);
+    setFavorite(!!item?.isFavorited);
     setAddError(null);
   }, [item]);
 
@@ -357,6 +366,15 @@ export default function ItemDetailScreen() {
     <View style={styles.screen}>
       <StatusBar style={item ? 'light' : 'dark'} />
 
+      {/* Back control — present in every state (skeleton, error, loaded). */}
+      <Pressable
+        onPress={() => router.back()}
+        style={[styles.circleBtn, { top: headerBtnTop, left: Spacing.base }]}
+        hitSlop={8}
+      >
+        <Ionicons name="arrow-back" size={22} color={item ? Colors.white : Colors.foodText} />
+      </Pressable>
+
       {isLoading ? (
         <LoadingState />
       ) : error || !item ? (
@@ -415,7 +433,7 @@ export default function ItemDetailScreen() {
                 key={group._id}
                 group={group}
                 selections={selections}
-                onChange={setSelections}
+                onChange={setOverrides}
               />
             ))}
 
@@ -427,14 +445,7 @@ export default function ItemDetailScreen() {
             )}
           </ScrollView>
 
-          {/* Floating header controls over the hero */}
-          <Pressable
-            onPress={() => router.back()}
-            style={[styles.circleBtn, { top: headerBtnTop, left: Spacing.base }]}
-            hitSlop={8}
-          >
-            <Ionicons name="arrow-back" size={22} color={Colors.white} />
-          </Pressable>
+          {/* Save / favorite — only meaningful once the dish is loaded. */}
           <Pressable
             onPress={toggleFavorite}
             style={[styles.savePill, { top: headerBtnTop, right: Spacing.base }]}

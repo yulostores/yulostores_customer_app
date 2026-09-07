@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { BorderRadius } from '../constants/Theme';
 import { useCart } from '../context/CartContext';
 import { useVegMode } from '../context/VegModeContext';
-import { logger } from '../lib/logger';
 
 /**
  * Floating "sticky cart" pill for the Home screen — a port of the Figma
@@ -59,20 +59,9 @@ export default function CartBar() {
     }).start(() => clear());
   };
 
-  const handleViewCart = () => {
-    // TODO(cart): navigate to the cart screen once it exists.
-    logger.info('cart', 'View cart tapped — cart screen not built yet', {
-      itemCount,
-      restaurantId: cart.restaurantId,
-    });
-  };
+  const handleViewCart = () => router.push('/cart');
 
-  const handleViewMenu = () => {
-    // TODO(cart): open the restaurant's menu once that route exists.
-    logger.info('cart', 'View menu tapped — menu screen not built yet', {
-      restaurantId: cart.restaurantId,
-    });
-  };
+  const handleViewMenu = () => router.push(`/restaurant/${cart.restaurantId}`);
 
   const translateY = anim.interpolate({
     inputRange: [0, 1],

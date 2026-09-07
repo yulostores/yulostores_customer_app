@@ -22,11 +22,18 @@
 
 import type {
   MenuCategory,
+  MenuCategorySummary,
+  MenuItem,
   PaginationMeta,
   Restaurant,
 } from '../types/restaurant';
 import { apiGet } from './api';
-import { toRestaurant, type RawRestaurant } from './restaurantMapper';
+import {
+  toMenuItem,
+  toRestaurant,
+  type RawMenuItem,
+  type RawRestaurant,
+} from './restaurantMapper';
 
 /** Server-side page size — `PAGE_SIZE` in restaurant.controller.js. */
 export const PAGE_SIZE = 20;
@@ -64,6 +71,33 @@ interface RestaurantDetailResponse {
 
 interface MenuResponse {
   menu: MenuCategory[];
+}
+
+interface MenuCategoriesResponse {
+  categories: MenuCategorySummary[];
+}
+
+interface MenuItemsResponse {
+  items: RawMenuItem[];
+  total: number;
+  page: number;
+  pages: number;
+}
+
+interface MenuSearchResponse {
+  items: RawMenuItem[];
+}
+
+/** Filters for one page of {@link fetchMenuItemsPage}. */
+export interface MenuItemsParams {
+  /** Restrict to one category. Omit for the whole menu. */
+  categoryId?: string;
+  subCategoryId?: string;
+  /** `'all'` is sent as no filter. */
+  foodType?: 'all' | 'veg' | 'non_veg' | 'egg';
+  page?: number;
+  /** Server default 10, clamped 1–30. */
+  limit?: number;
 }
 
 // ─── Fetchers ──────────────────────────────────────────────────────────────
@@ -121,7 +155,10 @@ export async function fetchRestaurant(id: string): Promise<Restaurant> {
 }
 
 /**
- * Get the full menu tree for a restaurant.
+ * Get the full menu tree for a restaurant — the whole payload in one call.
+ * The customer restaurant screen uses {@link fetchMenuCategories} +
+ * {@link fetchMenuItemsPage} instead so the menu loads lazily; this stays for
+ * the owner-style "everything at once" callers.
  */
 export async function fetchRestaurantMenu(
   restaurantId: string,
@@ -130,4 +167,63 @@ export async function fetchRestaurantMenu(
     `/api/restaurants/${restaurantId}/menu`,
   );
   return data.menu ?? [];
+}
+
+/**
+ * The collapsed section list for the restaurant screen — one lightweight row per
+ * category (name + item count + subcategory names), no item data. Pair with
+ * {@link fetchMenuItemsPage} to fill a section in when it is expanded.
+ */
+export async function fetchMenuCategories(
+  restaurantId: string,
+): Promise<MenuCategorySummary[]> {
+  const data = await apiGet<MenuCategoriesResponse>(
+    `/api/restaurants/${restaurantId}/menu/categories`,
+  );
+  return data.categories ?? [];
+}
+
+/**
+ * One page of available menu items — the lazy-load feed behind each expanded
+ * category on the restaurant screen. `foodType: 'all'` is sent as no filter.
+ */
+export async function fetchMenuItemsPage(
+  restaurantId: string,
+  params: MenuItemsParams = {},
+): Promise<{ items: MenuItem[]; pagination: PaginationMeta }> {
+  const data = await apiGet<MenuItemsResponse>(
+    `/api/restaurants/${restaurantId}/menu-items`,
+    {
+      categoryId: params.categoryId,
+      subCategoryId: params.subCategoryId,
+      foodType:
+        params.foodType && params.foodType !== 'all' ? params.foodType : undefined,
+      page: params.page,
+      limit: params.limit,
+    },
+  );
+
+  return {
+    items: (data.items ?? []).map(toMenuItem),
+    pagination: {
+      total: data.total ?? 0,
+      page: data.page ?? params.page ?? 1,
+      pages: data.pages ?? 1,
+    },
+  };
+}
+
+/**
+ * Menu-scoped text search ("Search in menu" bar). Returns a flat list — the
+ * backend matches name and description against the query.
+ */
+export async function fetchMenuSearch(
+  restaurantId: string,
+  q: string,
+): Promise<MenuItem[]> {
+  const data = await apiGet<MenuSearchResponse>(
+    `/api/restaurants/${restaurantId}/menu/search`,
+    { q },
+  );
+  return (data.items ?? []).map(toMenuItem);
 }

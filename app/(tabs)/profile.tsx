@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,18 +10,22 @@ import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 
 const MENU = [
-  { icon: 'location-outline', label: 'Saved Addresses', chevron: true },
-  { icon: 'card-outline', label: 'Payment Methods', chevron: true },
-  { icon: 'notifications-outline', label: 'Notifications', chevron: true },
-  { icon: 'lock-closed-outline', label: 'Privacy & Security', chevron: true },
-  { icon: 'help-circle-outline', label: 'Help & Support', chevron: true },
-  { icon: 'star-outline', label: 'Rate the App', chevron: true },
-  { icon: 'information-circle-outline', label: 'About Yulo Stores', chevron: true },
-];
+  { icon: 'location-outline', label: 'Saved Addresses', chevron: true, route: '/address' },
+  { icon: 'card-outline', label: 'Payment Methods', chevron: true, route: null },
+  { icon: 'notifications-outline', label: 'Notifications', chevron: true, route: null },
+  { icon: 'lock-closed-outline', label: 'Privacy & Security', chevron: true, route: null },
+  { icon: 'help-circle-outline', label: 'Help & Support', chevron: true, route: null },
+  { icon: 'star-outline', label: 'Rate the App', chevron: true, route: null },
+  { icon: 'information-circle-outline', label: 'About Yulo Stores', chevron: true, route: null },
+] as const;
 
-function MenuItem({ icon, label }: { icon: string; label: string }) {
+function MenuItem({ icon, label, onPress }: { icon: string; label: string; onPress?: () => void }) {
   return (
-    <Pressable style={styles.menuItem}>
+    <Pressable
+      style={styles.menuItem}
+      onPress={onPress}
+      android_ripple={{ color: 'rgba(123,47,190,0.12)' }}
+    >
       <View style={styles.menuIconWrap}>
         <Ionicons name={icon as any} size={20} color={Colors.primaryLight} />
       </View>
@@ -72,7 +77,12 @@ export default function ProfileScreen() {
           {/* Menu */}
           <View style={styles.menuCard}>
             {MENU.map((m) => (
-              <MenuItem key={m.label} icon={m.icon} label={m.label} />
+              <MenuItem
+                key={m.label}
+                icon={m.icon}
+                label={m.label}
+                onPress={m.route ? () => router.push(m.route as any) : undefined}
+              />
             ))}
           </View>
 

@@ -15,7 +15,7 @@
  */
 
 import { haversineKm } from '../lib/geo';
-import type { Restaurant } from '../types/restaurant';
+import type { MenuItem, Restaurant } from '../types/restaurant';
 
 /** The fields we read off a wire restaurant. Everything is optional but `_id`/`name`. */
 export interface RawRestaurant {
@@ -32,6 +32,9 @@ export interface RawRestaurant {
   bannerImage?: string;
   coverImage?: string;
   ownerId?: string;
+  phone?: string;
+  establishedYear?: number;
+  delivery?: { estimatedMinutes?: number };
   startingPrice?: number | null;
   isPureVeg?: boolean;
   operatingHours?: {
@@ -40,6 +43,51 @@ export interface RawRestaurant {
     openTime: number;
     closeTime: number;
   }[];
+}
+
+/** The fields we read off a wire menu item — the raw MenuItem document plus its
+ *  `effectivePrice` virtual, as returned by `/menu-items`, `/menu/search` and the
+ *  home feed. */
+export interface RawMenuItem {
+  _id: string;
+  name: string;
+  description?: string;
+  foodType?: MenuItem['foodType'];
+  sellingPrice?: number;
+  discountedPrice?: number | null;
+  effectivePrice?: number;
+  prepTime?: number;
+  ingredients?: string[];
+  badges?: string[];
+  image?: string;
+  isAvailable?: boolean;
+  isFavorited?: boolean;
+}
+
+/**
+ * Reshape one wire menu item into the view type. Mirrors the backend's
+ * `effectivePrice` virtual EXACTLY (`discountedPrice ?? sellingPrice`) because
+ * that virtual is what `cart.service.js` charges — see the longer note in
+ * `src/services/home.ts`, whose own private copy of this predates the shared one.
+ */
+export function toMenuItem(m: RawMenuItem): MenuItem {
+  const selling = m.sellingPrice ?? 0;
+  const discounted = m.discountedPrice ?? undefined;
+  return {
+    _id: m._id,
+    name: m.name,
+    description: m.description,
+    foodType: m.foodType ?? 'veg',
+    sellingPrice: selling,
+    discountedPrice: discounted,
+    effectivePrice: m.effectivePrice ?? discounted ?? selling,
+    prepTime: m.prepTime,
+    ingredients: m.ingredients,
+    badges: m.badges,
+    image: m.image,
+    isAvailable: m.isAvailable ?? true,
+    isFavorited: m.isFavorited,
+  };
 }
 
 const WEEKDAY = [
@@ -103,6 +151,11 @@ export function toRestaurant(
     // detail endpoints return carry both, and older rows only `coverImage`.
     coverImage: r.bannerImage ?? r.coverImage,
     ownerId: r.ownerId,
+    phone: r.phone,
+    // Owner-declared prep+handover estimate. The detail header prefers this over
+    // the distance-derived guess the home cards fall back to.
+    deliveryMinutes: r.delivery?.estimatedMinutes,
+    establishedYear: r.establishedYear,
     startingPrice: r.startingPrice ?? null,
     isPureVeg: r.isPureVeg ?? false,
     distanceKm,

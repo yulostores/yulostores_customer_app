@@ -37,7 +37,11 @@ function RootNavigator() {
       <Stack.Protected guard={isAuthenticated}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="location" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="address" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="restaurant/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="checkout" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="item/[id]" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="order/[id]/track" options={{ animation: 'slide_from_bottom', headerShown: false }} />
       </Stack.Protected>
 
       <Stack.Protected guard={!isAuthenticated}>

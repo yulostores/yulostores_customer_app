@@ -23,11 +23,16 @@ import { getAccessToken } from './session';
 export class ApiError extends Error {
   code: string;
   status: number;
-  constructor(message: string, code: string, status: number) {
+  /** The server's `details` payload, when it sent one (e.g. `{ items: [...] }`
+   *  on `CART_PRICE_CHANGED` / `ORDER_ITEM_UNAVAILABLE`, `{ field }` on
+   *  validation errors). `null` for transport failures. */
+  details: unknown;
+  constructor(message: string, code: string, status: number, details: unknown = null) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -38,6 +43,9 @@ interface Envelope<T> {
   message?: string;
   code?: string;
   data?: T;
+  /** Present on error responses that carry structured context (validation
+   *  field, changed-price / unavailable line items, …). */
+  details?: unknown;
 }
 
 // ─── Shared failure logging ────────────────────────────────────────────────
@@ -116,6 +124,7 @@ export async function apiGet<T>(
       json?.message ?? `Request failed (${res.status})`,
       json?.code ?? 'HTTP_ERROR',
       res.status,
+      json?.details ?? null,
     );
     logApiFailure('GET', path, apiErr);
     throw apiErr;
@@ -127,6 +136,13 @@ export async function apiGet<T>(
 // ─── Mutating helper (POST / PATCH / PUT / DELETE) ─────────────────────────
 
 type Method = 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+
+/** Per-call options for {@link apiSend} / {@link apiPost}. `headers` is merged in
+ *  last so a caller can add e.g. an `Idempotency-Key`, but never override
+ *  `Authorization`. */
+export interface SendOptions {
+  headers?: Record<string, string>;
+}
 
 /**
  * Perform an authenticated request with an optional JSON body.
@@ -140,12 +156,21 @@ export async function apiSend<T>(
   method: Method,
   path: string,
   body?: unknown,
+  opts?: SendOptions,
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
   const token = getAccessToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  // Caller-supplied headers last so an Idempotency-Key (etc.) can't be dropped,
+  // but Authorization / Content-Type stay under this client's control.
+  if (opts?.headers) {
+    for (const [k, v] of Object.entries(opts.headers)) {
+      if (k.toLowerCase() !== 'authorization') headers[k] = v;
+    }
+  }
 
   let res: Response;
   try {
@@ -173,6 +198,7 @@ export async function apiSend<T>(
       json?.message ?? `Request failed (${res.status})`,
       json?.code ?? 'HTTP_ERROR',
       res.status,
+      json?.details ?? null,
     );
     logApiFailure(method, path, apiErr);
     throw apiErr;
@@ -181,6 +207,7 @@ export async function apiSend<T>(
   return (json?.data ?? ({} as T));
 }
 
-export const apiPost = <T>(path: string, body?: unknown) => apiSend<T>('POST', path, body);
+export const apiPost = <T>(path: string, body?: unknown, opts?: SendOptions) =>
+  apiSend<T>('POST', path, body, opts);
 export const apiPatch = <T>(path: string, body?: unknown) => apiSend<T>('PATCH', path, body);
 export const apiDelete = <T>(path: string, body?: unknown) => apiSend<T>('DELETE', path, body);

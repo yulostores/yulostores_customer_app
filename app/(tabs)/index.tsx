@@ -426,7 +426,10 @@ function RestaurantHCard({ restaurant }: { restaurant: Restaurant }) {
   const eta = formatDeliveryTime(restaurant.distanceKm);
 
   return (
-    <Pressable style={styles.restHCard}>
+    <Pressable
+      style={styles.restHCard}
+      onPress={() => router.push(`/restaurant/${restaurant._id}`)}
+    >
       <View style={styles.restHImageWrap}>
         <RemoteImage
           uri={restaurant.coverImage || restaurant.logo}
@@ -485,7 +488,10 @@ function RestaurantNearbyCard({ restaurant }: { restaurant: Restaurant }) {
   ].filter((part): part is string => !!part);
 
   return (
-    <Pressable style={styles.nearbyCard}>
+    <Pressable
+      style={styles.nearbyCard}
+      onPress={() => router.push(`/restaurant/${restaurant._id}`)}
+    >
       {/* Cover image */}
       <View style={styles.nearbyCoverWrap}>
         <RemoteImage
