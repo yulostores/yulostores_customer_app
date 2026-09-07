@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import BrandSplash from '../src/components/BrandSplash';
+import DemoSessionBanner from '../src/components/DemoSessionBanner';
 import ErrorBoundary from '../src/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { CartProvider } from '../src/context/CartContext';
@@ -38,6 +39,8 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="location" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="address" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="favorites" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="help" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="restaurant/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="checkout" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="item/[id]" options={{ animation: 'slide_from_bottom' }} />
@@ -60,6 +63,7 @@ function RootNavigator() {
 
 function AppShell() {
   const { ready, showOnboarding } = useOnboarding();
+  const { isReady: authReady } = useAuth();
 
   // Preload the icon font once, up front. @expo/vector-icons otherwise calls
   // Font.loadAsync() from every icon's componentDidMount with no catch, so a
@@ -95,23 +99,24 @@ function AppShell() {
     if (ready && showOnboarding) router.replace('/onboarding');
   }, [ready, showOnboarding]);
 
-  // Reveal the app only once the intro animation has played AND the persisted
-  // onboarding flag has resolved, so the first screen (onboarding vs sign-in)
-  // never flashes the wrong one.
+  // Reveal the app only once the intro animation has played AND both persisted
+  // stores have resolved — the onboarding flag and the saved session — so the
+  // first screen (onboarding vs sign-in vs the tabs) never flashes the wrong one.
   useEffect(() => {
-    if (!splashAnimDone || !ready || !fontsSettled || splashDone) return;
+    if (!splashAnimDone || !ready || !authReady || !fontsSettled || splashDone) return;
     Animated.timing(overlayFade, {
       toValue: 0,
       duration: 320,
       useNativeDriver: true,
     }).start(() => setSplashDone(true));
-  }, [splashAnimDone, ready, fontsSettled, splashDone, overlayFade]);
+  }, [splashAnimDone, ready, authReady, fontsSettled, splashDone, overlayFade]);
 
   return (
     <>
       <VegModeProvider>
         <DeliveryLocationProvider>
           <CartProvider>
+            <DemoSessionBanner />
             <RootNavigator />
           </CartProvider>
         </DeliveryLocationProvider>

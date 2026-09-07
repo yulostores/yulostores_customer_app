@@ -103,17 +103,18 @@ function SearchBar() {
   return (
     <View style={styles.searchBar}>
       <Ionicons name="search-outline" size={20} color={Colors.foodTextMuted} />
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search restaurants, cuisines..."
-        placeholderTextColor={Colors.foodTextMuted}
-        editable={false}
-      />
-      <Image
-        source={require('../../assets/Images/Icons/Button - Voice search.png')}
-        style={styles.voiceIcon}
-        resizeMode="contain"
-      />
+      <Pressable
+        style={{ flex: 1, height: '100%', justifyContent: 'center' }}
+        onPress={() => router.push('/search')}
+      >
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search restaurants, cuisines..."
+          placeholderTextColor={Colors.foodTextMuted}
+          editable={false}
+          pointerEvents="none"
+        />
+      </Pressable>
       <VegToggle />
     </View>
   );
@@ -285,7 +286,14 @@ function PromoBanner({ banner }: { banner: HomeBanner | null }) {
   const remote = banner?.image && !failed ? banner.image : null;
 
   return (
-    <View style={styles.bannerWrap}>
+    <Pressable 
+      style={styles.bannerWrap}
+      onPress={() => {
+        if (banner?.restaurantId) {
+          router.push(`/restaurant/${banner.restaurantId}`);
+        }
+      }}
+    >
       {remote ? (
         <Image
           source={{ uri: remote }}
@@ -311,7 +319,7 @@ function PromoBanner({ banner }: { banner: HomeBanner | null }) {
           )}
         </View>
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -338,7 +346,10 @@ function SectionHeader({
 /** "What's on your mind?" card — a curated quick-filter chip from the feed. */
 function CuisineCardItem({ item }: { item: CuisineCard }) {
   return (
-    <Pressable style={styles.cuisineCard}>
+    <Pressable
+      style={styles.cuisineCard}
+      onPress={() => router.push({ pathname: '/search', params: { query: item.queryParam } })}
+    >
       <View style={styles.cuisineImageWrap}>
         <RemoteImage
           uri={item.image}
@@ -795,7 +806,10 @@ export default function HomeScreen() {
         {/* ── Restaurants near you ── */}
         {nearbyRestaurants.length > 0 && (
           <>
-            <SectionHeader title="Restaurants near you" />
+            <SectionHeader 
+              title="Restaurants near you" 
+              onSeeAll={() => router.push('/search')}
+            />
             {nearbyRestaurants.map((r) => (
               <RestaurantNearbyCard key={r._id} restaurant={r} />
             ))}

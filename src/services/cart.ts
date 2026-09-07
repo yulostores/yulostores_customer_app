@@ -199,6 +199,36 @@ export function reshapeCartSnapshot(raw: { cart?: unknown; bill?: unknown }): Ca
   return toSnapshot(raw as RawCartResponse);
 }
 
+/** The device-local `CartContext.syncFromServer` argument shape. */
+export interface CartCachePayload {
+  restaurantId: string;
+  restaurantName: string;
+  restaurantImage?: string;
+  lines: { itemId: string; name: string; price: number; qty: number }[];
+}
+
+/**
+ * Collapse a server {@link CartSnapshot} into the badge-cache payload the
+ * device-local `CartContext` mirrors (keyed by dish id — it sums the server's
+ * per-customization lines). `null` for an empty cart. Shared by every screen
+ * that mutates the cart so the tab badge / Home CartBar stay in step.
+ */
+export function toCartCachePayload(snapshot: CartSnapshot): CartCachePayload | null {
+  const { cart } = snapshot;
+  if (!cart.restaurant || cart.lines.length === 0) return null;
+  return {
+    restaurantId: cart.restaurant.id,
+    restaurantName: cart.restaurant.name,
+    restaurantImage: cart.restaurant.image ?? undefined,
+    lines: cart.lines.map((l) => ({
+      itemId: l.menuItemId,
+      name: l.name,
+      price: l.unitPrice,
+      qty: l.qty,
+    })),
+  };
+}
+
 // ─── API ─────────────────────────────────────────────────────────────────
 
 export interface CartOptionSelection {

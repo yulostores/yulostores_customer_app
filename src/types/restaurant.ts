@@ -72,6 +72,13 @@ export interface MenuItem {
   isAvailable: boolean;
   /** Present only when the request carried a valid customer token. */
   isFavorited?: boolean;
+  /**
+   * Number of customization groups on the dish. `> 0` means "ADD" opens the
+   * customization screen (`/item/[id]`) rather than adding straight to the cart.
+   * Attached by the menu list / in-menu search endpoints; absent (treat as `0`)
+   * on menu items from the home feed.
+   */
+  optionGroupCount?: number;
 }
 
 /**

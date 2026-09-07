@@ -25,7 +25,7 @@
  * on `SMS_PROVIDER=messagecentral`. Real OTP verification is then enforced and
  * a wrong code is rejected.
  */
-export const AUTH_OTP_BYPASS = true;
+export const AUTH_OTP_BYPASS = false;
 
 /**
  * Number of digits in the OTP. Must match the backend, which validates

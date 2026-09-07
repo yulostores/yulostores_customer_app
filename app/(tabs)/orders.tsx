@@ -1,19 +1,24 @@
 /**
- * app/(tabs)/orders.tsx — Customer orders list.
+ * app/(tabs)/orders.tsx — the customer's "Order history".
  *
- * Wired to GET /api/orders (src/services/orders.ts) — replaces the old
- * hardcoded static list with real data from the backend.
+ * Data, paging and auth handling all come from useOrders() (src/hooks/useOrders.ts):
+ * GET /api/orders, 20 per page, newest first, with a mounted / stale-response
+ * guard and a 401 → "sign in" branch. Nothing on this screen is hard-coded — the
+ * card's storefront name, item summary, total, timestamp and the "veg-only fleet"
+ * tag are all fields of the order document.
  *
- * Active orders (placed/confirmed/preparing/out_for_delivery) link to the
- * live tracking screen. Delivered/cancelled orders show the same screen in
- * a read-only final state.
+ * Active orders (placed/confirmed/preparing/ready/out_for_delivery) show a status
+ * pill and open the live tracking screen. A finished delivery order shows
+ * "Reorder", which re-adds its items to the cart via POST /api/orders/:id/reorder
+ * (src/services/orders.ts) and drops the customer on the cart tab.
  */
 
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -22,96 +27,172 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
-import { listOrders, describeStatus, type OrderSummary } from '../../src/services/orders';
-import { logger } from '../../src/lib/logger';
+import { useAuth } from '../../src/context/AuthContext';
+import { useCart } from '../../src/context/CartContext';
+import { useOrders } from '../../src/hooks/useOrders';
+import { logger, reportError } from '../../src/lib/logger';
+import { ApiError } from '../../src/services/api';
+import { toCartCachePayload } from '../../src/services/cart';
+import {
+  reorder,
+  removedReasonLabel,
+  statusMeta,
+  type OrderSummary,
+} from '../../src/services/orders';
 
-// ─── Status display map ──────────────────────────────────────────────────────
+// ─── Status display ──────────────────────────────────────────────────────────
 
-const STATUS_ICON: Record<string, { name: string; color: string }> = {
-  placed: { name: 'time-outline', color: Colors.warning },
-  confirmed: { name: 'checkmark-circle-outline', color: Colors.info },
-  preparing: { name: 'flame-outline', color: Colors.warning },
-  ready: { name: 'bag-check-outline', color: Colors.info },
-  out_for_delivery: { name: 'bicycle', color: Colors.foodAccent },
-  delivered: { name: 'checkmark-circle', color: Colors.success },
-  cancelled: { name: 'close-circle', color: Colors.danger },
+const ACTIVE_STATUSES = new Set([
+  'placed',
+  'confirmed',
+  'preparing',
+  'ready',
+  'out_for_delivery',
+]);
+
+const TONE_COLOR: Record<string, string> = {
+  accent: Colors.foodAccent,
+  positive: Colors.success,
+  muted: Colors.foodTextMuted,
+  danger: Colors.danger,
 };
-
-const ACTIVE_STATUSES = new Set(['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery']);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+function goBack() {
+  // Reached from the Profile menu and from the checkout-success screen (which
+  // `replace`s, leaving nothing to pop) — fall back to Home in that case.
+  if (router.canGoBack()) router.back();
+  else router.navigate('/(tabs)');
 }
 
 function formatTotal(total: number): string {
   return '₹' + Math.round(total).toLocaleString('en-IN');
 }
 
+/** "Today, 8:12 PM" · "Yesterday, 1:30 PM" · "12 Jul, 9:05 PM" · "12 Jul 2024, 9:05 PM". */
+function formatOrderWhen(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+
+  const time = d.toLocaleTimeString('en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+  const now = new Date();
+  const midnight = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const daysAgo = Math.round((midnight(now) - midnight(d)) / 86_400_000);
+
+  if (daysAgo <= 0) return `Today, ${time}`;
+  if (daysAgo === 1) return `Yesterday, ${time}`;
+
+  const date = d.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    ...(d.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  });
+  return `${date}, ${time}`;
+}
+
 // ─── Order card ──────────────────────────────────────────────────────────────
 
-function OrderCard({ order }: { order: OrderSummary }) {
-  const statusMeta = STATUS_ICON[order.status] ?? { name: 'ellipse-outline', color: Colors.foodTextMuted };
-  const { label } = describeStatus(order.status);
+function OrderCard({
+  order,
+  onReorder,
+  reordering,
+}: {
+  order: OrderSummary;
+  onReorder: () => void;
+  reordering: boolean;
+}) {
   const isActive = ACTIVE_STATUSES.has(order.status);
+  const meta = statusMeta(order.status);
+  const toneColor = TONE_COLOR[meta.tone] ?? Colors.foodTextMuted;
 
-  const handlePress = useCallback(() => {
-    // Both active and completed orders open the tracking screen —
-    // it gracefully handles the delivered/cancelled terminal states.
+  // Storefront name is the card's identity; fall back to the item summary only
+  // when the restaurant record is gone.
+  const heading = order.restaurantName ?? order.title;
+  const showItemLine = !!order.restaurantName && !!order.title;
+
+  const openTracking = useCallback(() => {
+    // The tracking screen renders the delivered / cancelled terminal states too.
     router.push(`/order/${order.id}/track`);
   }, [order.id]);
-
-  // Show the first 2 items as a summary line
-  const itemSummary = order.items
-    .slice(0, 2)
-    .map((i) => `${i.quantity}x ${i.name}`)
-    .join(', ')
-    + (order.items.length > 2 ? ` +${order.items.length - 2} more` : '');
 
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={handlePress}
+      onPress={openTracking}
       accessibilityRole="button"
-      accessibilityLabel={`Order ${order.id} — ${label}`}
+      accessibilityLabel={`${heading} — ${meta.label}`}
     >
-      {/* Top row: order ref + status badge */}
-      <View style={styles.cardTop}>
-        <Text style={styles.orderId}># YU-{order.id.slice(-8).toUpperCase()}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: statusMeta.color + '1A' }]}>
-          <Ionicons name={statusMeta.name as any} size={13} color={statusMeta.color} />
-          <Text style={[styles.statusText, { color: statusMeta.color }]}>{label}</Text>
-        </View>
-      </View>
+      <RemoteImage
+        uri={order.restaurantLogo ?? undefined}
+        style={styles.logo}
+        icon="storefront-outline"
+        iconSize={20}
+      />
 
-      {/* Item summary */}
-      <Text style={styles.itemSummary} numberOfLines={1}>{itemSummary}</Text>
-
-      <View style={styles.divider} />
-
-      {/* Bottom row: date + item count + total + chevron */}
-      <View style={styles.cardBottom}>
-        <View style={styles.metaItem}>
-          <Ionicons name="calendar-outline" size={12} color={Colors.foodTextMuted} />
-          <Text style={styles.metaText}>{formatDate(order.createdAt)}</Text>
+      <View style={styles.body}>
+        <View style={styles.headingRow}>
+          <Text style={styles.name} numberOfLines={1}>{heading}</Text>
+          <Text style={styles.total}>{formatTotal(order.total)}</Text>
         </View>
-        <View style={styles.metaItem}>
-          <Ionicons name="bag-outline" size={12} color={Colors.foodTextMuted} />
-          <Text style={styles.metaText}>{order.itemCount} item{order.itemCount !== 1 ? 's' : ''}</Text>
-        </View>
-        <Text style={styles.total}>{formatTotal(order.total)}</Text>
-        {isActive && (
-          <View style={styles.trackChip}>
-            <Text style={styles.trackChipText}>Track</Text>
-            <Ionicons name="chevron-forward" size={12} color={Colors.foodAccent} />
+
+        {showItemLine ? (
+          <Text style={styles.items} numberOfLines={1}>
+            {order.title}
+            {order.itemCount > 1 ? ` · ${order.itemCount} items` : ''}
+          </Text>
+        ) : null}
+
+        <Text style={styles.when}>{formatOrderWhen(order.createdAt)}</Text>
+
+        {order.deliveredViaVegFleet ? (
+          <View style={styles.vegTag}>
+            <Ionicons name="leaf" size={13} color={Colors.foodVegGreen} />
+            <Text style={styles.vegTagText}>Delivered via veg-only fleet</Text>
           </View>
-        )}
+        ) : isActive ? (
+          <View style={[styles.statusPill, { backgroundColor: toneColor + '1A' }]}>
+            <Ionicons name={meta.icon as any} size={12} color={toneColor} />
+            <Text style={[styles.statusText, { color: toneColor }]}>{meta.label}</Text>
+          </View>
+        ) : order.status === 'cancelled' ? (
+          <Text style={styles.cancelled}>Cancelled</Text>
+        ) : null}
+
+        <View style={styles.actionRow}>
+          {isActive ? (
+            <View style={styles.trackBtn}>
+              <Text style={styles.trackBtnText}>Track order</Text>
+              <Ionicons name="chevron-forward" size={13} color={Colors.foodAccent} />
+            </View>
+          ) : order.canReorder ? (
+            <Pressable
+              style={({ pressed }) => [styles.reorderBtn, pressed && styles.reorderBtnPressed]}
+              onPress={onReorder}
+              disabled={reordering}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`Reorder from ${heading}`}
+            >
+              {reordering ? (
+                <ActivityIndicator size="small" color={Colors.foodAccent} />
+              ) : (
+                <>
+                  <Ionicons name="repeat" size={15} color={Colors.foodAccent} />
+                  <Text style={styles.reorderBtnText}>Reorder</Text>
+                </>
+              )}
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </Pressable>
   );
@@ -132,58 +213,128 @@ function EmptyState() {
   );
 }
 
+// ─── Centered notice (not signed in / load error) ────────────────────────────
+
+function CenteredNotice({
+  icon,
+  title,
+  message,
+  actionLabel,
+  onAction,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <View style={styles.centered}>
+      <Ionicons name={icon} size={48} color={Colors.foodBorder} />
+      <Text style={styles.noticeTitle}>{title}</Text>
+      <Text style={styles.errorText}>{message}</Text>
+      {actionLabel && onAction && (
+        <Pressable style={styles.retryBtn} onPress={onAction}>
+          <Text style={styles.retryText}>{actionLabel}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 20;
-
 export default function OrdersScreen() {
-  const [orders, setOrders] = useState<OrderSummary[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { signOut } = useAuth();
+  const { syncFromServer } = useCart();
+  const {
+    orders,
+    total,
+    isLoading,
+    isRefreshing,
+    isPaging,
+    error,
+    notSignedIn,
+    refresh,
+    loadMore,
+  } = useOrders();
 
-  const fetchPage = useCallback(async (p: number, append = false) => {
-    try {
-      const result = await listOrders(p);
-      setOrders((prev) => (append ? [...prev, ...result.orders] : result.orders));
-      setTotal(result.total);
-      setPage(p);
-      setError(null);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to load orders';
-      logger.warn('OrdersScreen', 'fetchPage failed', { page: p, msg });
-      setError(msg);
-    }
-  }, []);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    fetchPage(1).finally(() => setLoading(false));
-  }, [fetchPage]);
+  const handleReorder = useCallback(
+    async (order: OrderSummary) => {
+      if (reorderingId) return;
+      setReorderingId(order.id);
+      try {
+        const { snapshot, removedItems } = await reorder(order.id);
+        syncFromServer(toCartCachePayload(snapshot));
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchPage(1);
-    setRefreshing(false);
-  }, [fetchPage]);
+        if (removedItems.length === 0) {
+          router.push('/(tabs)/cart');
+          return;
+        }
 
-  const handleLoadMore = useCallback(async () => {
-    if (loadingMore || orders.length >= total) return;
-    setLoadingMore(true);
-    await fetchPage(page + 1, true);
-    setLoadingMore(false);
-  }, [loadingMore, orders.length, total, fetchPage, page]);
+        const named = removedItems.filter((r) => r.name);
+        const detail =
+          named.length > 0
+            ? named.map((r) => `${r.name} (${removedReasonLabel(r.reason)})`).join('\n')
+            : `${removedItems.length} item${removedItems.length !== 1 ? 's' : ''} could not be added.`;
+        const anyAdded = snapshot.cart.lines.length > 0;
 
-  // ── Loading ──
-  if (loading) {
+        Alert.alert(
+          anyAdded ? 'Some items weren’t added' : 'Couldn’t reorder',
+          anyAdded
+            ? `${detail}\n\nEverything still available is in your cart.`
+            : `${detail}\n\nNothing from this order is available right now.`,
+          anyAdded
+            ? [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'View cart', onPress: () => router.push('/(tabs)/cart') },
+              ]
+            : [{ text: 'OK' }],
+        );
+      } catch (err) {
+        if (err instanceof ApiError && err.code === 'CART_RESTAURANT_CONFLICT') {
+          const current = (err.details as { currentRestaurantName?: string } | null)
+            ?.currentRestaurantName;
+          Alert.alert(
+            'You already have a cart',
+            `Your cart has items from ${current ?? 'another restaurant'}. Clear it first, then reorder.`,
+          );
+        } else if (err instanceof ApiError && err.status === 401) {
+          Alert.alert('Sign in required', 'Please sign in again to reorder.');
+        } else if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+          logger.warn('orders', `Reorder rejected — ${err.status} ${err.code}`, {
+            orderId: order.id,
+            code: err.code,
+          });
+          Alert.alert('Couldn’t reorder', err.message || 'Please try again.');
+        } else {
+          reportError('orders', 'Reorder failed', err, { orderId: order.id });
+          Alert.alert('Something went wrong', 'Please try again in a moment.');
+        }
+      } finally {
+        setReorderingId(null);
+      }
+    },
+    [reorderingId, syncFromServer],
+  );
+
+  const header = (
+    <View style={styles.header}>
+      <Pressable onPress={goBack} hitSlop={10} style={styles.backBtn}>
+        <Ionicons name="arrow-back" size={22} color={Colors.foodText} />
+      </Pressable>
+      <Text style={styles.headerTitle}>Order history</Text>
+      <View style={styles.backBtn} />
+    </View>
+  );
+
+  // ── First load ──
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.header}>
-          <Text style={styles.title}>My Orders</Text>
-        </View>
+        {header}
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.foodAccent} />
         </View>
@@ -191,49 +342,73 @@ export default function OrdersScreen() {
     );
   }
 
-  // ── Error ──
+  // ── Bypass / expired session ──
+  if (notSignedIn) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {header}
+        <CenteredNotice
+          icon="lock-closed-outline"
+          title="Sign in to see your orders"
+          message="Your order history is tied to your account. Sign in again to pick up where you left off."
+          actionLabel="Sign in"
+          onAction={signOut}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ── Load error, nothing on screen ──
   if (error && orders.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.header}>
-          <Text style={styles.title}>My Orders</Text>
-        </View>
-        <View style={styles.centered}>
-          <Ionicons name="alert-circle-outline" size={48} color={Colors.danger} />
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable style={styles.retryBtn} onPress={handleRefresh}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        </View>
+        {header}
+        <CenteredNotice
+          icon="alert-circle-outline"
+          title="Couldn’t load your orders"
+          message={error}
+          actionLabel="Retry"
+          onAction={refresh}
+        />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My Orders</Text>
-        <Text style={styles.subtitle}>{total} order{total !== 1 ? 's' : ''} placed</Text>
-      </View>
+      {header}
 
       <FlatList
         data={orders}
         keyExtractor={(o) => o.id}
         contentContainerStyle={styles.list}
-        renderItem={({ item }) => <OrderCard order={item} />}
+        renderItem={({ item }) => (
+          <OrderCard
+            order={item}
+            reordering={reorderingId === item.id}
+            onReorder={() => handleReorder(item)}
+          />
+        )}
+        ListHeaderComponent={
+          orders.length > 0 ? (
+            <Text style={styles.count}>
+              {total} order{total !== 1 ? 's' : ''}
+            </Text>
+          ) : null
+        }
         ListEmptyComponent={<EmptyState />}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
+            refreshing={isRefreshing}
+            onRefresh={refresh}
             tintColor={Colors.foodAccent}
             colors={[Colors.foodAccent]}
           />
         }
-        onEndReached={handleLoadMore}
+        onEndReached={loadMore}
         onEndReachedThreshold={0.4}
         ListFooterComponent={
-          loadingMore ? (
+          isPaging ? (
             <ActivityIndicator style={{ marginVertical: 16 }} color={Colors.foodAccent} />
           ) : null
         }
@@ -248,17 +423,26 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.base,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.base,
+    paddingVertical: Spacing.sm + 2,
     borderBottomWidth: 1,
     borderBottomColor: Colors.foodBorder,
+    backgroundColor: Colors.foodSurface,
   },
-  title: { fontSize: 26, fontWeight: '800', color: Colors.foodText },
-  subtitle: { fontSize: 13, color: Colors.foodTextMuted, marginTop: 2 },
+  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: Colors.foodText, letterSpacing: -0.3 },
 
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
-  errorText: { fontSize: 14, color: Colors.foodText, textAlign: 'center', paddingHorizontal: Spacing.xl },
+  noticeTitle: { fontSize: 18, fontWeight: '800', color: Colors.foodText, marginTop: 4 },
+  errorText: {
+    fontSize: 14,
+    color: Colors.foodText,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.xl,
+  },
   retryBtn: {
     backgroundColor: Colors.foodAccent,
     paddingHorizontal: Spacing.xl,
@@ -267,9 +451,18 @@ const styles = StyleSheet.create({
   },
   retryText: { fontSize: 14, fontWeight: '700', color: Colors.white },
 
-  list: { paddingHorizontal: Spacing.base, gap: Spacing.md, paddingTop: Spacing.md, paddingBottom: 24 },
+  list: {
+    paddingHorizontal: Spacing.base,
+    gap: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: 24,
+  },
+  count: { fontSize: 13, color: Colors.foodTextMuted, marginBottom: Spacing.xs },
 
   card: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
     backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.base,
@@ -277,40 +470,58 @@ const styles = StyleSheet.create({
     borderColor: Colors.foodBorder,
     ...Shadows.sm,
   },
-  cardPressed: { opacity: 0.88, backgroundColor: Colors.foodBgSecondary },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  orderId: { fontSize: 13, fontWeight: '700', color: Colors.foodText },
-  statusBadge: {
+  cardPressed: { opacity: 0.9, backgroundColor: Colors.foodBgSecondary },
+
+  logo: { width: 44, height: 44, borderRadius: BorderRadius.md },
+
+  body: { flex: 1, gap: 3 },
+  headingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  name: { flex: 1, fontSize: 15, fontWeight: '800', color: Colors.foodText, letterSpacing: -0.2 },
+  total: { fontSize: 15, fontWeight: '800', color: Colors.foodText },
+  items: { fontSize: 12.5, color: Colors.foodTextSecondary },
+  when: { fontSize: 12.5, color: Colors.foodTextMuted, marginTop: 1 },
+
+  vegTag: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: Spacing.xs },
+  vegTagText: { fontSize: 12.5, fontWeight: '600', color: Colors.foodVegGreen },
+
+  statusPill: {
     flexDirection: 'row',
+    alignSelf: 'flex-start',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    marginTop: Spacing.xs,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: BorderRadius.full,
   },
   statusText: { fontSize: 12, fontWeight: '700' },
-  itemSummary: {
-    fontSize: 13,
-    color: Colors.foodTextSecondary,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.sm,
-  },
-  divider: { height: 1, backgroundColor: Colors.foodBorder, marginVertical: Spacing.sm },
-  cardBottom: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { fontSize: 12, color: Colors.foodTextMuted },
-  total: { marginLeft: 'auto', fontSize: 15, fontWeight: '800', color: Colors.foodText },
-  trackChip: {
+  cancelled: { fontSize: 12.5, fontWeight: '600', color: Colors.danger, marginTop: Spacing.xs },
+
+  actionRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm },
+  trackBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    marginLeft: Spacing.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.foodAccentLight,
   },
-  trackChipText: { fontSize: 12, fontWeight: '700', color: Colors.foodAccent },
+  trackBtnText: { fontSize: 13, fontWeight: '800', color: Colors.foodAccent },
+  reorderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minWidth: 108,
+    minHeight: 36,
+    paddingHorizontal: 16,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.foodAccent,
+  },
+  reorderBtnPressed: { backgroundColor: Colors.foodAccentLight },
+  reorderBtnText: { fontSize: 13, fontWeight: '800', color: Colors.foodAccent },
 
   // Empty state
   emptyState: {

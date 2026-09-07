@@ -64,7 +64,8 @@
           "requestLocationPermission": true,
           "locationPermission": "Allow Yulo Stores to use your location to centre the map on where you are."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "apiPort": 3000,

@@ -15,13 +15,19 @@ import {
   type PropsWithChildren,
 } from 'react';
 import type { VerifyResult } from '../services/auth';
-import { getSession, setSession, subscribe, type Session } from '../services/session';
+import {
+  getSession,
+  hydrateSession,
+  setSession,
+  subscribe,
+  type Session,
+} from '../services/session';
 
 interface AuthContextValue {
   session: Session | null;
   user: Session['user'] | null;
   isAuthenticated: boolean;
-  /** In-memory store is ready synchronously; kept for a future async backend. */
+  /** False until the persisted session has been read from secure storage. */
   isReady: boolean;
   signIn: (result: VerifyResult) => void;
   signOut: () => void;
@@ -30,13 +36,33 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [session, setSessionState] = useState<Session | null>(() => getSession());
+  const [session, setSessionState] = useState<Session | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
+  // Restore a persisted session before the app decides which stack to show, so a
+  // returning customer never flashes the sign-in screen.
+  useEffect(() => {
+    let active = true;
+    hydrateSession()
+      .then((restored) => {
+        if (active) setSessionState(restored);
+      })
+      .finally(() => {
+        if (active) setIsReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Picks up out-of-band changes: a token rotated by the API refresh path, or a
+  // forced sign-out when that refresh fails.
   useEffect(() => subscribe(() => setSessionState(getSession())), []);
 
   const signIn = useCallback((result: VerifyResult) => {
     setSession({
       accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
       user: result.user,
       bypassed: result.bypassed,
     });
@@ -49,11 +75,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       user: session?.user ?? null,
       isAuthenticated: session != null,
-      isReady: true,
+      isReady,
       signIn,
       signOut,
     }),
-    [session, signIn, signOut],
+    [session, isReady, signIn, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

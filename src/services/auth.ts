@@ -39,6 +39,8 @@ export interface VerifyResult {
   user: AuthUser;
   /** Real JWT from the backend, or '' when the session was minted locally. */
   accessToken: string;
+  /** Backend refresh JWT for silent re-auth, or '' for a local/bypass session. */
+  refreshToken: string;
   isNewUser: boolean;
   /** True when this session did not come from a successful backend verify. */
   bypassed: boolean;
@@ -141,13 +143,16 @@ export async function requestOtp(phone: string): Promise<OtpSendResult> {
  */
 export async function verifyOtp(phone: string, code: string): Promise<VerifyResult> {
   try {
-    const data = await postJson<{ user: AuthUser; accessToken: string; isNewUser?: boolean }>(
-      '/api/auth/customer/otp/verify',
-      { phone, code, tosAccepted: true },
-    );
+    const data = await postJson<{
+      user: AuthUser;
+      accessToken: string;
+      refreshToken?: string;
+      isNewUser?: boolean;
+    }>('/api/auth/customer/otp/verify', { phone, code, tosAccepted: true });
     return {
       user: data.user,
       accessToken: data.accessToken,
+      refreshToken: data.refreshToken ?? '',
       isNewUser: Boolean(data.isNewUser),
       bypassed: false,
     };
@@ -159,6 +164,7 @@ export async function verifyOtp(phone: string, code: string): Promise<VerifyResu
       return {
         user: { _id: `local:${phone}`, phone, role: 'customer' },
         accessToken: '',
+        refreshToken: '',
         isNewUser: false,
         bypassed: true,
       };

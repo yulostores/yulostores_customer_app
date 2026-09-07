@@ -1,16 +1,19 @@
 /**
- * CartContext — the open cart, and the three ways a screen changes it.
+ * CartContext — the device-local badge cache that mirrors the server cart.
  *
- * Deliberately local: this app has no cart endpoint yet, so the cart lives on
- * the device and is cached in AsyncStorage the same best-effort way as
- * {@link VegModeContext} — the in-memory state always wins immediately, the
- * disk write is fire-and-forget and a failure is logged, never surfaced.
+ * The backend cart (`/api/cart`, src/services/cart.ts) is the system of record.
+ * This context is the fast local mirror the tab badge and the Home / restaurant
+ * `CartBar` read so they don't each round-trip: a screen that mutates the server
+ * cart pushes the fresh snapshot here through {@link CartValue.syncFromServer}.
+ * It is cached to AsyncStorage the same best-effort way as {@link VegModeContext}
+ * — the in-memory state wins immediately, the disk write is fire-and-forget — so
+ * the badge survives a cold start until the next real fetch reconciles it.
  *
- * One restaurant per cart (standard for food delivery): adding a dish from a
- * different storefront starts the cart over rather than mixing kitchens. There
- * is no "discard this cart?" prompt yet because there is no add-to-cart surface
- * beyond the Home screen's demo wiring — when a real menu screen lands, that is
- * where the confirm dialog belongs.
+ * One restaurant per cart (standard for food delivery) is enforced server-side
+ * (`409 CART_RESTAURANT_CONFLICT`); the "start a new cart?" confirm lives on the
+ * add-to-cart surface (`AddControl` in app/restaurant/[id].tsx). `addItem` /
+ * `setQty` / `clear` still mutate this local mirror directly, for the optimistic
+ * nudge after a server write — `syncFromServer` is always the last word.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';

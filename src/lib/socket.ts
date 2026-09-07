@@ -71,6 +71,15 @@ export function reconnectSocket(): Socket {
   return getSocket();
 }
 
+/**
+ * Like {@link reconnectSocket}, but a no-op when no socket has been created yet —
+ * so a token refresh re-handshakes an in-use connection without spawning one for
+ * a user who never opened a real-time screen.
+ */
+export function reconnectSocketIfActive(): void {
+  if (_socket) reconnectSocket();
+}
+
 /** Disconnects and clears the singleton (e.g. on sign-out). */
 export function destroySocket(): void {
   if (_socket) {

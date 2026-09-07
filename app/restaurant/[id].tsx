@@ -10,8 +10,10 @@
  *
  * The menu never downloads whole: a fresh screen shows the header and collapsed
  * sections instantly, then fills a section in a page at a time as it is expanded or
- * scrolled to. Adding a dish goes through the device-local CartContext; opening a
- * dish (tap the row, not the ADD button) hands off to the full customization screen.
+ * scrolled to. The ADD button posts to POST /api/cart/items and mirrors the fresh
+ * server snapshot into CartContext (the tab-badge cache); a dish with customization
+ * groups (optionGroupCount > 0) hands off to the full dish screen instead — the
+ * same as tapping the row.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -53,6 +55,13 @@ import {
   type MenuSection,
 } from '../../src/hooks/useRestaurantDetail';
 import { ApiError } from '../../src/services/api';
+import {
+  addItemToCart,
+  clearCart,
+  toCartCachePayload,
+  updateCartLine,
+  type CartSnapshot,
+} from '../../src/services/cart';
 import { formatBadge } from '../../src/services/items';
 import { fetchMenuSearch } from '../../src/services/restaurants';
 import { logger, reportError } from '../../src/lib/logger';
@@ -112,7 +121,7 @@ function FoodTypeDot({ foodType }: { foodType: MenuItem['foodType'] }) {
   );
 }
 
-// ─── Add control (device-local cart) ─────────────────────────────────────
+// ─── Add control (server cart, badge-cache mirror) ───────────────────────
 
 function AddControl({
   item,
@@ -121,44 +130,133 @@ function AddControl({
   item: MenuItem;
   restaurant: Restaurant;
 }) {
-  const { cart, addItem, setQty } = useCart();
+  const { cart, syncFromServer } = useCart();
+  const customizable = (item.optionGroupCount ?? 0) > 0;
+
+  // Display quantity comes from the mirrored badge cache (keyed by dish id).
   const qty =
     cart && cart.restaurantId === restaurant._id
       ? cart.lines.find((l) => l.itemId === item._id)?.qty ?? 0
       : 0;
 
-  const doAdd = () =>
-    addItem(
-      {
-        id: restaurant._id,
-        name: restaurant.name,
-        image: restaurant.coverImage || restaurant.logo,
-      },
-      { id: item._id, name: item.name, price: item.effectivePrice },
-      1,
+  const [busy, setBusy] = useState(false);
+
+  // The server appends a NEW line per POST and needs that line's id to change
+  // its quantity (PATCH /api/cart/items/:id). We remember the line this control
+  // last touched; a quantity we only know from the cache (dish added on the
+  // detail screen, then back here) has no id, so its stepper defers to the cart.
+  const lineIdRef = useRef<string | null>(null);
+
+  const openCustomizer = () => router.push(`/item/${item._id}`);
+
+  const mirror = (snap: CartSnapshot) => {
+    syncFromServer(toCartCachePayload(snap));
+    lineIdRef.current =
+      [...snap.cart.lines].reverse().find((l) => l.menuItemId === item._id)?.id ?? null;
+  };
+
+  const handleError = (err: unknown, fallbackName?: string | null) => {
+    if (err instanceof ApiError && err.status === 401) {
+      Alert.alert('Sign in required', 'Please sign in again to add items to your cart.');
+    } else if (err instanceof ApiError && err.code === 'CART_RESTAURANT_CONFLICT') {
+      const name =
+        (err.details as { currentRestaurantName?: string } | null)?.currentRestaurantName ??
+        fallbackName ??
+        null;
+      confirmSwitch(name);
+    } else if (err instanceof ApiError && err.status === 400) {
+      // A required customization is missing — send them to choose it.
+      openCustomizer();
+    } else if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+      logger.warn('restaurant', `Add to cart rejected — ${err.status} ${err.code}`, {
+        status: err.status,
+        code: err.code,
+      });
+      Alert.alert('Couldn’t add item', err.message || 'Please try again.');
+    } else {
+      reportError('restaurant', 'Add to cart failed', err, { itemId: item._id });
+      Alert.alert('Something went wrong', 'Please try again.');
+    }
+  };
+
+  const runAdd = async (freshCart: boolean) => {
+    setBusy(true);
+    try {
+      if (freshCart) await clearCart();
+      mirror(await addItemToCart({ menuItemId: item._id, qty: 1, selectedOptions: [] }));
+    } catch (err) {
+      handleError(err, cart?.restaurantName ?? null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmSwitch = (currentName: string | null) => {
+    Alert.alert(
+      'Start a new cart?',
+      `Your cart has items from ${currentName ?? 'another restaurant'}. Adding this dish will clear it.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Start new', style: 'destructive', onPress: () => runAdd(true) },
+      ],
     );
+  };
 
   const onAdd = () => {
-    if (cart && cart.restaurantId !== restaurant._id) {
-      // One cart per kitchen — the confirm the CartContext comment says belongs here.
-      Alert.alert(
-        'Start a new cart?',
-        `Your cart has items from ${cart.restaurantName}. Adding this dish will clear it.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Start new', style: 'destructive', onPress: doAdd },
-        ],
-      );
+    if (busy) return;
+    if (customizable) {
+      openCustomizer();
       return;
     }
-    doAdd();
+    // Fast pre-check against the cache so the switch prompt needs no round-trip
+    // (the server enforces it too — 409 CART_RESTAURANT_CONFLICT, handled above).
+    if (cart && cart.lines.length > 0 && cart.restaurantId !== restaurant._id) {
+      confirmSwitch(cart.restaurantName);
+      return;
+    }
+    runAdd(false);
+  };
+
+  const changeQty = async (next: number) => {
+    if (busy) return;
+    if (!lineIdRef.current || customizable) {
+      // Multiple customizations, or a line this control didn't create — the cart
+      // screen (or the dish screen, to add another) is where those are managed.
+      if (customizable && next > qty) openCustomizer();
+      else router.push('/cart');
+      return;
+    }
+    setBusy(true);
+    try {
+      mirror(await updateCartLine(lineIdRef.current, next));
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (qty === 0) {
     return (
-      <Pressable style={styles.addBtn} onPress={onAdd} accessibilityRole="button">
-        <Text style={styles.addBtnText}>ADD</Text>
-        <Ionicons name="add" size={14} color={Colors.foodAccent} />
+      <Pressable
+        style={styles.addBtn}
+        onPress={onAdd}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel={customizable ? `Customise and add ${item.name}` : `Add ${item.name}`}
+      >
+        {busy ? (
+          <ActivityIndicator size="small" color={Colors.foodAccent} />
+        ) : (
+          <>
+            <Text style={styles.addBtnText}>ADD</Text>
+            <Ionicons
+              name={customizable ? 'options-outline' : 'add'}
+              size={14}
+              color={Colors.foodAccent}
+            />
+          </>
+        )}
       </Pressable>
     );
   }
@@ -168,16 +266,22 @@ function AddControl({
       <Pressable
         style={styles.stepBtn}
         hitSlop={6}
-        onPress={() => setQty(item._id, qty - 1)}
+        disabled={busy}
+        onPress={() => changeQty(qty - 1)}
         accessibilityLabel={`Reduce ${item.name}`}
       >
         <Ionicons name="remove" size={16} color={Colors.foodAccent} />
       </Pressable>
-      <Text style={styles.stepValue}>{qty}</Text>
+      {busy ? (
+        <ActivityIndicator size="small" color={Colors.foodAccent} style={{ minWidth: 22 }} />
+      ) : (
+        <Text style={styles.stepValue}>{qty}</Text>
+      )}
       <Pressable
         style={styles.stepBtn}
         hitSlop={6}
-        onPress={() => setQty(item._id, qty + 1)}
+        disabled={busy}
+        onPress={() => changeQty(qty + 1)}
         accessibilityLabel={`Add another ${item.name}`}
       >
         <Ionicons name="add" size={16} color={Colors.foodAccent} />

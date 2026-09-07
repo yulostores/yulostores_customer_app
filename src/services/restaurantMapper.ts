@@ -62,6 +62,9 @@ export interface RawMenuItem {
   image?: string;
   isAvailable?: boolean;
   isFavorited?: boolean;
+  /** Count of customization groups on the dish — attached by `/menu-items` and
+   *  `/menu/search`. `> 0` means "ADD" must open the customization screen. */
+  optionGroupCount?: number;
 }
 
 /**
@@ -87,6 +90,7 @@ export function toMenuItem(m: RawMenuItem): MenuItem {
     image: m.image,
     isAvailable: m.isAvailable ?? true,
     isFavorited: m.isFavorited,
+    optionGroupCount: m.optionGroupCount ?? 0,
   };
 }
 

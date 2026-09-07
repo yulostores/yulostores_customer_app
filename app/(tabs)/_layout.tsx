@@ -77,12 +77,7 @@ export default function TabLayout() {
       />
 
       {/* Hidden tabs — screens kept for future stack navigation */}
-      <Tabs.Screen
-        name="categories"
-        options={{
-          href: null, // hides from tab bar
-        }}
-      />
+
       <Tabs.Screen
         name="cart"
         options={{

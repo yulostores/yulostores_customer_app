@@ -13,10 +13,11 @@
  */
 
 import { apiUrl } from '../constants/Api';
-import { API_TIMEOUT_MS } from '../constants/network';
+import { API_TIMEOUT_MS, AUTH_TIMEOUT_MS } from '../constants/network';
 import { fetchWithTimeout, TimeoutError } from '../lib/http';
 import { logger, reportError } from '../lib/logger';
-import { getAccessToken } from './session';
+import { reconnectSocketIfActive } from '../lib/socket';
+import { getAccessToken, getSession, setAccessToken, setSession } from './session';
 
 // ─── Error class ───────────────────────────────────────────────────────────
 
@@ -74,6 +75,100 @@ function toApiError(err: unknown): ApiError {
   return new ApiError('Could not reach the server.', 'NETWORK_ERROR', 0);
 }
 
+// ─── Silent token refresh ──────────────────────────────────────────────────
+
+/** A single in-flight refresh, shared by every 401 that lands while it runs — a
+ *  screenful of parallel requests triggers exactly one `/auth/refresh`. */
+let refreshInFlight: Promise<boolean> | null = null;
+
+/**
+ * Exchange the stored refresh token for a fresh access token. Resolves `true`
+ * when the session was rotated (and the socket reconnected with the new token),
+ * `false` on any failure or when there is no refresh token to spend (a bypass /
+ * offline session).
+ */
+function refreshAccessToken(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = doRefresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+async function doRefresh(): Promise<boolean> {
+  const session = getSession();
+  if (!session?.refreshToken) return false;
+
+  try {
+    // Bare fetch, not apiSend: this call must not re-enter the 401 path, and it
+    // needs no Bearer header. `?portal=customer` scopes it to the customer
+    // refresh secret on the backend.
+    const res = await fetchWithTimeout(apiUrl('/api/auth/refresh?portal=customer'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ refreshToken: session.refreshToken }),
+      timeoutMs: AUTH_TIMEOUT_MS,
+    });
+
+    let json: Envelope<{ accessToken?: string }> | null = null;
+    try {
+      json = (await res.json()) as Envelope<{ accessToken?: string }>;
+    } catch {
+      /* non-JSON body — treated as a failed refresh below */
+    }
+
+    if (!res.ok || json?.status !== 'success' || !json?.data?.accessToken) {
+      logger.warn('api', 'Session refresh rejected', { status: res.status, code: json?.code });
+      return false;
+    }
+
+    setAccessToken(json.data.accessToken);
+    // Real-time events authenticate with the token captured at handshake time —
+    // re-handshake an in-use socket with the rotated one (no-op if none is open).
+    reconnectSocketIfActive();
+    return true;
+  } catch (err) {
+    logger.warn('api', 'Session refresh failed', {
+      reason: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
+/**
+ * Issue an authenticated request and, on a 401 for a real (non-bypass) session,
+ * rotate the access token once via {@link refreshAccessToken} and replay it —
+ * `buildHeaders` is re-invoked so the replay carries the new token. A 401 that
+ * survives the refresh (or a session with no refresh token) means the session
+ * is unrecoverable: it is cleared so the router falls back to the sign-in stack,
+ * and the still-401 response is returned for the normal envelope handling.
+ */
+async function fetchAuthed(
+  method: string,
+  url: string,
+  buildHeaders: () => Record<string, string>,
+  body?: string,
+): Promise<Response> {
+  const send = () =>
+    fetchWithTimeout(url, { method, headers: buildHeaders(), body, timeoutMs: API_TIMEOUT_MS });
+
+  let res = await send();
+  if (res.status !== 401) return res;
+
+  // Bypass / offline sessions carry no refresh token — a 401 there is expected
+  // (see logApiFailure); leave it for the caller and never force a sign-out.
+  if (!getSession()?.refreshToken) return res;
+
+  if (await refreshAccessToken()) {
+    res = await send();
+    if (res.status !== 401) return res;
+  }
+
+  setSession(null);
+  return res;
+}
+
 // ─── GET helper ────────────────────────────────────────────────────────────
 
 /**
@@ -94,18 +189,16 @@ export async function apiGet<T>(
     if (qs) url += `?${qs}`;
   }
 
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
+  const buildHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    const token = getAccessToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
   };
-
-  const token = getAccessToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
 
   let res: Response;
   try {
-    res = await fetchWithTimeout(url, { method: 'GET', headers, timeoutMs: API_TIMEOUT_MS });
+    res = await fetchAuthed('GET', url, buildHeaders);
   } catch (err) {
     const apiErr = toApiError(err);
     logApiFailure('GET', path, apiErr);
@@ -158,28 +251,28 @@ export async function apiSend<T>(
   body?: unknown,
   opts?: SendOptions,
 ): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const buildHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
 
-  const token = getAccessToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+    const token = getAccessToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  // Caller-supplied headers last so an Idempotency-Key (etc.) can't be dropped,
-  // but Authorization / Content-Type stay under this client's control.
-  if (opts?.headers) {
-    for (const [k, v] of Object.entries(opts.headers)) {
-      if (k.toLowerCase() !== 'authorization') headers[k] = v;
+    // Caller-supplied headers last so an Idempotency-Key (etc.) can't be dropped,
+    // but Authorization / Content-Type stay under this client's control.
+    if (opts?.headers) {
+      for (const [k, v] of Object.entries(opts.headers)) {
+        if (k.toLowerCase() !== 'authorization') headers[k] = v;
+      }
     }
-  }
+    return headers;
+  };
+
+  const payload = body !== undefined ? JSON.stringify(body) : undefined;
 
   let res: Response;
   try {
-    res = await fetchWithTimeout(apiUrl(path), {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      timeoutMs: API_TIMEOUT_MS,
-    });
+    res = await fetchAuthed(method, apiUrl(path), buildHeaders, payload);
   } catch (err) {
     const apiErr = toApiError(err);
     logApiFailure(method, path, apiErr);

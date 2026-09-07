@@ -25,6 +25,7 @@ import { ApiError } from '../services/api';
 import {
   getCart,
   removeCartLine,
+  toCartCachePayload,
   updateCartLine,
   type CartSnapshot,
 } from '../services/cart';
@@ -46,23 +47,6 @@ interface UseCartScreenResult {
   setLineQty: (lineId: string, qty: number) => Promise<void>;
   removeLine: (lineId: string) => Promise<void>;
   dismissActionError: () => void;
-}
-
-/** Shape `CartContext.syncFromServer` expects, or `null` for an empty cart. */
-function toCachePayload(snapshot: CartSnapshot) {
-  const { cart } = snapshot;
-  if (!cart.restaurant || cart.lines.length === 0) return null;
-  return {
-    restaurantId: cart.restaurant.id,
-    restaurantName: cart.restaurant.name,
-    restaurantImage: cart.restaurant.image ?? undefined,
-    lines: cart.lines.map((l) => ({
-      itemId: l.menuItemId,
-      name: l.name,
-      price: l.unitPrice,
-      qty: l.qty,
-    })),
-  };
 }
 
 function messageFor(err: unknown, fallback: string): string {
@@ -96,7 +80,7 @@ export function useCartScreen(): UseCartScreenResult {
   const applyServer = useCallback(
     (next: CartSnapshot) => {
       setSnapshot(next);
-      syncFromServer(toCachePayload(next));
+      syncFromServer(toCartCachePayload(next));
     },
     [syncFromServer],
   );
