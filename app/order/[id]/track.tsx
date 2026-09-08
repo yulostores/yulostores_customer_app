@@ -443,7 +443,7 @@ export default function TrackingScreen() {
       <View style={[styles.mapContainer, { paddingTop: insets.top }]}>
         {/* Static map background image */}
         <Image
-          source={require('../../../assets/map-placeholder.png')}
+          source={require('../../../assets/map-placeholder.jpg')}
           style={styles.mapImage}
           resizeMode="cover"
         />
