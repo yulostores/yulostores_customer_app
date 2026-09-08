@@ -21,8 +21,8 @@ import { useAccentTheme } from '../hooks/useAccentTheme';
  * only" is on, same as the tab bar and every CTA), so the screen only has to
  * drop `<CartBar />` above the tab bar.
  *
- * `View cart` and `View menu` are logged TODOs for now: neither the cart screen
- * nor a restaurant menu route exists yet.
+ * The CTA opens `/cart`; the restaurant block on the left deep-links to
+ * `/restaurant/[id]` for the cart's storefront.
  */
 
 const BAR_HEIGHT = 80;

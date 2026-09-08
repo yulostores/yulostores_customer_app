@@ -30,8 +30,9 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env files — runtime config lives in app.json → extra, not here (see .env.example)
+.env*
+!.env.example
 
 # typescript
 *.tsbuildinfo

@@ -179,7 +179,9 @@ export default function SearchScreen() {
       try {
         // `q` — not `cuisine`: the list endpoint has no cuisine filter, and any
         // request without `q` is treated as a geo-browse and 400s without lat/lng.
-        // `q` already matches cuisine names as well as restaurant names.
+        // `q` matches restaurant names, cuisine names, and the names of available
+        // dishes a restaurant serves — so a search for a dish returns the places
+        // that sell it.
         // `vegOnly` mirrors the app-wide "Pure veg restaurants only" scope so the
         // results are filtered server-side, never in the client.
         const { restaurants } = await fetchRestaurants({

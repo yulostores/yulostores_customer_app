@@ -9,10 +9,12 @@
  *    friendly copy — this module only decides what the console and (later) a
  *    crash reporter receive.
  *
- * {@link reportError} is the single seam for wiring Sentry / Crashlytics later:
- * add the SDK call there and every service picks it up for free. Mirrors the
- * backend's `server/utils/logger.js` ergonomics — `logger.error(scope, msg, ctx)`.
+ * {@link reportError} forwards every caught error to {@link crashReporter}, the one
+ * place the crash-reporting SDK is wired (a no-op until it is switched on there).
+ * Mirrors the backend's `server/utils/logger.js` ergonomics — `logger.error(scope, msg, ctx)`.
  */
+
+import { captureError } from './crashReporter';
 
 type Level = 'debug' | 'info' | 'warn' | 'error';
 type Context = Record<string, unknown>;
@@ -87,9 +89,9 @@ export const logger = {
 export function reportError(scope: string, message: string, err: unknown, context?: Context): void {
   emit('error', scope, message, { ...context, error: describeError(err) });
 
-  // TODO(observability): once a crash-reporting SDK is added, forward here so
-  // every service benefits without touching its call sites, e.g.
-  //   Sentry.captureException(err, { tags: { scope }, extra: context });
+  // One forward for every service. Inert until a crash-reporting SDK is switched on
+  // in crashReporter.ts — see that file's header for the enable steps.
+  captureError(scope, message, err, context);
 }
 
 /**

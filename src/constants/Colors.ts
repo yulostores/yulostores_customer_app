@@ -110,6 +110,15 @@ export const Colors = {
   foodWashMidVeg: '#DAEFDC',
   foodWashEdgeVeg: '#EFF2EC',
 
+  // Home-feed section rhythm. The feed is a long scroll of shelves — "What's on
+  // your mind?", "Recommended for you", the restaurant rails — and on one flat
+  // canvas they ran together. Alternate shelves sit on this faint band instead:
+  // a hair warmer/brighter than foodBg, paired with a hairline top and bottom, so
+  // two neighbours separate without the page fragmenting. *Veg is the pure-veg
+  // counterpart, tinted green by the same small amount.
+  foodSectionBand: '#F8F1E8',
+  foodSectionBandVeg: '#EDF5EB',
+
   // Icon tints for the storefronts Yulo sells through, on the home tab row.
   // Food takes the accent (it's the selected one and fills with it); these two
   // keep their own hue so the row reads as three destinations, not one repeated.

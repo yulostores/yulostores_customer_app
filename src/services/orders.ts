@@ -259,18 +259,20 @@ export async function reorder(orderId: string): Promise<ReorderResult> {
 // ─── Review ───────────────────────────────────────────────────────────────
 
 /**
- * Rate a delivered order (`POST /api/orders/:orderId/review`) — one rating
- * (1-5) plus an optional comment, covering both the order and the restaurant
- * (the backend has no separate split). Only valid once the order is
- * `delivered`; a second attempt throws `ApiError` `ALREADY_REVIEWED` (409),
- * which the caller shows as "already rated" rather than an error.
+ * Rate a delivered order (`POST /api/reviews/:orderId/review` — mounted under
+ * `/api/reviews`, not `/api/orders`) — one rating (1-5) plus an optional
+ * comment, stored as a single row covering both the order and the restaurant
+ * (the backend has no separate split). Error codes from the endpoint:
+ * `ORDER_NOT_DELIVERED` (400) until the order is delivered, `NOT_FOUND` (404)
+ * for an unknown order, and `ALREADY_REVIEWED` (409) on a second attempt —
+ * which the caller special-cases as "already rated" rather than an error.
  */
 export async function submitReview(
   orderId: string,
   rating: number,
   comment?: string,
 ): Promise<void> {
-  await apiPost(`/api/orders/${orderId}/review`, {
+  await apiPost(`/api/reviews/${orderId}/review`, {
     rating,
     comment: comment?.trim() || undefined,
   });

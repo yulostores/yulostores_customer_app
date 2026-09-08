@@ -15,8 +15,9 @@
  * Only the accent family moves: `accent` (buttons / links / active states /
  * spinners), `accentLight` (tinted chip & badge backgrounds), `accentDark` (text
  * on `accentLight`, pressed states), `accentRing` (the tinted outline around a
- * round image on the canvas) and `accentWash` (the gradient behind the home app
- * bar). Backgrounds, text and borders are the same in both themes and stay on
+ * round image on the canvas), `accentWash` (the gradient behind the home app
+ * bar) and `sectionBand` (the faint tint behind alternate home-feed shelves).
+ * Backgrounds, text and borders are the same in both themes and stay on
  * `Colors`.
  */
 
@@ -39,6 +40,8 @@ export interface AccentTheme {
    * canvas rather than ending on a visible edge.
    */
   accentWash: readonly [string, string, string];
+  /** Faint background tint behind alternate home-feed shelves. */
+  sectionBand: string;
   /** True while the green "pure veg" palette is active. */
   isPureVeg: boolean;
 }
@@ -50,6 +53,7 @@ export const ORANGE_ACCENT: AccentTheme = {
   accentDark: Colors.foodAccentDark,
   accentRing: Colors.foodAccentRing,
   accentWash: [Colors.foodWashTop, Colors.foodWashMid, Colors.foodWashEdge],
+  sectionBand: Colors.foodSectionBand,
   isPureVeg: false,
 };
 
@@ -60,6 +64,7 @@ export const GREEN_ACCENT: AccentTheme = {
   accentDark: Colors.foodVegGreenDark,
   accentRing: Colors.foodVegRing,
   accentWash: [Colors.foodWashTopVeg, Colors.foodWashMidVeg, Colors.foodWashEdgeVeg],
+  sectionBand: Colors.foodSectionBandVeg,
   isPureVeg: true,
 };
 

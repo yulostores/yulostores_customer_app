@@ -28,6 +28,20 @@
 export const AUTH_OTP_BYPASS = false;
 
 /**
+ * Build-time guard (audit M7). `AUTH_OTP_BYPASS` mints a fake local session when the
+ * backend verify fails — invaluable while testing, a silent "signed in with no server
+ * session" footgun if it ever ships enabled. `__DEV__` is `false` in every release
+ * bundle, so a misconfigured production build throws here on first import instead of
+ * reaching a user. Keep the flag `false` for every real build; remove this guard only
+ * once the offline-session path itself is gone.
+ */
+if (AUTH_OTP_BYPASS && !(typeof __DEV__ !== 'undefined' && __DEV__)) {
+  throw new Error(
+    'AUTH_OTP_BYPASS must be false in a release build — see src/constants/config.ts (audit M7).',
+  );
+}
+
+/**
  * Number of digits in the OTP. Must match the backend, which validates
  * `code` with `z.string().length(6)` (see auth.routes.js).
  */

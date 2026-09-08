@@ -3,10 +3,19 @@
     "name": "Yulo Stores",
     "slug": "yulo-stores",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "yulostores",
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/00000000-0000-0000-0000-000000000000"
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -44,6 +53,7 @@
     "plugins": [
       "expo-router",
       "expo-font",
+      "expo-navigation-bar",
       [
         "expo-splash-screen",
         {
@@ -81,7 +91,8 @@
     ],
     "extra": {
       "apiPort": 3000,
-      "apiUrl": null
+      "apiUrl": null,
+      "sentryDsn": null
     }
   }
 }

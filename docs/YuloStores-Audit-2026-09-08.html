@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>YuloStores Platform Audit</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --muted:#5b5b5b; --line:#d9d9d9; --bg:#fff;
+    --crit:#b00020; --crit-bg:#fdecef;
+    --high:#c25e00; --high-bg:#fdefe3;
+    --med:#8a6d00; --med-bg:#fbf4dc;
+    --low:#3a6b35; --low-bg:#eef5ec;
+    --code-bg:#f4f4f4;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  body{
+    font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); background:var(--bg); margin:0; padding:32px 40px 60px;
+    max-width:940px; margin:0 auto;
+  }
+  h1{font-size:26px; margin:0 0 4px}
+  h2{font-size:19px; margin:34px 0 10px; padding-bottom:6px; border-bottom:2px solid var(--ink)}
+  h3{font-size:14px; margin:20px 0 4px}
+  p{margin:6px 0}
+  small,.meta{color:var(--muted)}
+  code{background:var(--code-bg); padding:1px 4px; border-radius:3px; font:11.5px/1.4 "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace; word-break:break-word}
+  pre{background:var(--code-bg); padding:10px 12px; border-radius:5px; overflow-x:auto; font:11.5px/1.45 "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace; margin:8px 0}
+  table{border-collapse:collapse; width:100%; margin:10px 0; font-size:12px}
+  th,td{border:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top}
+  th{background:#f0f0f0}
+  ul,ol{margin:6px 0; padding-left:22px}
+  li{margin:3px 0}
+  .tag{display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; padding:2px 7px; border-radius:3px; vertical-align:middle}
+  .t-crit{background:var(--crit-bg); color:var(--crit); border:1px solid var(--crit)}
+  .t-high{background:var(--high-bg); color:var(--high); border:1px solid var(--high)}
+  .t-med{background:var(--med-bg); color:var(--med); border:1px solid var(--med)}
+  .t-low{background:var(--low-bg); color:var(--low); border:1px solid var(--low)}
+  .finding{border:1px solid var(--line); border-left-width:5px; border-radius:5px; padding:12px 16px; margin:14px 0; page-break-inside:avoid}
+  .finding.crit{border-left-color:var(--crit)}
+  .finding.high{border-left-color:var(--high)}
+  .finding.med{border-left-color:var(--med)}
+  .finding.low{border-left-color:var(--low)}
+  .finding h3{margin-top:0; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap}
+  .finding h3 .id{font-family:monospace; font-size:12px; color:var(--muted)}
+  .kv{margin:8px 0}
+  .kv b{display:inline-block; min-width:74px; color:var(--muted); font-weight:600}
+  .loc{font-family:monospace; font-size:11.5px}
+  .cover{padding:60px 0 30px; border-bottom:1px solid var(--line); margin-bottom:10px}
+  .summary-grid{display:flex; gap:10px; margin:14px 0}
+  .sbox{flex:1; border:1px solid var(--line); border-radius:6px; padding:10px 12px; text-align:center}
+  .sbox .n{font-size:24px; font-weight:800; display:block}
+  .sbox.crit .n{color:var(--crit)} .sbox.high .n{color:var(--high)}
+  .sbox.med .n{color:var(--med)} .sbox.low .n{color:var(--low)}
+  .note{background:#f7f7f7; border:1px solid var(--line); border-radius:5px; padding:10px 14px; margin:12px 0}
+  @page{margin:14mm 12mm}
+  @media print{
+    body{padding:0; max-width:none}
+    h2{page-break-after:avoid}
+    h3{page-break-after:avoid}
+    .finding{page-break-inside:avoid}
+    .no-print{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>YuloStores &mdash; Cross-Portal Technical Audit</h1>
+  <p class="meta">
+    Prepared 2026&#8209;09&#8209;08 &nbsp;&bull;&nbsp; Scope: customer app, backend API, restaurant portal, super&#8209;admin portal<br>
+    Repositories reviewed: <code>yulostores_customer_app</code>, <code>yulo_backend</code>, <code>yulo_restaurant</code>, <code>yulo_super_admin</code><br>
+    Branch: <code>main</code> (customer app had uncommitted working-tree changes at review time)
+  </p>
+
+  <div class="summary-grid">
+    <div class="sbox crit"><span class="n">5</span>Critical</div>
+    <div class="sbox high"><span class="n">5</span>High</div>
+    <div class="sbox med"><span class="n">8</span>Medium</div>
+    <div class="sbox low"><span class="n">4</span>Low / cleanup</div>
+  </div>
+
+  <div class="note">
+    <b>Do not ship to production until these are resolved:</b> C1, C2, C3, C4, C5, H1, H2, H5.
+    Every one of them is a config or wiring issue &mdash; none require large code changes.
+    Several are deliberately-temporary states the team already flagged in code comments; this
+    report collects them in one place so nothing is forgotten at cut-over.
+  </div>
+</div>
+
+<h2>How to read this</h2>
+<table>
+  <tr><th>Severity</th><th>Meaning</th></tr>
+  <tr><td><span class="tag t-crit">Critical</span></td><td>Causes data loss, a security hole, money handled incorrectly, or a totally non-functional build. Fix before any production/beta release.</td></tr>
+  <tr><td><span class="tag t-high">High</span></td><td>A core user-facing feature is broken or a whole portal fails in a realistic deployment. Fix before release.</td></tr>
+  <tr><td><span class="tag t-med">Medium</span></td><td>Real defect or risk, but with a workaround or limited blast radius. Schedule soon.</td></tr>
+  <tr><td><span class="tag t-low">Low</span></td><td>Cleanup, stale comments, hygiene. No user impact.</td></tr>
+</table>
+<p><small>Locations are given as <code>repo / path:line</code>. Line numbers are from the review-time checkout and may drift by a few lines.</small></p>
+
+<!-- ============================ CRITICAL ============================ -->
+<h2>1 &nbsp;Critical</h2>
+
+<div class="finding crit">
+  <h3><span class="id">C1</span> <span class="tag t-crit">Critical</span> Placeholder JWT secrets and plaintext third-party credentials in the backend <code>.env</code></h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulo_backend / server/.env:4&ndash;6, 10&ndash;17, 20</span></div>
+  <div class="kv"><b>What</b>
+    <ul>
+      <li><code>JWT_ACCESS_SECRET</code>, <code>JWT_REFRESH_SECRET</code>, <code>JWT_STAFF_SECRET</code> are literally
+        <code>dev_access_secret_replace_in_production_32c</code> etc. They satisfy the <code>min(32)</code> check in
+        <span class="loc">config/env.js</span> so nothing complains, but anyone who has seen this repo can mint a valid
+        access / staff token for any account (including <code>admin</code> and <code>restaurant_owner</code>).</li>
+      <li>Live-looking service credentials sit in cleartext in the working tree: MongoDB Atlas
+        (<code>admin_db_user:rgVqfZZZ&hellip;</code>), Redis (<code>default:fp8U40aH&hellip;</code>), Cloudinary API secret,
+        and the MessageCentral key (<code>eXVsb3N0b3Jlc1Byb2RAMTIzNA==</code> decodes to <code>yulostoresProd@1234</code>).</li>
+    </ul>
+  </div>
+  <div class="kv"><b>Impact</b> Full authentication bypass and account takeover if these secrets reach a live environment; credential exposure for four external services; a weak, guessable SMS-provider password.</div>
+  <div class="kv"><b>Fix</b>
+    <ol>
+      <li>Generate real 48-byte secrets (<code>node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"</code>) and set all four <code>JWT_*_SECRET</code> values only in the DigitalOcean App Platform dashboard, never in a file.</li>
+      <li>Rotate the MongoDB, Redis, Cloudinary and MessageCentral credentials that have been in this file, and give MessageCentral a strong password.</li>
+      <li>Add a startup guard in <span class="loc">config/env.js</span>: if <code>NODE_ENV === 'production'</code> and any secret matches <code>/replace_in_production|dev_.*_secret/</code>, <code>process.exit(1)</code>.</li>
+      <li>Confirm this <code>.env</code> is genuinely local-only &mdash; it is correctly gitignored (verified), but treat every value in it as compromised.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="finding crit">
+  <h3><span class="id">C2</span> <span class="tag t-crit">Critical</span> OTP login is fully bypassed &mdash; any 6-digit code signs in as any phone number</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulo_backend / server/.env:20</span> (<code>SMS_PROVIDER="bypass"</code>) &nbsp;&bull;&nbsp; logic in <span class="loc">server/services/otp.service.js:59&ndash;66, 146&ndash;150</span></div>
+  <div class="kv"><b>What</b> With <code>SMS_PROVIDER=bypass</code>, <code>verifyOtp()</code> accepts <code>/^\d{6}$/</code> for any number that has requested a code &mdash; no SMS, no stored hash check. The customer app mirrors this expectation (<span class="loc">yulostores_customer_app / src/services/auth.ts:8&ndash;12</span>). The code comments say this is temporary because the MessageCentral balance is exhausted.</div>
+  <div class="kv"><b>Impact</b> Anyone can sign in as any customer by entering their phone number and any 6 digits. Full account access (addresses, order history, saved payment labels, support tickets).</div>
+  <div class="kv"><b>Fix</b> Top up MessageCentral and set <code>SMS_PROVIDER=messagecentral</code> (env-only, no code change). Until then, treat every customer session as unauthenticated. Consider a short-lived allow-list of test numbers instead of a global bypass. Add the same production guard as C1 so <code>bypass</code> can never be the value when <code>NODE_ENV=production</code>.</div>
+</div>
+
+<div class="finding crit">
+  <h3><span class="id">C3</span> <span class="tag t-crit">Critical</span> Online payments are simulated &mdash; orders are marked <code>paid</code> with no money collected</h3>
+  <div class="kv"><b>Where</b>
+    <span class="loc">yulo_backend / server/.env</span> (no <code>RAZORPAY_*</code> keys present) &nbsp;&bull;&nbsp;
+    <span class="loc">server/controllers/order.controller.js:234&ndash;254</span> (<code>simulatePayment</code>) &nbsp;&bull;&nbsp;
+    <span class="loc">yulostores_customer_app / src/services/payments.ts:405&ndash;466</span> (<code>razorpayGateway</code> is a stub that throws)
+  </div>
+  <div class="kv"><b>What</b> No Razorpay credentials are configured, so <code>createRazorpayOrder()</code> returns <code>null</code>, the app falls back to <code>POST /api/orders/:id/payment/simulate</code>, and because <code>env.RAZORPAY_KEY_ID</code> is unset that endpoint does <em>not</em> 400 &mdash; it sets <code>paymentStatus = 'paid'</code> with a fake <code>sim_&hellip;</code> id. Separately, the real client gateway is not implemented: <code>razorpayGateway.pay()</code> immediately throws &ldquo;Online payments aren&rsquo;t enabled in this build yet.&rdquo;</div>
+  <div class="kv"><b>Impact</b> If the customer app is used for real: every &ldquo;online&rdquo; order is fulfilled without payment. If a Razorpay key is added without also finishing the client integration: every online order fails at the pay step. The backend only logs a warning in this state (<span class="loc">server/index.js:30&ndash;40</span>).</div>
+  <div class="kv"><b>Fix</b> Decide the launch payment posture:
+    <ul>
+      <li><b>COD-only launch:</b> hide/disable the online methods in <span class="loc">src/services/payments.ts</span> so nothing routes to the simulated gateway in a shipped build.</li>
+      <li><b>Online launch:</b> set <code>RAZORPAY_KEY_ID/SECRET/WEBHOOK_SECRET</code>, then complete step 3 in the <span class="loc">payments.ts</span> header (<code>npx expo install react-native-razorpay</code>, remove the <code>PaymentError</code> throw, uncomment the block), and test the <code>/payment/verify</code> + <code>/api/webhooks/razorpay</code> paths end to end.</li>
+    </ul>
+    The backend verify/webhook code (<span class="loc">server/services/payment.service.js</span>) is already implemented and looks correct &mdash; only keys + the client SDK are missing.
+  </div>
+</div>
+
+<div class="finding crit">
+  <h3><span class="id">C4</span> <span class="tag t-crit">Critical</span> Customer app has no production API URL &mdash; a release build cannot reach the backend</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulostores_customer_app / app.json:84</span> (<code>"apiUrl": null</code>) &nbsp;&bull;&nbsp; resolution in <span class="loc">src/constants/Api.ts:71&ndash;92</span></div>
+  <div class="kv"><b>What</b> <code>resolveBaseUrl()</code> priority is: <code>extra.apiUrl</code> &rarr; Expo dev-server LAN IP &rarr; <code>http://10.0.2.2:3000</code> &rarr; <code>http://localhost:3000</code>. In a standalone (EAS) build there is no dev-server host, so it resolves to <code>http://10.0.2.2:3000</code> / <code>localhost</code> &mdash; unreachable from a real device. It is also cleartext <code>http://</code>, which Android blocks by default.</div>
+  <div class="kv"><b>Impact</b> Every screen in a shipped APK/IPA fails to load. The app only works today because it is run through Expo dev tooling.</div>
+  <div class="kv"><b>Fix</b> Set <code>expo.extra.apiUrl</code> to the HTTPS API origin (e.g. <code>https://api.yulostores.in</code>) before <code>eas build</code>, or wire it from an EAS build profile / env var. Also add the Android <code>usesCleartextTraffic</code> exception only if a non-HTTPS staging URL is ever needed. Do the same review for <code>expo.extra</code> on every build profile.</div>
+</div>
+
+<div class="finding crit">
+  <h3><span class="id">C5</span> <span class="tag t-crit">Critical</span> Order rating always fails with 404 &mdash; endpoint path mismatch</h3>
+  <div class="kv"><b>Where</b>
+    caller <span class="loc">yulostores_customer_app / src/services/orders.ts:273</span> &rarr; <code>POST /api/orders/${orderId}/review</code><br>
+    used by <span class="loc">yulostores_customer_app / app/order/[id]/track.tsx:289</span> (<code>submitReview</code>)<br>
+    backend route is <span class="loc">yulo_backend / server/routes/review.routes.js:8</span> mounted at <code>/api/reviews</code> (<span class="loc">server/app.js</span>) &rarr; real path is <code>POST&nbsp;/api/reviews/:orderId/review</code>
+  </div>
+  <div class="kv"><b>What</b> The customer app posts to <code>/api/orders/:id/review</code>, which does not exist (<span class="loc">server/routes/order.routes.js</span> has no <code>/review</code>). The restaurant portal calls the correct path (<span class="loc">yulo_restaurant / src/api/customer.api.js</span> &rarr; <code>/reviews/${orderId}/review</code>), confirming the backend contract.</div>
+  <div class="kv"><b>Impact</b> Customers can never rate a delivered order from the app; the rating sheet on the tracking screen always errors.</div>
+  <div class="kv"><b>Fix</b> One line in <span class="loc">src/services/orders.ts:273</span>: change the path to <code>/api/reviews/${orderId}/review</code>. Also align the doc comment on <code>submitReview</code> &mdash; the backend&rsquo;s not-delivered code is <code>ORDER_NOT_DELIVERED</code>, not the phrasing the comment implies.</div>
+</div>
+
+<!-- ============================ HIGH ============================ -->
+<h2>2 &nbsp;High</h2>
+
+<div class="finding high">
+  <h3><span class="id">H1</span> <span class="tag t-high">High</span> Android Google Maps API key is a placeholder</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulostores_customer_app / app.json:37</span> &rarr; <code>"apiKey": "YOUR_ANDROID_GOOGLE_MAPS_API_KEY"</code></div>
+  <div class="kv"><b>What</b> <code>expo-maps</code> is used in the location flow (<span class="loc">src/components/location/MapCanvas.tsx</span>, <span class="loc">app/location/map.tsx</span>). The Google provider on Android needs a valid Maps SDK key; with the placeholder the map renders blank / grey tiles on a device build.</div>
+  <div class="kv"><b>Impact</b> &ldquo;Set location on map&rdquo; and delivery-pin confirmation are unusable on Android release builds. iOS uses Apple Maps and is unaffected.</div>
+  <div class="kv"><b>Fix</b> Create an Android Maps SDK key in Google Cloud (restrict by SHA-1 + package <code>com.yulostores.customerapp</code>), put it in <code>app.json</code> or an EAS secret, and rebuild. Verify billing is enabled on the GCP project.</div>
+</div>
+
+<div class="finding high">
+  <h3><span class="id">H2</span> <span class="tag t-high">High</span> <code>ALLOWED_ORIGINS</code> is localhost-only &mdash; a real browser deploy is CORS-blocked</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulo_backend / server/.env:13</span> &nbsp;&bull;&nbsp; usage <span class="loc">server/app.js:52&ndash;56</span></div>
+  <div class="kv"><b>What</b> Current value is <code>http://localhost:5174,http://localhost:8081,http://localhost:8082,http://localhost:5173</code>. <code>cors()</code> exact-matches the request <code>Origin</code> against this list (with <code>credentials:true</code>), so any deployed portal on a Vercel/custom domain is rejected.</div>
+  <div class="kv"><b>Impact</b> The restaurant portal and super-admin portal cannot talk to the API once deployed &mdash; every request fails preflight, including auth. (Does not affect the mobile app or <code>curl</code>, which is why it can pass casual testing.)</div>
+  <div class="kv"><b>Fix</b> In the production backend env, set <code>ALLOWED_ORIGINS</code> to the exact list of deployed portal origins (restaurant, super-admin, and the guest menu app if browser-based). Keep it out of the committed file. Confirm Socket.IO CORS uses the same list (<span class="loc">server/socket.js</span>).</div>
+</div>
+
+<div class="finding high">
+  <h3><span class="id">H3</span> <span class="tag t-high">High</span> Push notifications are not implemented anywhere</h3>
+  <div class="kv"><b>Where</b>
+    <span class="loc">yulo_backend / server/services/notify.service.js</span> (Socket.IO room emits only) &nbsp;&bull;&nbsp;
+    dead endpoint <code>POST/DELETE /api/users/me/devices</code> (<span class="loc">server/routes/user.routes.js:131&ndash;134</span>) + <span class="loc">server/models/UserDevice.js</span> &nbsp;&bull;&nbsp;
+    <span class="loc">yulostores_customer_app / src/services/notifications.ts</span> is effectively empty; <code>expo-notifications</code> is in <span class="loc">package.json</span> + configured in <span class="loc">app.json</span> plugins but never imported
+  </div>
+  <div class="kv"><b>What</b> There is no FCM / APNs / Expo Push integration (no <code>expo-server-sdk</code> or <code>firebase-admin</code> in the backend deps). Order-status updates reach the customer only while a screen holds an open socket (e.g. the live tracking screen). The device-token registration route and model exist but nothing writes to them and nothing reads them to send a push.</div>
+  <div class="kv"><b>Impact</b> Customers get no notification when the app is backgrounded or closed &mdash; no &ldquo;order confirmed&rdquo;, &ldquo;out for delivery&rdquo;, &ldquo;delivered&rdquo;. For a delivery product this is a major expectation gap. The <code>expo-notifications</code> dependency and iOS/Android permission prompts ship for no functional benefit.</div>
+  <div class="kv"><b>Fix</b> Scope a real push implementation: register the Expo push token from the app on sign-in via the existing <code>/api/users/me/devices</code> route, and have <code>notify.service.js</code> also fan out to <code>expo-server-sdk</code> for the customer-facing events. If push is explicitly out of scope for launch, remove <code>expo-notifications</code>, the plugin config, and the permission strings so the app stops asking.</div>
+</div>
+
+<div class="finding high">
+  <h3><span class="id">H4</span> <span class="tag t-high">High</span> Two separate Admin portals against the same <code>/api/admin/*</code> API</h3>
+  <div class="kv"><b>Where</b>
+    <span class="loc">yulo_super_admin</span> (standalone Vite app) &nbsp;&bull;&nbsp;
+    <span class="loc">yulo_restaurant / src/screens/admin/*</span> + <span class="loc">src/api/admin.api.js</span> + <span class="loc">src/context/AdminAuthContext.jsx</span>, mounted at <code>/admin/*</code> in <span class="loc">yulo_restaurant / src/App.jsx:79</span>
+  </div>
+  <div class="kv"><b>What</b> The restaurant portal contains a full second admin UI (login, stores, customers, tickets, dashboard, reports) that overlaps the dedicated <code>yulo_super_admin</code> project. <code>yulo_super_admin</code> is the superset &mdash; it also has Finance, Bills, and Delivery-Partner management the restaurant copy lacks.</div>
+  <div class="kv"><b>Impact</b> Divergence risk: two auth contexts, two client layers, two sets of screens to keep in step with backend changes. Whoever fixes an admin bug may fix it in the wrong copy. Also a larger restaurant-portal bundle and attack surface.</div>
+  <div class="kv"><b>Fix</b> Confirm <code>yulo_super_admin</code> is canonical, then delete <span class="loc">src/screens/admin/</span>, <span class="loc">src/api/admin.api.js</span>, <span class="loc">src/context/AdminAuthContext.jsx</span>, <span class="loc">src/components/AdminRoute.jsx</span> and the <code>/admin/*</code> routes from the restaurant portal. If the embedded one is intentionally kept for a subset of admins, document why and freeze feature work on it.</div>
+</div>
+
+<div class="finding high">
+  <h3><span class="id">H5</span> <span class="tag t-high">High</span> <code>REFRESH_COOKIE_SAMESITE = none</code> with <code>NODE_ENV=development</code> silently logs portal users out</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulo_backend / server/.env:1, 22</span> &nbsp;&bull;&nbsp; logic <span class="loc">server/utils/refreshCookie.js:44&ndash;53</span></div>
+  <div class="kv"><b>What</b> <code>sameSite:'none'</code> forces <code>secure:true</code>. On plain-<code>http://localhost</code> the browser refuses to store the refresh cookie. Sign-in appears to work, then when the 15-minute access token expires every screen 401s and the next reload ends the session &mdash; exactly the footgun the <code>.env.example</code> comment warns about.</div>
+  <div class="kv"><b>Impact</b> Broken local dev for the owner / staff / super-admin portals (mobile app is unaffected &mdash; it stores its refresh token in SecureStore, not a cookie). Wastes developer time chasing &ldquo;random&rdquo; logouts.</div>
+  <div class="kv"><b>Fix</b> Remove line 22 from the local <code>.env</code> (let <code>config/env.js</code> resolve it &mdash; <code>lax</code> in dev, <code>none</code> in prod), or set it to <code>lax</code> for local work. In production it must be <code>none</code> because the portals and API are cross-site. Also note <code>OTP_MAX_REQUESTS_PER_WINDOW=10</code> on line 21 is loosened from the prod-safe default of 3 &mdash; reset before launch.</div>
+</div>
+
+<!-- ============================ MEDIUM ============================ -->
+<h2>3 &nbsp;Medium</h2>
+
+<div class="finding med">
+  <h3><span class="id">M1</span> <span class="tag t-med">Medium</span> <code>@sentry/node</code> is a dependency but is never initialized</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulo_backend / server/package.json</span> (<code>"@sentry/node": "^10.58.0"</code>); no <code>Sentry.init</code> / import anywhere in <code>server/</code>.</div>
+  <div class="kv"><b>Impact</b> No server-side error monitoring despite the dependency being installed &mdash; a false sense of coverage. Unused package in the deploy.</div>
+  <div class="kv"><b>Fix</b> Either initialize Sentry in <span class="loc">server/index.js</span> before route registration (DSN from env) and add its Express error handler, or drop the dependency.</div>
+</div>
+
+<div class="finding med">
+  <h3><span class="id">M2</span> <span class="tag t-med">Medium</span> Customer app has no crash / error reporting</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulostores_customer_app / src/lib/logger.ts:90&ndash;96, 951&ndash;957</span> &mdash; <code>reportError()</code> only calls <code>console.error</code>; the crash-reporter hook is a <code>TODO(observability)</code>.</div>
+  <div class="kv"><b>Impact</b> Production crashes and handled errors are invisible to the team. The infrastructure is in place (single <code>reportError</code> seam, global handler installer) &mdash; only the SDK call is missing.</div>
+  <div class="kv"><b>Fix</b> Add Sentry React Native (or Crashlytics) and wire it into <code>reportError</code> and <code>installGlobalErrorLogging</code>. Low effort given the existing structure.</div>
+</div>
+
+<div class="finding med">
+  <h3><span class="id">M3</span> <span class="tag t-med">Medium</span> The &ldquo;Scan&rdquo; tab is a dead end</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulostores_customer_app / app/(tabs)/scan.tsx:42&ndash;45</span></div>
+  <div class="kv"><b>What</b> <code>handleBarCodeScanned</code> shows <code>Alert.alert('QR Code Scanned!', 'Data: ' + data)</code> and stops. The QR payload is never parsed and nothing navigates. The tab subtitle promises &ldquo;Scan a table QR to order directly&rdquo;.</div>
+  <div class="kv"><b>Impact</b> A primary bottom-tab feature does nothing. Combined with the fact that customer dine-in ordering has no backend support (see Known Gaps &sect;5, item 1.4), the whole QR path is unbuilt.</div>
+  <div class="kv"><b>Fix</b> Decide whether dine-in QR ordering is in scope. If not, remove or hide the Scan tab. If yes, this needs backend work first (accept <code>type:"dine_in"</code> + <code>tableId</code> on <code>POST /api/orders</code>), then parse the QR deep link and route into the menu.</div>
+</div>
+
+<div class="finding med">
+  <h3><span class="id">M4</span> <span class="tag t-med">Medium</span> Backend does not pin a Node.js version</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulo_backend / server/package.json</span> &mdash; no <code>engines</code> field. <span class="loc">server/index.js:12&ndash;20</span> explicitly depends on Node&nbsp;20+ behaviour (guards <code>net.setDefaultAutoSelectFamily</code>).</div>
+  <div class="kv"><b>Impact</b> The deploy platform can silently pick a different Node major across builds. The IPv6/Happy-Eyeballs workaround in <code>index.js</code> exists precisely because a version difference caused Cloudinary reads to stall for 60s; an older runtime would reintroduce that class of bug.</div>
+  <div class="kv"><b>Fix</b> Add <code>"engines": { "node": "&gt;=20 &lt;23" }</code> (or the exact version DigitalOcean runs) and an <code>.nvmrc</code>. Pin it in the App Platform settings too.</div>
+</div>
+
+<div class="finding med">
+  <h3><span class="id">M5</span> <span class="tag t-med">Medium</span> Payment-method and store-settings catalogues are hand-copied between backend and frontend</h3>
+  <div class="kv"><b>Where</b>
+    <span class="loc">yulostores_customer_app / src/services/payments.ts:312&ndash;327</span> is a manual twin of <span class="loc">yulo_backend / server/config/appConfig.config.js</span><br>
+    <span class="loc">yulo_restaurant / src/lib/fieldRules.js</span> is a manual twin of <span class="loc">yulo_backend / server/config/storeSettings.config.js</span>
+  </div>
+  <div class="kv"><b>What</b> Both are documented as &ldquo;synchronous twins, keep in step by hand.&rdquo; The customer app can&rsquo;t block checkout on a config fetch, and the portal renders the settings form from local rules.</div>
+  <div class="kv"><b>Impact</b> Silent drift: add a payment method or change a validation rule on the backend and the client keeps rendering the old set until someone remembers to edit the twin. No test catches it.</div>
+  <div class="kv"><b>Fix</b> Add a lightweight contract test (or a CI script) that fetches <code>GET /api/app/config</code> and <code>GET /api/owner/settings-requirements</code> and diffs the shapes/keys against the committed twins, failing the build on divergence. Or generate the twins from a shared JSON at build time.</div>
+</div>
+
+<div class="finding med">
+  <h3><span class="id">M6</span> <span class="tag t-med">Medium</span> Customer app <code>.env</code> is git-tracked</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulostores_customer_app / .env</span> (tracked, currently empty) &nbsp;&bull;&nbsp; <span class="loc">.gitignore</span> only excludes <code>.env*.local</code></div>
+  <div class="kv"><b>Impact</b> Any value a developer adds to <code>.env</code> for local work gets committed by default. Today it is empty so there is no leak, but the setup invites one.</div>
+  <div class="kv"><b>Fix</b> <code>git rm --cached .env</code>, add <code>.env</code> to <code>.gitignore</code>, and commit a <code>.env.example</code> instead. (Runtime config for this app actually lives in <code>app.json</code> &rarr; <code>extra</code>, so <code>.env</code> may not be needed at all &mdash; confirm and delete if so.)</div>
+</div>
+
+<div class="finding med">
+  <h3><span class="id">M7</span> <span class="tag t-med">Medium</span> Offline &ldquo;local session&rdquo; auth fallback in the customer app</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulostores_customer_app / src/constants/config.ts:135</span> (<code>AUTH_OTP_BYPASS</code>, currently <code>false</code>) &nbsp;&bull;&nbsp; <span class="loc">src/services/auth.ts:110&ndash;170</span></div>
+  <div class="kv"><b>What</b> When <code>AUTH_OTP_BYPASS</code> is <code>true</code>, a failed backend verify mints a fake <code>{ _id: 'local:&lt;phone&gt;', role: 'customer' }</code> session client-side. It is off now, but the path exists and is easy to flip on for a demo and forget.</div>
+  <div class="kv"><b>Impact</b> If enabled in a shipped build, the app shows a &ldquo;signed in&rdquo; state with no server session; every authenticated call 401s and screens show empty/needs-sign-in states inconsistently.</div>
+  <div class="kv"><b>Fix</b> Keep it <code>false</code> for every real build. Add a build-time assertion (or a lint rule) that fails a production build if <code>AUTH_OTP_BYPASS !== false</code>. Remove once C2 is resolved.</div>
+</div>
+
+<div class="finding med">
+  <h3><span class="id">M8</span> <span class="tag t-med">Medium</span> No automated tests in any of the four repos</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulo_backend / server/package.json</span> &rarr; <code>"test": "echo \"Error: no test specified\" &amp;&amp; exit 1"</code>; no test files or runners in the customer app or either portal.</div>
+  <div class="kv"><b>Impact</b> Regressions like C5 (a one-word path typo that breaks a feature) ship undetected. Refactors are high-risk. The API contract between four codebases is only enforced by hand and by the prose in <code>API.md</code> / <code>API-GAPS.md</code>.</div>
+  <div class="kv"><b>Fix</b> Start with the highest-leverage layer: a handful of supertest integration tests over the backend auth + order + cart + checkout routes, and a contract test (M5) for the shared config. Add a CI workflow that runs them on PRs.</div>
+</div>
+
+<!-- ============================ LOW ============================ -->
+<h2>4 &nbsp;Low / cleanup</h2>
+
+<div class="finding low">
+  <h3><span class="id">L1</span> <span class="tag t-low">Low</span> Stale doc comments</h3>
+  <div class="kv"><b>Where</b>
+    <span class="loc">yulostores_customer_app / src/components/CartBar.tsx:22&ndash;24</span> &mdash; says &ldquo;neither the cart screen nor a restaurant menu route exists yet&rdquo;; both exist and the buttons navigate (<code>router.push('/cart')</code>, <code>router.push('/restaurant/&hellip;')</code>).<br>
+    <span class="loc">src/services/checkout.ts</span> header and <span class="loc">src/services/orders.ts:262&ndash;270</span> describe behaviour that has since changed.
+  </div>
+  <div class="kv"><b>Fix</b> Trim the comments to match current behaviour during the next touch of these files. No functional impact.</div>
+</div>
+
+<div class="finding low">
+  <h3><span class="id">L2</span> <span class="tag t-low">Low</span> <code>console.*</code> used directly in backend bootstrap</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulo_backend / server/config/db.js</span>, <span class="loc">config/redis.js</span>, <span class="loc">config/env.js</span> use <code>console.log/warn/error</code> instead of the pino <code>logger</code>.</div>
+  <div class="kv"><b>Impact</b> These lines run before/around logger setup so it is defensible, but the output skips pino&rsquo;s JSON formatting and log levels &mdash; slightly harder to parse in production log aggregation.</div>
+  <div class="kv"><b>Fix</b> Move to <code>logger</code> where it is available; leave the pre-logger <code>env.js</code> failure path as-is.</div>
+</div>
+
+<div class="finding low">
+  <h3><span class="id">L3</span> <span class="tag t-low">Low</span> Ad-hoc migration scripts with no runner or tracking</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulo_backend / server/scripts/</span> &mdash; 9 one-off <code>backfill*/fix*</code> scripts.</div>
+  <div class="kv"><b>Impact</b> No record of which have been run against which environment; risk of double-run or missed-run during the next deploy or a fresh environment bring-up.</div>
+  <div class="kv"><b>Fix</b> Adopt a minimal migration tool (e.g. <code>migrate-mongo</code>) or at least a <code>migrations_applied</code> collection and a README listing run order and idempotency of each script.</div>
+</div>
+
+<div class="finding low">
+  <h3><span class="id">L4</span> <span class="tag t-low">Low</span> Restaurant portal local <code>.env</code> bypasses the documented dev proxy</h3>
+  <div class="kv"><b>Where</b> <span class="loc">yulo_restaurant / .env</span> &rarr; <code>VITE_API_BASE = http://localhost:3000</code> (the <code>.env.example</code> and <code>vite.config.js</code> comments say leave it blank to use the Vite proxy).</div>
+  <div class="kv"><b>Impact</b> Local requests go cross-origin to <code>:3000</code> instead of same-origin through the proxy. Works today (localhost is same-site, and <code>:3000</code> is in <code>ALLOWED_ORIGINS</code>), but it is a deviation from the intended setup and interacts badly with H5.</div>
+  <div class="kv"><b>Fix</b> Blank the value locally, or document why the direct connection is wanted. <code>.env</code> is gitignored here so this is per-developer.</div>
+</div>
+
+<!-- ============================ KNOWN GAPS ============================ -->
+<h2>5 &nbsp;Pre-existing known gaps (already catalogued by the team)</h2>
+<p>
+  <span class="loc">yulo_restaurant / API-GAPS.md</span> is a thorough, current list of features that are designed but not backed by an API,
+  or where the frontend works around an ambiguous contract. It is worth reading in full. The load-bearing items:
+</p>
+<table>
+  <tr><th>#</th><th>Gap</th><th>State</th></tr>
+  <tr><td>1.1</td><td>Customer assistance requests (call waiter / water / bill / cleaning) &mdash; <em>partially closed</em>: guest request routes now exist (<code>/api/restaurants/:id/requests</code>), but staff-queue endpoints are still thin.</td><td>Mostly resolved</td></tr>
+  <tr><td>1.2</td><td>Customer-facing offers list &mdash; no public &ldquo;active discounts&rdquo; endpoint. <em>Note:</em> the customer app <em>does</em> call <code>POST /api/cart/apply-promo</code>, which exists, so coupon entry works even though browsing offers does not.</td><td>Open (browse), Works (redeem)</td></tr>
+  <tr><td>1.3</td><td>Password change &mdash; no route; <code>PATCH /api/users/me</code> covers name/phone/avatar only.</td><td>Open</td></tr>
+  <tr><td>1.4</td><td><b>Customer dine-in ordering</b> &mdash; <code>POST /api/orders</code> requires <code>type:"delivery"</code>. QR self-ordering from the customer app is not possible; a waiter must place it. Blocks M3.</td><td>Open (biggest)</td></tr>
+  <tr><td>1.7&ndash;1.9</td><td>Admin: platform activity log, cross-restaurant order/offer monitoring, QR oversight, system settings, staff &amp; roles listing &mdash; screens removed because nothing backs them.</td><td>Open</td></tr>
+  <tr><td>1.10&ndash;1.12</td><td>Menu add-ons/modifiers, ingredient cost/inventory, cancellation reasons &amp; refunds &mdash; data models don&rsquo;t support the designed UI.</td><td>Open</td></tr>
+  <tr><td>2</td><td>No <code>manager</code> role &mdash; the manager portal at <code>/manager/*</code> runs on the owner session against owner-scoped endpoints.</td><td>Open (by design for now)</td></tr>
+  <tr><td>4.11</td><td>Socket.IO is largely unconsumed by the portals &mdash; most live data is polled. Wiring the existing <code>new_order</code> / <code>order_status_updated</code> / <code>live_stats</code> events would cut polling load.</td><td>Open</td></tr>
+  <tr><td>4.13</td><td>Compliance fields (<code>panNumber</code>, <code>gstNumber</code>, &hellip;) are locked in the portal UI after first save but the server still accepts changes &mdash; the rule lives only in the client.</td><td>Open (server-side enforcement)</td></tr>
+</table>
+
+<h2>6 &nbsp;Quick-fix checklist</h2>
+<table>
+  <tr><th>ID</th><th>One-line action</th><th>Owner</th><th>Effort</th></tr>
+  <tr><td>C1</td><td>Rotate all leaked service creds; set strong <code>JWT_*_SECRET</code> in the platform dashboard; add prod guard in <code>env.js</code></td><td>Backend / DevOps</td><td>M</td></tr>
+  <tr><td>C2</td><td>Top up MessageCentral, set <code>SMS_PROVIDER=messagecentral</code>; guard against <code>bypass</code> in prod</td><td>Backend / Ops</td><td>S</td></tr>
+  <tr><td>C3</td><td>Pick COD-only vs. real Razorpay; either disable online methods in <code>payments.ts</code> or finish the SDK integration + set keys</td><td>Mobile + Backend</td><td>M&ndash;L</td></tr>
+  <tr><td>C4</td><td>Set <code>expo.extra.apiUrl</code> to the HTTPS API origin for every build profile</td><td>Mobile</td><td>S</td></tr>
+  <tr><td>C5</td><td>Change one path string in <code>src/services/orders.ts:273</code> to <code>/api/reviews/${orderId}/review</code></td><td>Mobile</td><td>XS</td></tr>
+  <tr><td>H1</td><td>Add a real restricted Android Google Maps key</td><td>Mobile / DevOps</td><td>S</td></tr>
+  <tr><td>H2</td><td>Set production <code>ALLOWED_ORIGINS</code> to the deployed portal domains</td><td>DevOps</td><td>XS</td></tr>
+  <tr><td>H3</td><td>Implement Expo push (register token + fan out from <code>notify.service.js</code>), or remove <code>expo-notifications</code></td><td>Mobile + Backend</td><td>M&ndash;L</td></tr>
+  <tr><td>H4</td><td>Delete the embedded admin portal from <code>yulo_restaurant</code> (confirm <code>yulo_super_admin</code> is canonical first)</td><td>Frontend</td><td>S</td></tr>
+  <tr><td>H5</td><td>Remove <code>REFRESH_COOKIE_SAMESITE</code> + reset <code>OTP_MAX_REQUESTS_PER_WINDOW</code> in local/prod env as appropriate</td><td>Backend / Ops</td><td>XS</td></tr>
+  <tr><td>M1&ndash;M2</td><td>Initialize Sentry on backend and in the customer app (or drop the unused dep)</td><td>All</td><td>S</td></tr>
+  <tr><td>M3</td><td>Hide the Scan tab, or scope dine-in ordering properly (needs 1.4 first)</td><td>Mobile + Backend</td><td>S / L</td></tr>
+  <tr><td>M4</td><td>Add <code>engines</code> + <code>.nvmrc</code> to the backend and pin the platform runtime</td><td>DevOps</td><td>XS</td></tr>
+  <tr><td>M5 / M8</td><td>Add a config-contract test and a small backend integration suite in CI</td><td>All</td><td>M</td></tr>
+  <tr><td>M6</td><td><code>git rm --cached</code> the customer app <code>.env</code>; ignore it</td><td>Mobile</td><td>XS</td></tr>
+  <tr><td>M7</td><td>Assert <code>AUTH_OTP_BYPASS === false</code> at build time</td><td>Mobile</td><td>XS</td></tr>
+</table>
+
+<h2>7 &nbsp;Method &amp; coverage</h2>
+<p>
+  This pass was a static read of all four repositories: configuration and env files, the backend route/controller/service
+  tree, the customer app service + hook layer, and the two portals&rsquo; API clients and routing. Cross-portal API contracts
+  were checked by extracting every endpoint string each frontend calls and matching it against the backend&rsquo;s mounted
+  routes (that is how C5 surfaced). It did <b>not</b> include: running the apps, load/perf testing, a dependency CVE scan,
+  a full read of every screen component, or a deep review of the delivery-partner backend surface
+  (<code>/api/partner/*</code> exists and is substantial but no partner app was in scope). A follow-up focused on the
+  partner flow and on database index / query-cost review would be worthwhile.
+</p>
+
+<p class="meta" style="margin-top:30px; border-top:1px solid var(--line); padding-top:10px">
+  End of report &mdash; 22 findings (5 critical, 5 high, 8 medium, 4 low). Generated from a working-tree review on 2026&#8209;09&#8209;08.
+</p>
+
+</body>
+</html>

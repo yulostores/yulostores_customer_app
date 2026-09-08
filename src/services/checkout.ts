@@ -14,7 +14,8 @@
  *   POST /api/orders/checkout
  *     { addressId?, deliveryInstructions?, cookingRequests?, extraCutlery?,
  *       tip?, vegFleetOptIn?, paymentMethod }
- *     → { orderId, restaurantName, status, order, clientSecret?, razorpayOrder? }
+ *     → { orderId, restaurantName, status, vegFleetOptIn, order,
+ *         clientSecret?, razorpayOrder? }
  *     `paymentMethod` is only ever `'cod'` or `'online'` on the wire — the rich
  *     UPI / card / net-banking choice on the Payment screen is a client-side
  *     label that all collapses to `'online'` here (and becomes a Razorpay
@@ -22,8 +23,10 @@
  *
  *     `razorpayOrder` is present ONLY when the backend has a gateway key
  *     configured; without one it is absent and the caller falls back to the
- *     simulate endpoint. That single signal is what routes between the real and
- *     simulated payment gateways — nothing else needs to change to go live.
+ *     simulate endpoint. That signal routes the *backend* between its real and
+ *     simulated payment paths — the client side still needs its Razorpay SDK
+ *     step finished (see the header of src/services/payments.ts) before an
+ *     online payment can actually be collected in a shipped build.
  *
  * Known error codes from POST /api/orders/checkout (callers branch on `.code`):
  *   400 VALIDATION_ERROR        — empty cart, or no delivery address on file.

@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -18,11 +20,60 @@ import {
   useThemedStyles,
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
+import { reportError } from '../../src/lib/logger';
+
+/**
+ * What a scanned string resolves to:
+ *  - `internal` — a Yulo deep link (our `yulostores://` scheme, or a yulostores.in
+ *    universal link) that names a screen we can push straight to.
+ *  - `external` — any other http(s) URL, e.g. a table QR that points at the guest
+ *    ordering site. Opened via the OS after a confirm.
+ *  - `unknown`  — not a link we can do anything with.
+ */
+type ScanTarget =
+  | { kind: 'internal'; path: string }
+  | { kind: 'external'; url: string }
+  | { kind: 'unknown' };
+
+const INTERNAL_HOSTS = ['yulostores.in', 'www.yulostores.in'];
+// First path segment we're willing to navigate to from a scan.
+const ROUTABLE_PREFIXES = ['restaurant', 'item', 'cuisines', 'order'];
+
+function resolveScan(raw: string): ScanTarget {
+  const value = raw.trim();
+  if (!value) return { kind: 'unknown' };
+
+  let parsed: ReturnType<typeof Linking.parse>;
+  try {
+    parsed = Linking.parse(value);
+  } catch {
+    return { kind: 'unknown' };
+  }
+
+  const path = (parsed.path ?? '').replace(/^\/+/, '');
+  const firstSeg = path.split('/')[0]?.toLowerCase();
+  const routable = !!firstSeg && ROUTABLE_PREFIXES.includes(firstSeg);
+  const host = parsed.hostname?.toLowerCase();
+
+  // Our own scheme — app.json → "scheme": "yulostores".
+  if (parsed.scheme === 'yulostores' && routable) {
+    return { kind: 'internal', path: `/${path}` };
+  }
+
+  if (parsed.scheme === 'http' || parsed.scheme === 'https') {
+    if (host && INTERNAL_HOSTS.includes(host) && routable) {
+      return { kind: 'internal', path: `/${path}` };
+    }
+    return { kind: 'external', url: value };
+  }
+
+  return { kind: 'unknown' };
+}
 
 export default function ScanScreen() {
   const styles = useThemedStyles(makeStyles);
   const { accent } = useAccentTheme();
-  
+
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
@@ -39,17 +90,47 @@ export default function ScanScreen() {
     setIsScanning(true);
   };
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+  const handleBarCodeScanned = ({ data }: { type: string; data: string }) => {
+    if (scanned) return; // guard against a second frame firing before the camera unmounts
     setScanned(true);
     setIsScanning(false);
-    Alert.alert('QR Code Scanned!', `Data: ${data}`);
+
+    const target = resolveScan(data);
+
+    if (target.kind === 'internal') {
+      router.push(target.path as Parameters<typeof router.push>[0]);
+      return;
+    }
+
+    if (target.kind === 'external') {
+      Alert.alert('Open this link?', target.url, [
+        { text: 'Cancel', style: 'cancel', onPress: () => setScanned(false) },
+        {
+          text: 'Open',
+          onPress: () => {
+            Linking.openURL(target.url).catch((err) => {
+              reportError('scan', 'Could not open scanned link', err, { url: target.url });
+              Alert.alert('Couldn’t open that link', 'The scanned code could not be opened.');
+              setScanned(false);
+            });
+          },
+        },
+      ]);
+      return;
+    }
+
+    Alert.alert(
+      'Unrecognised QR code',
+      "That doesn't look like a Yulo Stores code. Scan the QR printed on your restaurant table.",
+      [{ text: 'OK', onPress: () => setScanned(false) }],
+    );
   };
 
   if (isScanning) {
     return (
       <View style={styles.cameraContainer}>
         <CameraView
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
           barcodeScannerSettings={{
             barcodeTypes: ['qr'],
@@ -69,7 +150,7 @@ export default function ScanScreen() {
       <View style={styles.container}>
         {/* Header */}
         <Text style={styles.title}>Scan QR Code</Text>
-        <Text style={styles.subtitle}>Scan a table QR to order directly</Text>
+        <Text style={styles.subtitle}>Scan a Yulo QR to jump to a store or menu</Text>
 
         {/* Illustration area */}
         <View style={styles.centerBox}>
@@ -83,8 +164,8 @@ export default function ScanScreen() {
 
           <Text style={styles.scanTitle}>Point your camera at a QR code</Text>
           <Text style={styles.scanSubtext}>
-            Scan the QR code on your restaurant table to view the menu and place
-            your order directly.
+            Scan the QR code on your restaurant table, or any Yulo Stores code, to
+            open the store or menu it points to.
           </Text>
 
           <Pressable style={styles.scanBtn} onPress={handleOpenCamera}>

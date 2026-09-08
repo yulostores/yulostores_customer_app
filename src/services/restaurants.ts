@@ -12,8 +12,9 @@
  *   • no `q` → geo-browse. `lat`/`lng` are REQUIRED; without them the server
  *     400s with VALIDATION_ERROR "lat and lng are required". Sorted by $near,
  *     which is why it cannot also report `total`/`pages`.
- *   • with `q` → case-insensitive match on name OR cuisine. Needs no location
- *     and does return `total`/`pages`.
+ *   • with `q` → case-insensitive match on restaurant name, cuisine, OR the name
+ *     of an available dish the restaurant serves. Needs no location and does
+ *     return `total`/`pages`.
  *
  * Note this endpoint does NOT accept a `cuisine` filter or a `limit` — page
  * size is fixed server-side at {@link PAGE_SIZE}. (yulo_backend/API.md still

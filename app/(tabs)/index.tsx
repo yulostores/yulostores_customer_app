@@ -468,7 +468,7 @@ function PromoBanner({ banner }: { banner: HomeBanner | null }) {
   );
 }
 
-/** Section header with "See all" */
+/** Section header — an accent tick, the title, and an optional "See all". */
 function SectionHeader({
   title,
   onSeeAll,
@@ -479,7 +479,10 @@ function SectionHeader({
   const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionTitleWrap}>
+        <View style={styles.sectionEyebrow} />
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
       {onSeeAll && (
         <Pressable onPress={onSeeAll}>
           <Text style={styles.seeAll}>See all →</Text>
@@ -487,6 +490,23 @@ function SectionHeader({
       )}
     </View>
   );
+}
+
+/**
+ * One home-feed shelf. A `tinted` shelf sits on a faint band (`t.sectionBand`)
+ * with a hairline top and bottom; a plain one sits straight on the page canvas.
+ * The two alternate down the feed so neighbouring sections stay distinct on the
+ * long scroll instead of running together on one flat colour.
+ */
+function Section({
+  tinted,
+  children,
+}: {
+  tinted?: boolean;
+  children: React.ReactNode;
+}) {
+  const styles = useThemedStyles(makeStyles);
+  return <View style={tinted ? styles.sectionTinted : undefined}>{children}</View>;
 }
 
 /** "What's on your mind?" card — a curated quick-filter chip from the feed. */
@@ -951,11 +971,22 @@ export default function HomeScreen() {
       );
     }
 
+    // Which shelves will actually render, in order. Alternate ones get the tinted
+    // band — always starting with one — so the feed reads as a stack of distinct
+    // sections however many happen to be present.
+    const sectionKeys = [
+      cuisines.length > 0 && 'cuisines',
+      recommendedItems.length > 0 && 'recItems',
+      recommendedRestaurants.length > 0 && 'recRestaurants',
+      nearbyRestaurants.length > 0 && 'nearby',
+    ].filter(Boolean) as string[];
+    const isTinted = (key: string) => sectionKeys.indexOf(key) % 2 === 0;
+
     return (
       <>
         {/* ── What's on your mind? ── */}
         {cuisines.length > 0 && (
-          <>
+          <Section tinted={isTinted('cuisines')}>
             <SectionHeader title="What's on your mind?" onSeeAll={() => router.push('/cuisines')} />
             <FlatList
               data={cuisines}
@@ -965,12 +996,12 @@ export default function HomeScreen() {
               contentContainerStyle={styles.cuisineList}
               renderItem={({ item }) => <CuisineCardItem item={item} />}
             />
-          </>
+          </Section>
         )}
 
         {/* ── Recommended for you ── */}
         {recommendedItems.length > 0 && (
-          <>
+          <Section tinted={isTinted('recItems')}>
             <SectionHeader title="Recommended for you" />
             <FlatList
               data={recommendedItems}
@@ -980,12 +1011,12 @@ export default function HomeScreen() {
               contentContainerStyle={styles.recItemList}
               renderItem={({ item }) => <RecommendedItemCard item={item} />}
             />
-          </>
+          </Section>
         )}
 
         {/* ── Recommended restaurants ── */}
         {recommendedRestaurants.length > 0 && (
-          <>
+          <Section tinted={isTinted('recRestaurants')}>
             <SectionHeader title="Recommended restaurants" />
             <FlatList
               data={recommendedRestaurants}
@@ -995,12 +1026,12 @@ export default function HomeScreen() {
               contentContainerStyle={styles.restHList}
               renderItem={({ item }) => <RestaurantHCard restaurant={item} />}
             />
-          </>
+          </Section>
         )}
 
         {/* ── Restaurants near you ── */}
         {nearbyRestaurants.length > 0 && (
-          <>
+          <Section tinted={isTinted('nearby')}>
             <SectionHeader 
               title="Restaurants near you" 
               onSeeAll={() => router.push('/search')}
@@ -1008,7 +1039,7 @@ export default function HomeScreen() {
             {nearbyRestaurants.map((r) => (
               <RestaurantNearbyCard key={r._id} restaurant={r} />
             ))}
-          </>
+          </Section>
         )}
 
         {/* Bottom spacer for tab bar */}
@@ -1487,6 +1518,19 @@ const makeStyles = (t: AccentTheme) =>
     marginTop: 2,
   },
 
+  // ── Section shelf ──
+  // Alternate feed sections sit on this faint tinted band, hairlined top and
+  // bottom, so two neighbours read as separate shelves rather than one flat
+  // scroll. The tint follows the accent theme (warm by default, green in
+  // pure-veg mode); plain shelves just let the page canvas show through.
+  sectionTinted: {
+    backgroundColor: t.sectionBand,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.foodBorder,
+    paddingBottom: Spacing.sm,
+  },
+
   // ── Section header ──
   sectionHeader: {
     flexDirection: 'row',
@@ -1495,6 +1539,21 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: Spacing.base,
     marginBottom: Spacing.md,
     marginTop: Spacing.lg,
+  },
+  // The accent tick bleeds into the gutter (negative margin ≈ tick + gap) so the
+  // title text itself still lands on the 16px grid, lined up with the card rail
+  // beneath it.
+  sectionTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginLeft: -13,
+  },
+  sectionEyebrow: {
+    width: 4,
+    height: 18,
+    borderRadius: 2,
+    backgroundColor: t.accent,
   },
   sectionTitle: {
     fontSize: 18,
