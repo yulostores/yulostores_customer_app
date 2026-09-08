@@ -39,18 +39,8 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.RECORD_AUDIO"
-      ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "YOUR_ANDROID_GOOGLE_MAPS_API_KEY"
-        }
-      }
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -73,13 +63,6 @@
           "locationWhenInUsePermission": "Yulo Stores uses your location to show stores that deliver to you and to place your delivery pin accurately."
         }
       ],
-      [
-        "expo-maps",
-        {
-          "requestLocationPermission": true,
-          "locationPermission": "Allow Yulo Stores to use your location to centre the map on where you are."
-        }
-      ],
       "expo-secure-store",
       [
         "expo-image-picker",
@@ -96,9 +79,8 @@
     ],
     "extra": {
       "apiPort": 3000,
-      "apiUrl": {},
-      "sentryDsn": {},
-      "router": {},
+      "apiUrl": null,
+      "sentryDsn": null,
       "eas": {
         "projectId": "b08fedc4-0830-4392-9621-5633f07af7c9"
       }

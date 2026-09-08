@@ -21,25 +21,11 @@
 module.exports = ({ config }) => {
   const apiUrl = process.env.EXPO_PUBLIC_API_URL || config.extra?.apiUrl || null;
 
-  const googleMapsAndroidKey =
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY ||
-    config.android?.config?.googleMaps?.apiKey;
-
   return {
     ...config,
     extra: {
       ...config.extra,
       apiUrl,
-    },
-    android: {
-      ...config.android,
-      config: {
-        ...config.android?.config,
-        googleMaps: {
-          ...config.android?.config?.googleMaps,
-          apiKey: googleMapsAndroidKey,
-        },
-      },
     },
   };
 };
