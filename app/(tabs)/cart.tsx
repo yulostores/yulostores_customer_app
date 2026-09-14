@@ -350,7 +350,7 @@ export default function CartScreen() {
   const styles = useThemedStyles(makeStyles);
   const theme = useAccentTheme();
   const insets = useSafeAreaInsets();
-  const { signOut } = useAuth();
+  const { signOut, isGuest } = useAuth();
   const {
     snapshot,
     isLoading,
@@ -377,6 +377,13 @@ export default function CartScreen() {
 
   const handleCheckout = () => {
     if (!cart || !bill) return;
+    // The cart itself works fine for a guest (see yulo_backend's cart.routes.js),
+    // but checkout needs a real account — this is the one place that's enforced,
+    // rather than letting the guest hit the 401 on /api/checkout/summary first.
+    if (isGuest) {
+      router.push({ pathname: '/sign-in', params: { intent: 'checkout' } });
+      return;
+    }
     logger.info('cart', 'Proceeding to checkout', {
       restaurantId: cart.restaurantId,
       itemCount: cart.itemCount,
