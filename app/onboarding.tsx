@@ -23,6 +23,8 @@ import { BorderRadius } from '../src/constants/Theme';
 import { useOnboarding } from '../src/context/OnboardingContext';
 
 const BLOB = require('../assets/Images/onboarding/blob.png');
+const BLOB_BOTTOM = require('../assets/Images/onboarding/blob-bottom.png');
+const BLOB_BOTTOM_RATIO = 328 / 893;
 
 const SLIDES = [
   {
@@ -70,6 +72,8 @@ export default function OnboardingScreen() {
   const [reduceMotion, setReduceMotion] = useState(false);
 
   const blobH = Math.round(width * 0.34);
+  const blobBottomW = Math.round(width * 0.56);
+  const blobBottomH = Math.round(blobBottomW * BLOB_BOTTOM_RATIO);
   const artSize = Math.round(Math.min(width * 0.72, height * 0.3, 300));
   const headingSize = clamp(width * 0.076, 23, 31);
   const bodySize = clamp(width * 0.039, 13.5, 16);
@@ -162,6 +166,12 @@ export default function OnboardingScreen() {
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
+  // "Everything delivered" (index 1) is the only slide with the bottom accent shape.
+  const blobBottomOpacity = scrollX.interpolate({
+    inputRange: [0, width, 2 * width],
+    outputRange: [0, 1, 0],
+    extrapolate: 'clamp',
+  });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -171,6 +181,15 @@ export default function OnboardingScreen() {
         source={BLOB}
         style={[styles.blob, { height: blobH }]}
         resizeMode="cover"
+      />
+
+      <Animated.Image
+        source={BLOB_BOTTOM}
+        style={[
+          styles.blobBottom,
+          { width: blobBottomW, height: blobBottomH, opacity: blobBottomOpacity },
+        ]}
+        resizeMode="contain"
       />
 
       <Animated.View
@@ -375,6 +394,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     width: '100%',
+  },
+  blobBottom: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
   },
   artArea: {
     flex: 1,
