@@ -79,11 +79,13 @@
         {
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "@maplibre/maplibre-react-native"
     ],
     "extra": {
       "apiPort": 3000,
       "apiUrl": null,
+      "hereApiKey": null,
       "sentryDsn": null,
       "eas": {
         "projectId": "d9035e4f-187c-404b-a188-1d47e7390c84"

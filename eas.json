@@ -19,7 +19,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://yulo-backend-f4juo.ondigitalocean.app"
+        "EXPO_PUBLIC_API_URL": "https://yulo-backend-f4juo.ondigitalocean.app",
+        "EXPO_PUBLIC_HERE_API_KEY": "ArxXwXFVeKpTPn_M5EaguL9x0dpGw66m9RO2Y_W3jIw"
       }
     },
     "production": {
@@ -30,7 +31,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://yulo-backend-f4juo.ondigitalocean.app"
+        "EXPO_PUBLIC_API_URL": "https://yulo-backend-f4juo.ondigitalocean.app",
+        "EXPO_PUBLIC_HERE_API_KEY": "ArxXwXFVeKpTPn_M5EaguL9x0dpGw66m9RO2Y_W3jIw"
       }
     }
   },

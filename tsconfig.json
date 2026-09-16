@@ -1,6 +1,13 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    // Expo's base config doesn't set this, but Metro (the real bundler) has always
+    // resolved .ios/.android/.native/.web platform-specific files — tsc just didn't know
+    // to look for them until a file actually needed the split (MapCanvas/TrackingMap,
+    // for @maplibre/maplibre-react-native, which has no web build). Without this, tsc
+    // reports a false "Cannot find module" for any bare import of a platform-split
+    // component even though the app builds and runs fine.
+    "moduleSuffixes": [".ios", ".android", ".native", ".web", ""]
   }
 }

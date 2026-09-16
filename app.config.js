@@ -20,12 +20,18 @@
 
 module.exports = ({ config }) => {
   const apiUrl = process.env.EXPO_PUBLIC_API_URL || config.extra?.apiUrl || null;
+  // HERE Location Services key — used client-side for map tiles (src/constants/Here.ts).
+  // Same "inlined into the bundle" caveat as everything else EXPO_PUBLIC_: this is not a
+  // server secret, it's a client-embedded key, so it must be restricted (referrer/IP) on
+  // the HERE portal side rather than protected by keeping it out of the repo.
+  const hereApiKey = process.env.EXPO_PUBLIC_HERE_API_KEY || config.extra?.hereApiKey || null;
 
   return {
     ...config,
     extra: {
       ...config.extra,
       apiUrl,
+      hereApiKey,
     },
   };
 };

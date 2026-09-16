@@ -1,19 +1,25 @@
 /**
- * MapCanvas — static backdrop for the location picker.
+ * MapCanvas (web) — non-crashing stand-in for the browser.
  *
- * Interactive maps are disabled in this build (no `expo-maps`, no Google Maps
- * key). This component keeps the API the picker screen expects —
- * `MapCanvasHandle.animateTo` plus the `onCenter*` / `onMovingChange` props — so
- * the rest of the flow (GPS recentre → reverse-geocode → confirm) keeps working;
- * it just renders a non-interactive panel instead of a live map.
+ * `@maplibre/maplibre-react-native` (used by MapCanvas.native.tsx) has no web
+ * implementation at all — importing it on web throws
+ * `codegenNativeComponent is not a function` as a FATAL, uncaught exception
+ * the moment this module loads, taking down the whole screen. Metro's
+ * platform-extension resolution (`.native.tsx` vs `.web.tsx`) means web never
+ * even evaluates that import: this file is a complete stand-in with the same
+ * public API (`MapCanvasHandle.animateTo`, the `onCenter*`/`onMovingChange`
+ * props) as the native version, so app/location/map.tsx needs no changes to
+ * work on either platform.
  *
- *   <MapCanvas ref={mapRef} initialCenter={coords} onCenterSettled={geocode} />
- *   mapRef.current?.animateTo(coords)   // no-op while maps are disabled
+ * "Use current location" and the search flow still work here — they don't
+ * depend on the map actually rendering, only on this component not crashing.
+ * A real interactive web map (maplibre-gl, which — unlike this native
+ * package — does support browsers) is a separate, larger follow-up if wanted.
  */
 
+import { Ionicons } from '@expo/vector-icons';
 import { forwardRef, useImperativeHandle } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import type { LatLng } from '../../types/address';
 
@@ -24,26 +30,21 @@ export interface MapCanvasHandle {
 interface Props {
   initialCenter: LatLng;
   initialZoom?: number;
-  /** Fires on every camera frame while dragging (not debounced). */
   onCenterChange?: (center: LatLng) => void;
-  /** Fires once the camera has been still for ~280 ms. */
   onCenterSettled?: (center: LatLng) => void;
-  /** True while the camera is in motion. */
   onMovingChange?: (moving: boolean) => void;
   style?: StyleProp<ViewStyle>;
 }
 
 const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas({ style }: Props, ref) {
-  // No live camera to drive — expose a no-op so callers (recentre-to-GPS) don't
-  // crash. The picker still resolves the address from `initialCenter` and from
-  // the GPS fix directly, so the flow completes without a map.
   useImperativeHandle(ref, () => ({ animateTo: () => {} }));
 
   return (
     <View style={[styles.fallback, style]}>
       <Ionicons name="map-outline" size={30} color={Colors.foodTextMuted} />
       <Text style={styles.fallbackText}>
-        Map preview is unavailable.{'\n'}Use “Use current location” to set your pin.
+        Live map preview isn&apos;t available on web yet.{'\n'}Use &quot;Use current location&quot;
+        or search to set your pin.
       </Text>
     </View>
   );

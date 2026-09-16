@@ -4,8 +4,8 @@
  * Mirrors the Zomato-style UI from the design mockup:
  *
  *  ┌─────────────────────────────────────┐
- *  │  [← Back]    MAP ZONE (static img)  │
- *  │             [bike icon overlay]      │
+ *  │  [← Back]    MAP ZONE (live map)    │
+ *  │           [live partner marker]      │
  *  ├─────────────────────────────────────┤
  *  │  ● On the way         Arriving in   │
  *  │                         12 mins     │
@@ -52,6 +52,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import TrackingMap from '../../../src/components/tracking/TrackingMap';
 import { Colors } from '../../../src/constants/Colors';
 import { BorderRadius, Shadows, Spacing } from '../../../src/constants/Theme';
 import {
@@ -441,29 +442,11 @@ export default function TrackingScreen() {
 
       {/* ── MAP ZONE ─────────────────────────────────────────────────────── */}
       <View style={[styles.mapContainer, { paddingTop: insets.top }]}>
-        {/* Static map background image */}
-        <Image
-          source={require('../../../assets/map-placeholder.jpg')}
-          style={styles.mapImage}
-          resizeMode="cover"
+        <TrackingMap
+          partnerLocation={partnerLocation}
+          destination={tracking.deliveryAddress?.coordinates ?? null}
+          restaurant={tracking.restaurant.coordinates}
         />
-
-        {/* Delivery route line overlay (decorative) */}
-        <View style={styles.routeOverlay} pointerEvents="none">
-          <View style={styles.routeLine} />
-        </View>
-
-        {/* Partner bike icon — positioned at centre for static map */}
-        <View style={styles.bikeContainer} pointerEvents="none">
-          <View style={styles.bikeIconBg}>
-            <Ionicons name="bicycle" size={22} color={Colors.white} />
-          </View>
-        </View>
-
-        {/* Destination dot */}
-        <View style={styles.destinationDot} pointerEvents="none">
-          <View style={styles.destinationInner} />
-        </View>
 
         {/* Back button */}
         <Pressable
@@ -738,54 +721,6 @@ const makeStyles = (t: AccentTheme) =>
     height: MAP_HEIGHT,
     overflow: 'hidden',
     backgroundColor: '#e8f3ec',
-  },
-  mapImage: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-  },
-  routeOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  routeLine: {
-    width: SCREEN_WIDTH * 0.5,
-    height: 3,
-    backgroundColor: Colors.info,
-    borderRadius: 2,
-    opacity: 0.6,
-  },
-  bikeContainer: {
-    position: 'absolute',
-    top: MAP_HEIGHT / 2 - 20,
-    left: SCREEN_WIDTH * 0.55,
-  },
-  bikeIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.info,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.md,
-  },
-  destinationDot: {
-    position: 'absolute',
-    top: MAP_HEIGHT / 2 - 8,
-    left: SCREEN_WIDTH * 0.15,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: t.accent,
-    borderWidth: 3,
-    borderColor: Colors.white,
-    ...Shadows.sm,
-  },
-  destinationInner: {
-    flex: 1,
-    borderRadius: 99,
   },
   backBtn: {
     position: 'absolute',
