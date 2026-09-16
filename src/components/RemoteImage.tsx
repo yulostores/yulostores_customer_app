@@ -28,12 +28,20 @@ import { Colors } from '../constants/Colors';
 export function RemoteImage({
   uri,
   style,
+  imageStyle,
   icon,
   iconSize,
   showCaption = false,
 }: {
   uri?: string;
   style: StyleProp<ImageStyle>;
+  /**
+   * Overrides `style` for a successfully-loaded image only — the placeholder (missing
+   * or failed) always renders at `style`. For surfaces like the Search "Popular right
+   * now" grid, where a resolved photo is masked to a circle but the "no image yet"
+   * state stays a plain dashed square.
+   */
+  imageStyle?: StyleProp<ImageStyle>;
   icon: keyof typeof Ionicons.glyphMap;
   iconSize: number;
   /**
@@ -61,7 +69,7 @@ export function RemoteImage({
     );
   }
 
-  return <Image source={{ uri }} style={style} onError={() => setFailed(true)} />;
+  return <Image source={{ uri }} style={imageStyle ?? style} onError={() => setFailed(true)} />;
 }
 
 const styles = StyleSheet.create({

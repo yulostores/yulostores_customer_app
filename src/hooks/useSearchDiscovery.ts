@@ -30,6 +30,8 @@ import type { PopularSearch, RecentSearch } from '../types/search';
 interface UseSearchDiscoveryResult {
   popular: PopularSearch[];
   recent: RecentSearch[];
+  /** "Pure veg mode is on — showing only vegetarian food", from the backend. */
+  vegBannerText: string | null;
   isLoading: boolean;
   /** Set only when the popular grid — the primary content — could not load. */
   error: string | null;
@@ -50,6 +52,7 @@ export function useSearchDiscovery(): UseSearchDiscoveryResult {
 
   const [popular, setPopular] = useState<PopularSearch[]>([]);
   const [recent, setRecent] = useState<RecentSearch[]>([]);
+  const [vegBannerText, setVegBannerText] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,9 +96,12 @@ export function useSearchDiscovery(): UseSearchDiscoveryResult {
     const recentPromise = loadRecent();
 
     let nextPopular: PopularSearch[] | null = null;
+    let nextVegBannerText: string | null = null;
     let popularError: string | null = null;
     try {
-      nextPopular = await fetchPopularSearches(vegOnly);
+      const result = await fetchPopularSearches(vegOnly);
+      nextPopular = result.popular;
+      nextVegBannerText = result.vegBannerText;
     } catch (err) {
       if (isExpected4xx(err)) {
         logger.warn('search', `Popular searches unavailable — ${err.status} ${err.code}`, {
@@ -117,9 +123,11 @@ export function useSearchDiscovery(): UseSearchDiscoveryResult {
     setRecent(nextRecent);
     if (nextPopular) {
       setPopular(nextPopular);
+      setVegBannerText(nextVegBannerText);
       setError(null);
     } else {
       setPopular([]);
+      setVegBannerText(null);
       setError(popularError);
     }
     setIsLoading(false);
@@ -149,5 +157,14 @@ export function useSearchDiscovery(): UseSearchDiscoveryResult {
     });
   }, []);
 
-  return { popular, recent, isLoading, error, refresh: load, refreshRecent, removeRecent };
+  return {
+    popular,
+    recent,
+    vegBannerText,
+    isLoading,
+    error,
+    refresh: load,
+    refreshRecent,
+    removeRecent,
+  };
 }

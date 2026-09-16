@@ -1,8 +1,9 @@
 /**
- * search.ts — the Search tab's discovery data (Recent + Popular).
+ * search.ts — the Search tab's discovery data (Recent + Popular + Typeahead).
  *
  * Endpoints (yulo_backend/server/routes/search.routes.js):
- *   GET    /api/search/popular?vegOnly=  → public; [{ query, imageUrl }]
+ *   GET    /api/search/typeahead?q=      → public; [{ id, name, type, thumbnailUrl, foodType }]
+ *   GET    /api/search/popular?vegOnly=  → public; { popular: [{ query, imageUrl }], vegBannerText }
  *   GET    /api/search/recent            → customer token; newest-first history
  *   POST   /api/search/recent            → record a term (best-effort)
  *   DELETE /api/search/recent/:id        → drop one row
@@ -15,14 +16,33 @@
  */
 
 import { apiDelete, apiGet, apiPost } from './api';
-import type { PopularSearch, RecentSearch } from '../types/search';
+import type { PopularSearch, RecentSearch, TypeaheadResult } from '../types/search';
 
 interface RawPopular {
   popular?: { query?: string | null; imageUrl?: string | null }[];
+  /** "Pure veg mode is on — …", set only when the request asked for `vegOnly`. */
+  vegBannerText?: string | null;
 }
 
 interface RawRecent {
   recent?: { _id?: string; query?: string | null }[];
+}
+
+interface RawTypeahead {
+  results?: {
+    id?: string;
+    name?: string | null;
+    type?: string | null;
+    thumbnailUrl?: string | null;
+    foodType?: string | null;
+  }[];
+}
+
+/** "Popular right now" tiles, plus the veg-mode banner text for the same request. */
+export interface PopularSearchesResult {
+  popular: PopularSearch[];
+  /** "Pure veg mode is on — showing only vegetarian food", when `vegOnly` was on. */
+  vegBannerText: string | null;
 }
 
 /**
@@ -31,18 +51,48 @@ interface RawRecent {
  * usable `query` are dropped; a missing image stays `undefined` so the tile can
  * render its own placeholder rather than a broken `<Image>`.
  */
-export async function fetchPopularSearches(vegOnly: boolean): Promise<PopularSearch[]> {
+export async function fetchPopularSearches(vegOnly: boolean): Promise<PopularSearchesResult> {
   const data = await apiGet<RawPopular>('/api/search/popular', {
     // The server compares this against the literal string 'true' — send it only
     // when on, same convention as `vegOnly` in restaurants.ts.
     vegOnly: vegOnly ? 'true' : undefined,
   });
-  return (data.popular ?? [])
+  const popular = (data.popular ?? [])
     .map((p) => ({
       query: (p.query ?? '').trim(),
       imageUrl: p.imageUrl ?? undefined,
     }))
     .filter((p) => p.query.length > 0);
+  return { popular, vegBannerText: data.vegBannerText ?? null };
+}
+
+const isTypeaheadType = (value: string | null | undefined): value is 'restaurant' | 'dish' =>
+  value === 'restaurant' || value === 'dish';
+
+/**
+ * Type-ahead suggestions for the term the customer is currently typing — a merge of
+ * matching restaurant names and matching dish names across every menu. No-ops for a
+ * blank term rather than hitting the endpoint, which 400s without `q`.
+ */
+export async function fetchTypeahead(query: string): Promise<TypeaheadResult[]> {
+  const term = query.trim();
+  if (!term) return [];
+  const data = await apiGet<RawTypeahead>('/api/search/typeahead', { q: term });
+
+  const results: TypeaheadResult[] = [];
+  for (const r of data.results ?? []) {
+    const id = r.id ?? '';
+    const name = (r.name ?? '').trim();
+    if (!id || !name || !isTypeaheadType(r.type)) continue;
+    results.push({
+      id,
+      name,
+      type: r.type,
+      thumbnailUrl: r.thumbnailUrl ?? undefined,
+      foodType: (r.foodType as TypeaheadResult['foodType']) ?? null,
+    });
+  }
+  return results;
 }
 
 /**

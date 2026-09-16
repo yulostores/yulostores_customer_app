@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CartBar from '../../src/components/CartBar';
+import { FoodTypeMark } from '../../src/components/FoodTypeMark';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
@@ -26,11 +27,12 @@ import {
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
 import { useSearchDiscovery } from '../../src/hooks/useSearchDiscovery';
+import { useTypeahead } from '../../src/hooks/useTypeahead';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
 import { fetchRestaurants } from '../../src/services/restaurants';
 import { recordSearch } from '../../src/services/search';
-import type { PopularSearch, RecentSearch } from '../../src/types/search';
+import type { PopularSearch, RecentSearch, TypeaheadResult } from '../../src/types/search';
 import type { Restaurant } from '../../src/types/restaurant';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -66,13 +68,14 @@ function RecentRow({
   );
 }
 
-/** One "Popular right now" tile — image (or a graceful placeholder) + label. */
+/** One "Popular right now" tile — a circular photo (or a graceful placeholder) + label. */
 function PopularTile({ item, onPress }: { item: PopularSearch; onPress: () => void }) {
   return (
     <Pressable style={styles.tile} onPress={onPress}>
       <RemoteImage
         uri={item.imageUrl}
         style={styles.tileImage}
+        imageStyle={styles.tileImageCircle}
         icon="fast-food-outline"
         iconSize={30}
         showCaption
@@ -80,6 +83,67 @@ function PopularTile({ item, onPress }: { item: PopularSearch; onPress: () => vo
       <Text style={styles.tileLabel} numberOfLines={2}>
         {item.query}
       </Text>
+    </Pressable>
+  );
+}
+
+/** The "Pure veg mode is on — …" confirmation pill, server-worded, shown app-wide while veg mode is on. */
+function VegBanner({ text }: { text: string }) {
+  return (
+    <View style={styles.vegBanner}>
+      <Ionicons name="radio-button-on" size={16} color={Colors.foodVegGreen} />
+      <Text style={styles.vegBannerText}>{text}</Text>
+    </View>
+  );
+}
+
+/** Splits `name` around the first case-insensitive match of `term`, for a bolded highlight. */
+function splitMatch(name: string, term: string): [string, string, string] {
+  const trimmed = term.trim();
+  if (!trimmed) return [name, '', ''];
+  const idx = name.toLowerCase().indexOf(trimmed.toLowerCase());
+  if (idx === -1) return [name, '', ''];
+  return [name.slice(0, idx), name.slice(idx, idx + trimmed.length), name.slice(idx + trimmed.length)];
+}
+
+/** One typeahead row — thumbnail, name (matched term bolded), and a "Dish"/"Restaurant" caption. */
+function SuggestionRow({
+  item,
+  query,
+  onPress,
+}: {
+  item: TypeaheadResult;
+  query: string;
+  onPress: () => void;
+}) {
+  const [before, match, after] = splitMatch(item.name, query);
+  return (
+    <Pressable style={styles.suggestionRow} onPress={onPress}>
+      <RemoteImage
+        uri={item.thumbnailUrl}
+        style={styles.suggestionThumb}
+        icon={item.type === 'restaurant' ? 'restaurant' : 'fast-food-outline'}
+        iconSize={18}
+      />
+      <View style={styles.suggestionBody}>
+        <View style={styles.suggestionNameRow}>
+          <Text style={styles.suggestionName} numberOfLines={1}>
+            {match ? (
+              <>
+                {before}
+                <Text style={styles.suggestionNameMatch}>{match}</Text>
+                {after}
+              </>
+            ) : (
+              item.name
+            )}
+          </Text>
+          {item.type === 'dish' && item.foodType && <FoodTypeMark foodType={item.foodType} />}
+        </View>
+        <Text style={styles.suggestionType}>
+          {item.type === 'restaurant' ? 'Restaurant' : 'Dish'}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -153,12 +217,18 @@ export default function SearchScreen() {
   const {
     popular,
     recent,
+    vegBannerText,
     isLoading: discoveryLoading,
     error: discoveryError,
     refresh: refreshDiscovery,
     refreshRecent,
     removeRecent,
   } = useSearchDiscovery();
+
+  // Live while the customer is mid-type and hasn't submitted yet — the same
+  // condition that swaps the discovery view for the suggestions dropdown below.
+  const isTyping = !hasSearched && query.trim().length > 0;
+  const { results: suggestions, isLoading: suggestLoading } = useTypeahead(query, isTyping);
 
   const runSearch = useCallback(
     async (raw: string) => {
@@ -245,6 +315,24 @@ export default function SearchScreen() {
     else router.navigate('/(tabs)');
   }, [hasSearched, query, clearSearch]);
 
+  // A restaurant suggestion is a specific storefront — go straight there rather
+  // than re-running it as a text search. A dish suggestion has no single detail
+  // page, so it runs the same restaurant search a Popular/Recent tap would.
+  const handleSelectSuggestion = useCallback(
+    (item: TypeaheadResult) => {
+      if (item.type === 'restaurant') {
+        recordSearch(item.name)
+          .then(() => refreshRecent())
+          .catch(() => {});
+        clearSearch();
+        router.push(`/restaurant/${item.id}`);
+        return;
+      }
+      runSearch(item.name);
+    },
+    [clearSearch, refreshRecent, runSearch],
+  );
+
   const renderResults = () => {
     if (isSearching) {
       return (
@@ -313,6 +401,36 @@ export default function SearchScreen() {
           </Pressable>
         )}
       />
+    );
+  };
+
+  const renderTypeahead = () => {
+    if (suggestLoading && suggestions.length === 0) {
+      return (
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="small" color={t.accent} />
+        </View>
+      );
+    }
+    if (suggestions.length === 0) return null;
+    return (
+      <ScrollView
+        style={styles.discoveryScroll}
+        contentContainerStyle={styles.suggestionsContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.suggestionsCard}>
+          {suggestions.map((item) => (
+            <SuggestionRow
+              key={`${item.type}-${item.id}`}
+              item={item}
+              query={query}
+              onPress={() => handleSelectSuggestion(item)}
+            />
+          ))}
+        </View>
+      </ScrollView>
     );
   };
 
@@ -385,7 +503,7 @@ export default function SearchScreen() {
         {/* Header — back + search field */}
         <View style={styles.header}>
           <Pressable onPress={handleBack} hitSlop={8} style={styles.backBtn}>
-            <Ionicons name="chevron-back" size={26} color={Colors.foodText} />
+            <Ionicons name="arrow-back" size={24} color={Colors.foodText} />
           </Pressable>
           <View style={styles.searchBar}>
             <Ionicons name="search" size={20} color={t.accent} />
@@ -401,6 +519,7 @@ export default function SearchScreen() {
               autoCorrect={false}
               autoFocus={!hasSearched}
             />
+            <View style={styles.searchDivider} />
             {query.length > 0 ? (
               <Pressable onPress={clearSearch} hitSlop={8}>
                 <Ionicons name="close-circle" size={20} color={Colors.foodTextMuted} />
@@ -415,7 +534,9 @@ export default function SearchScreen() {
           </View>
         </View>
 
-        {hasSearched ? renderResults() : renderDiscovery()}
+        {!!vegBannerText && <VegBanner text={vegBannerText} />}
+
+        {hasSearched ? renderResults() : isTyping ? renderTypeahead() : renderDiscovery()}
 
         <View style={styles.cartBarSlot} pointerEvents="box-none">
           <CartBar />
@@ -469,10 +590,36 @@ const makeStyles = (t: AccentTheme) =>
     color: Colors.foodText,
     paddingVertical: 0,
   },
+  searchDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: Colors.foodBorderStrong,
+  },
   voiceIcon: {
     width: 22,
     height: 22,
     tintColor: t.accent,
+  },
+
+  // ── Veg-mode confirmation pill ──
+  vegBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.base,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.foodVegGreen,
+    backgroundColor: Colors.foodPureVegBg,
+  },
+  vegBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.foodVegGreen,
   },
 
   // ── Discovery ──
@@ -493,24 +640,18 @@ const makeStyles = (t: AccentTheme) =>
     marginTop: Spacing.xl,
   },
 
-  // Recent searches
+  // Recent searches — a plain row (no card), per the Figma spec: just the icon,
+  // the term, and the "x", with generous vertical rhythm doing the separation.
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.base,
-    backgroundColor: Colors.foodSurface,
-    borderWidth: 1,
-    borderColor: Colors.foodBorder,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
-    ...Elevation.card,
   },
   recentText: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
     color: Colors.foodText,
   },
 
@@ -525,6 +666,8 @@ const makeStyles = (t: AccentTheme) =>
     alignItems: 'center',
     marginBottom: Spacing.md,
   },
+  // Placeholder shape (RemoteImage's `style`) — a dashed rounded square, only seen
+  // when the backend had no representative photo for the term.
   tileImage: {
     width: TILE_SIZE,
     height: TILE_SIZE,
@@ -532,12 +675,63 @@ const makeStyles = (t: AccentTheme) =>
     borderWidth: 1,
     borderColor: Colors.foodBorder,
   },
+  // Loaded-photo shape (RemoteImage's `imageStyle`) — masked to a circle, no border.
+  tileImageCircle: {
+    width: TILE_SIZE,
+    height: TILE_SIZE,
+    borderRadius: TILE_SIZE / 2,
+  },
   tileLabel: {
     marginTop: Spacing.sm,
     fontSize: 14,
     fontWeight: '700',
     color: Colors.foodText,
     textAlign: 'center',
+  },
+
+  // ── Typeahead suggestions ──
+  suggestionsContent: {
+    paddingBottom: 120,
+  },
+  suggestionsCard: {
+    backgroundColor: Colors.foodSurface,
+    borderRadius: BorderRadius.lg,
+    marginHorizontal: Spacing.base,
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.xs,
+    ...Elevation.raised,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+  },
+  suggestionThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.foodBgSecondary,
+  },
+  suggestionBody: { flex: 1, minWidth: 0, gap: 2 },
+  suggestionNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  suggestionName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.foodText,
+  },
+  suggestionNameMatch: {
+    fontWeight: '800',
+  },
+  suggestionType: {
+    fontSize: 12,
+    color: Colors.foodTextMuted,
   },
 
   // ── Shared status / skeleton ──

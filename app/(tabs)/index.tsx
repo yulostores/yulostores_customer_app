@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CartBar from '../../src/components/CartBar';
+import { FoodTypeMark } from '../../src/components/FoodTypeMark';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
@@ -395,32 +396,6 @@ function VegScopeSheet({
 }
 
 /**
- * The standard veg/non-veg mark — a small square outline with a centred dot:
- * green for veg, maroon for anything that isn't. `egg` reads as "not
- * vegetarian" here same as `non_veg` — VEG Only already drops/substitutes true
- * non-veg rows server-side, so a card only ever shows this mark for what
- * remains.
- */
-function FoodTypeDot({ foodType }: { foodType: MenuItem['foodType'] }) {
-  const isVeg = foodType === 'veg';
-  return (
-    <View
-      style={[
-        styles.foodTypeSquare,
-        isVeg ? styles.foodTypeSquareVeg : styles.foodTypeSquareNonVeg,
-      ]}
-    >
-      <View
-        style={[
-          styles.foodTypeDot,
-          isVeg ? styles.foodTypeDotVeg : styles.foodTypeDotNonVeg,
-        ]}
-      />
-    </View>
-  );
-}
-
-/**
  * "Browsing as guest" strip — the one on-Home nudge to sign in, for a customer
  * using the app via "Continue as guest" (app/sign-in.tsx). Not a hard gate: it
  * just links to sign-in, same screen the cart's checkout button routes a guest
@@ -603,7 +578,7 @@ function RecommendedItemCard({ item }: { item: RecommendedItem }) {
       {/* Info */}
       <View style={styles.recItemInfo}>
         <View style={styles.recItemNameRow}>
-          <FoodTypeDot foodType={menuItem.foodType} />
+          <FoodTypeMark foodType={menuItem.foodType} />
           <Text style={styles.recItemName} numberOfLines={1}>
             {menuItem.name}
           </Text>
@@ -765,7 +740,7 @@ function RestaurantNearbyCard({ restaurant }: { restaurant: Restaurant }) {
             Only happens to be filtering to right now. */}
         {restaurant.isPureVeg && (
           <View style={styles.pureVegBadge}>
-            <FoodTypeDot foodType="veg" />
+            <FoodTypeMark foodType="veg" />
             <Text style={styles.pureVegBadgeText}>Pure Veg</Text>
           </View>
         )}
@@ -1488,33 +1463,6 @@ const makeStyles = (t: AccentTheme) =>
     fontSize: 12,
     fontWeight: '700',
     color: Colors.foodVegGreen,
-  },
-
-  // ── Veg / non-veg dish mark ──
-  foodTypeSquare: {
-    width: 12,
-    height: 12,
-    borderRadius: 2,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  foodTypeSquareVeg: {
-    borderColor: Colors.foodVegGreen,
-  },
-  foodTypeSquareNonVeg: {
-    borderColor: Colors.foodNonVegRed,
-  },
-  foodTypeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  foodTypeDotVeg: {
-    backgroundColor: Colors.foodVegGreen,
-  },
-  foodTypeDotNonVeg: {
-    backgroundColor: Colors.foodNonVegRed,
   },
 
   // ── Pure-veg restaurant badge ──

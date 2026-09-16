@@ -25,3 +25,13 @@ export interface RecentSearch {
   id: string;
   query: string;
 }
+
+/** One row in the type-ahead dropdown shown while the customer is still typing. */
+export interface TypeaheadResult {
+  id: string;
+  name: string;
+  type: 'restaurant' | 'dish';
+  thumbnailUrl?: string;
+  /** Set only for `type: 'dish'` — a restaurant row carries no diet mark. */
+  foodType?: 'veg' | 'non_veg' | 'egg' | null;
+}
