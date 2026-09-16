@@ -140,11 +140,12 @@ export default function SignInScreen() {
           </View>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        </View>
 
-        <View style={styles.footer}>
           <Pressable
-            style={[styles.cta, (!isValid || submitting || startingGuest) && styles.ctaDisabled]}
+            style={[
+              styles.cta,
+              (!isValid || submitting || startingGuest) && styles.ctaDisabled,
+            ]}
             onPress={onContinue}
             disabled={!isValid || submitting || startingGuest}
           >
@@ -241,17 +242,13 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     marginLeft: Spacing.xs,
   },
-  footer: {
-    paddingHorizontal: Spacing['2xl'],
-    paddingBottom: Spacing.base,
-    gap: Spacing.base,
-  },
   terms: {
     fontSize: 14,
     color: Colors.authTextMuted,
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: Spacing.base,
+    marginTop: Spacing.base,
   },
   cta: {
     height: 48,
@@ -259,6 +256,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.authAccent,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: Spacing.lg,
     shadowColor: Colors.authAccent,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.28,
@@ -279,6 +277,7 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: Spacing.sm,
   },
   guestBtnText: {
     fontSize: 14.5,
