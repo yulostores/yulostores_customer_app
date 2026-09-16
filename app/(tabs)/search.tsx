@@ -57,12 +57,12 @@ function RecentRow({
 }) {
   return (
     <Pressable style={styles.recentRow} onPress={onPress}>
-      <Ionicons name="time-outline" size={22} color={Colors.foodTextMuted} />
+      <Ionicons name="time-outline" size={26} color={Colors.foodTextMuted} />
       <Text style={styles.recentText} numberOfLines={1}>
         {item.query}
       </Text>
       <Pressable onPress={onRemove} hitSlop={10} accessibilityLabel={`Remove ${item.query}`}>
-        <Ionicons name="close" size={18} color={Colors.foodTextMuted} />
+        <Ionicons name="close" size={20} color={Colors.foodTextMuted} />
       </Pressable>
     </Pressable>
   );
@@ -630,10 +630,10 @@ const makeStyles = (t: AccentTheme) =>
     paddingBottom: 120,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: '800',
     color: Colors.foodText,
-    letterSpacing: -0.4,
+    letterSpacing: -0.6,
     marginBottom: Spacing.md,
   },
   sectionTitleSpaced: {
@@ -645,12 +645,12 @@ const makeStyles = (t: AccentTheme) =>
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
+    gap: Spacing.base,
+    paddingVertical: Spacing.lg,
   },
   recentText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '500',
     color: Colors.foodText,
   },
