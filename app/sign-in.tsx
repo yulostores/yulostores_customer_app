@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   body: {
     flex: 1,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing['2xl'],
     paddingTop: Spacing['3xl'],
   },
   logoDot: {
@@ -191,17 +191,17 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: '700',
     color: Colors.authText,
-    letterSpacing: -0.5,
+    letterSpacing: -0.64,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 16,
     color: Colors.authTextMuted,
     marginTop: Spacing.sm,
     marginBottom: Spacing['2xl'],
-    lineHeight: 21,
+    lineHeight: 24,
   },
   inputRow: {
     flexDirection: 'row',
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.xs,
   },
   footer: {
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing['2xl'],
     paddingBottom: Spacing.base,
     gap: Spacing.base,
   },
@@ -248,16 +248,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.base,
   },
   cta: {
-    height: 56,
+    height: 48,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.authAccent,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: Colors.authAccent,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    elevation: 6,
   },
   ctaDisabled: {
     backgroundColor: Colors.authBorder,
@@ -265,10 +265,9 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   ctaText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: Colors.authAccentText,
-    letterSpacing: 0.3,
   },
   guestBtn: {
     height: 48,
