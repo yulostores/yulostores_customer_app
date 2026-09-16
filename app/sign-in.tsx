@@ -100,18 +100,26 @@ export default function SignInScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.body}>
-          <View style={styles.logoDot}>
-            <Ionicons name="storefront" size={22} color={Colors.authAccent} />
-          </View>
+          <Pressable
+            style={styles.back}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/onboarding'))}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={24} color={Colors.authText} />
+          </Pressable>
 
-          <Text style={styles.title}>Enter your number</Text>
+          <Text style={styles.wordmark}>YULO STORES</Text>
+
+          <Text style={styles.title}>Enter your mobile number</Text>
           <Text style={styles.subtitle}>
-            We&apos;ll send a verification code to confirm it&apos;s you.
+            We&apos;ll send you a one-time code to verify it&apos;s you
           </Text>
 
           <View style={[styles.inputRow, error ? styles.inputRowError : null]}>
+            <Ionicons name="call-outline" size={20} color={Colors.authTextMuted} />
             <Text style={styles.dialCode}>{DEFAULT_DIAL_CODE}</Text>
-            <View style={styles.divider} />
             <TextInput
               style={styles.input}
               value={phone}
@@ -135,9 +143,6 @@ export default function SignInScreen() {
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.terms}>
-            By continuing you agree to our Terms of Service and Privacy Policy.
-          </Text>
           <Pressable
             style={[styles.cta, (!isValid || submitting || startingGuest) && styles.ctaDisabled]}
             onPress={onContinue}
@@ -149,6 +154,10 @@ export default function SignInScreen() {
               <Text style={styles.ctaText}>Continue</Text>
             )}
           </Pressable>
+
+          <Text style={styles.terms}>
+            By continuing, you agree to our Terms &amp; Privacy Policy
+          </Text>
 
           {!isGuest && (
             <Pressable
@@ -177,18 +186,21 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     paddingHorizontal: Spacing['2xl'],
-    paddingTop: Spacing['3xl'],
+    paddingTop: Spacing.base,
   },
-  logoDot: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.authSurface,
-    borderWidth: 1,
-    borderColor: Colors.authBorder,
-    alignItems: 'center',
+  back: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
+    marginLeft: -8,
+  },
+  wordmark: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: Colors.authWordmark,
+    letterSpacing: -0.64,
+    marginBottom: Spacing['3xl'],
   },
   title: {
     fontSize: 32,
@@ -207,26 +219,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.authField,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1.5,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
     borderColor: Colors.authBorder,
-    paddingHorizontal: Spacing.base,
-    height: 58,
+    paddingHorizontal: Spacing.lg,
+    height: 48,
+    gap: Spacing.sm,
   },
   inputRowError: { borderColor: Colors.authDanger },
-  dialCode: { fontSize: 17, fontWeight: '700', color: Colors.authText },
-  divider: {
-    width: 1,
-    height: 24,
-    backgroundColor: Colors.authBorder,
-    marginHorizontal: Spacing.md,
-  },
+  dialCode: { fontSize: 16, fontWeight: '600', color: Colors.authText },
   input: {
     flex: 1,
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
     color: Colors.authText,
-    letterSpacing: 1,
     padding: 0,
   },
   errorText: {
@@ -241,10 +247,10 @@ const styles = StyleSheet.create({
     gap: Spacing.base,
   },
   terms: {
-    fontSize: 12,
+    fontSize: 14,
     color: Colors.authTextMuted,
     textAlign: 'center',
-    lineHeight: 17,
+    lineHeight: 20,
     paddingHorizontal: Spacing.base,
   },
   cta: {

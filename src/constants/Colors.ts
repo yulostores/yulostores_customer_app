@@ -56,6 +56,9 @@ export const Colors = {
   authAccent: '#FF5A00',
   authAccentText: '#FFFFFF',
   authDanger: '#D64545',
+  // The "YULO STORES" wordmark on the sign-in screen — a deeper burnt orange
+  // than authAccent, per the Figma spec (node 222:19).
+  authWordmark: '#D9480F',
 
   // ─── Food-delivery app surfaces (light theme) ──────────────────────────────
   // Three surface tiers carry the whole visual hierarchy, and every screen picks
