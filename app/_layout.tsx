@@ -32,12 +32,20 @@ installGlobalErrorLogging();
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isGuest } = useAuth();
   const { showOnboarding } = useOnboarding();
 
   // Protected groups swap automatically when the guard flips: signing in reveals
   // (tabs) and navigates to it, signing out falls back to the sign-in screen.
   // Finishing the intro drops `onboarding` and falls through to sign-in.
+  //
+  // A guest session is `isAuthenticated` (real tokens — see AuthContext) so it
+  // unlocks (tabs) exactly like a real customer. But sign-in/verify-otp must STAY
+  // reachable too, so a guest can upgrade to a real account later (from the cart's
+  // checkout gate, the Profile "Sign in" card, or the Home banner) — hence
+  // `|| isGuest` below instead of the plain `!isAuthenticated` a real customer
+  // session resolves to. Both groups are active at once for a guest; they stop
+  // overlapping the moment sign-in succeeds and `isGuest` goes false.
   return (
     <Stack
       screenOptions={{
@@ -61,7 +69,7 @@ function RootNavigator() {
         <Stack.Screen name="order/[id]/track" options={{ animation: 'slide_from_bottom', headerShown: false }} />
       </Stack.Protected>
 
-      <Stack.Protected guard={!isAuthenticated}>
+      <Stack.Protected guard={!isAuthenticated || isGuest}>
         <Stack.Protected guard={showOnboarding}>
           <Stack.Screen name="onboarding" />
         </Stack.Protected>

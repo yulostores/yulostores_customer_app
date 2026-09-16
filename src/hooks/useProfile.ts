@@ -11,7 +11,10 @@
  * the OTP verify, so the screen is seeded from it for an instant first paint and
  * the network call only ever *refines* what's shown. A local bypass session has
  * no server account: the fetch is skipped, `notSignedIn` is set, and the seed is
- * all the screen gets.
+ * all the screen gets. A guest session *does* have a real token and `GET /me`
+ * would succeed, but app/(tabs)/profile.tsx renders its own `GuestIdentityCard`
+ * instead of this hook's `profile` — so the fetch is skipped for guests too,
+ * purely to avoid an API call whose result nothing ever displays.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -50,9 +53,9 @@ function seedFrom(user: ReturnType<typeof useAuth>['user']): CustomerProfile | n
 }
 
 export function useProfile(): UseProfileResult {
-  const { user, isAuthenticated, session } = useAuth();
+  const { user, isAuthenticated, isGuest, session } = useAuth();
   const hasServerToken =
-    isAuthenticated && !session?.bypassed && !!session?.accessToken;
+    isAuthenticated && !isGuest && !session?.bypassed && !!session?.accessToken;
 
   const [profile, setProfile] = useState<CustomerProfile | null>(() => seedFrom(user));
   const [isLoading, setIsLoading] = useState(hasServerToken && !profile);

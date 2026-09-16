@@ -14,7 +14,7 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import type { VerifyResult } from '../services/auth';
+import { requestGuestSession, type VerifyResult } from '../services/auth';
 import {
   getSession,
   hydrateSession,
@@ -27,9 +27,18 @@ interface AuthContextValue {
   session: Session | null;
   user: Session['user'] | null;
   isAuthenticated: boolean;
+  /**
+   * A real, backend-issued session with `role: 'guest'` (see "Continue as guest"
+   * on sign-in.tsx) — authenticated enough to browse, cart and favorite things,
+   * but not a real account. Checkout, orders, reviews and support all reject it;
+   * screens use this to show their own sign-in prompt instead of even trying.
+   */
+  isGuest: boolean;
   /** False until the persisted session has been read from secure storage. */
   isReady: boolean;
   signIn: (result: VerifyResult) => void;
+  /** Starts an anonymous guest session. Throws on failure — same as a failed OTP. */
+  signInAsGuest: () => Promise<void>;
   signOut: () => void;
 }
 
@@ -68,6 +77,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
   }, []);
 
+  const signInAsGuest = useCallback(async () => {
+    const result = await requestGuestSession();
+    setSession({
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      user: result.user,
+      bypassed: result.bypassed,
+    });
+  }, []);
+
   const signOut = useCallback(() => setSession(null), []);
 
   const value = useMemo<AuthContextValue>(
@@ -75,11 +94,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       user: session?.user ?? null,
       isAuthenticated: session != null,
+      isGuest: session?.user.role === 'guest',
       isReady,
       signIn,
+      signInAsGuest,
       signOut,
     }),
-    [session, isReady, signIn, signOut],
+    [session, isReady, signIn, signInAsGuest, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

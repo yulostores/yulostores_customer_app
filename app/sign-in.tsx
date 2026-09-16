@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
@@ -16,18 +16,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../src/constants/Colors';
 import { DEFAULT_DIAL_CODE, PHONE_NUMBER_LENGTH } from '../src/constants/config';
 import { BorderRadius, Spacing } from '../src/constants/Theme';
+import { useAuth } from '../src/context/AuthContext';
 import { logger, reportError } from '../src/lib/logger';
 import { AuthError, requestOtp } from '../src/services/auth';
 
 export default function SignInScreen() {
+  // `intent=checkout` arrives when a guest hit this screen from the cart's
+  // "Proceed to checkout" gate (app/(tabs)/cart.tsx) — carried through to
+  // verify-otp so it can land the customer straight back on /checkout instead of
+  // wherever the tab stack happened to be.
+  const params = useLocalSearchParams<{ intent?: string }>();
+  const { isGuest, signInAsGuest } = useAuth();
+
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [startingGuest, setStartingGuest] = useState(false);
 
   const isValid = phone.length === PHONE_NUMBER_LENGTH;
 
   const onContinue = async () => {
-    if (!isValid || submitting) return;
+    if (!isValid || submitting || startingGuest) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -40,6 +49,7 @@ export default function SignInScreen() {
           bypass: result.otpBypass ? '1' : '',
           offline: result.offline ? '1' : '',
           devOtp: result.devOtp ?? '',
+          intent: params.intent ?? '',
         },
       });
     } catch (err) {
@@ -55,6 +65,30 @@ export default function SignInScreen() {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Starts an anonymous session and drops straight into the app. Not offered to
+  // someone who's already browsing as a guest — tapping it again would only
+  // abandon their current guest cart for a brand-new, empty one. `_layout.tsx`'s
+  // guard doesn't drop this screen when a guest signs in (only a real customer
+  // does that), so this screen navigates explicitly rather than relying on it.
+  const onContinueAsGuest = async () => {
+    if (startingGuest || submitting) return;
+    setStartingGuest(true);
+    setError(null);
+    try {
+      await signInAsGuest();
+      router.replace('/(tabs)');
+    } catch (err) {
+      if (err instanceof AuthError) {
+        logger.warn('auth', 'Guest session request rejected', { code: err.code, status: err.status });
+      } else {
+        reportError('auth', 'Unexpected error starting a guest session', err);
+      }
+      setError('Could not start browsing. Please try again.');
+    } finally {
+      setStartingGuest(false);
     }
   };
 
@@ -105,9 +139,9 @@ export default function SignInScreen() {
             By continuing you agree to our Terms of Service and Privacy Policy.
           </Text>
           <Pressable
-            style={[styles.cta, (!isValid || submitting) && styles.ctaDisabled]}
+            style={[styles.cta, (!isValid || submitting || startingGuest) && styles.ctaDisabled]}
             onPress={onContinue}
-            disabled={!isValid || submitting}
+            disabled={!isValid || submitting || startingGuest}
           >
             {submitting ? (
               <ActivityIndicator color={Colors.authAccentText} />
@@ -115,6 +149,22 @@ export default function SignInScreen() {
               <Text style={styles.ctaText}>Continue</Text>
             )}
           </Pressable>
+
+          {!isGuest && (
+            <Pressable
+              style={styles.guestBtn}
+              onPress={onContinueAsGuest}
+              disabled={startingGuest || submitting}
+              accessibilityRole="button"
+              accessibilityLabel="Continue as guest"
+            >
+              {startingGuest ? (
+                <ActivityIndicator color={Colors.authText} />
+              ) : (
+                <Text style={styles.guestBtnText}>Continue as guest</Text>
+              )}
+            </Pressable>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -219,5 +269,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.authAccentText,
     letterSpacing: 0.3,
+  },
+  guestBtn: {
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guestBtnText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: Colors.authText,
+    textDecorationLine: 'underline',
   },
 });

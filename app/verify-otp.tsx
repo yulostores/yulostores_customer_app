@@ -41,12 +41,13 @@ export default function VerifyOtpScreen() {
     bypass?: string;
     offline?: string;
     devOtp?: string;
+    intent?: string;
   }>();
 
   const phone = params.phone ?? '';
   const dialCode = params.dialCode ?? DEFAULT_DIAL_CODE;
 
-  const { signIn } = useAuth();
+  const { session, isGuest, signIn } = useAuth();
   const inputRef = useRef<TextInput>(null);
 
   const [isBypass, setIsBypass] = useState(params.bypass === '1');
@@ -87,9 +88,21 @@ export default function VerifyOtpScreen() {
     setVerifying(true);
     setError(null);
     try {
-      const result = await verifyOtp(phone, code);
-      // The guard in app/_layout.tsx flips to (tabs) and navigates there.
+      // Carry the current guest session's REFRESH token along (if there is one) so
+      // the backend can upgrade/merge it instead of starting a fresh account — see
+      // src/services/auth.ts's verifyOtp and yulo_backend's guestAccount.service.js.
+      // The refresh token, not the access token: the access token is only good for
+      // 15 minutes and a guest can easily spend longer than that deciding to buy
+      // something before signing in.
+      const guestToken = isGuest && session?.refreshToken ? session.refreshToken : undefined;
+      const result = await verifyOtp(phone, code, guestToken);
       signIn(result);
+      // Signing in as a real customer drops this screen from the navigator (see
+      // app/_layout.tsx's guard), which normally falls back to wherever the
+      // (tabs) stack already was. That's fine on its own — except a guest who
+      // got here via the checkout gate (app/(tabs)/cart.tsx) needs to land back
+      // on /checkout specifically, not wherever cart/tabs was left.
+      if (params.intent === 'checkout') router.replace('/checkout');
     } catch (err) {
       if (err instanceof AuthError) {
         logger.warn('auth', 'verifyOtp rejected on verify screen', { code: err.code, status: err.status });

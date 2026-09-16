@@ -68,6 +68,38 @@ const MENU: readonly MenuRow[] = [
 
 // ─── Identity card ───────────────────────────────────────────────────────────
 
+/** Shown instead of the real identity card while browsing as a guest — the
+ *  fetched profile has no name/phone worth showing, so this replaces it outright
+ *  rather than rendering a card that just looks broken. */
+function GuestIdentityCard() {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
+
+  return (
+    <View style={styles.identityCard}>
+      <View style={[styles.avatar, styles.avatarFallback]}>
+        <Ionicons name="person-outline" size={28} color={Colors.white} />
+      </View>
+
+      <View style={styles.identityText}>
+        <Text style={styles.name} numberOfLines={1}>Browsing as guest</Text>
+        <Text style={styles.contact} numberOfLines={2}>
+          Sign in to check out, track orders and get support.
+        </Text>
+      </View>
+
+      <Pressable
+        style={[styles.guestSignInBtn, { backgroundColor: accent }]}
+        onPress={() => router.push('/sign-in')}
+        accessibilityRole="button"
+        accessibilityLabel="Sign in"
+      >
+        <Text style={styles.guestSignInText}>Sign in</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function IdentityCard({ profile, onEdit }: { profile: CustomerProfile; onEdit: () => void }) {
   const styles = useThemedStyles(makeStyles);
   const name = displayName(profile);
@@ -143,7 +175,7 @@ function Row({ row, onPress, right }: { row: MenuRow; onPress?: () => void; righ
 export default function ProfileScreen() {
   const styles = useThemedStyles(makeStyles);
   const { accent, accentDark } = useAccentTheme();
-  const { signOut } = useAuth();
+  const { isGuest, signOut } = useAuth();
   const { profile, isLoading, isRefreshing, error, refresh } = useProfile();
   const vegFleet = useVegFleetPreference();
 
@@ -158,6 +190,12 @@ export default function ProfileScreen() {
   );
 
   const confirmSignOut = () => {
+    if (isGuest) {
+      // Nothing to lose a confirmation over — a guest session is just cleared,
+      // dropping the customer back on sign-in.
+      signOut();
+      return;
+    }
     Alert.alert('Log out?', 'You’ll need to sign in again to place orders.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Log out', style: 'destructive', onPress: signOut },
@@ -202,7 +240,9 @@ export default function ProfileScreen() {
           </Pressable>
         ) : null}
 
-        {profile ? (
+        {isGuest ? (
+          <GuestIdentityCard />
+        ) : profile ? (
           <IdentityCard profile={profile} onEdit={() => router.push('/profile/edit')} />
         ) : null}
 
@@ -249,11 +289,11 @@ export default function ProfileScreen() {
               );
             }
 
-            // danger — Log out
+            // danger — Log out (relabelled for a guest, who has nothing to confirm)
             return (
               <Row
                 key={row.key}
-                row={row}
+                row={isGuest ? { ...row, label: 'Exit guest mode' } : row}
                 onPress={confirmSignOut}
                 right={<Ionicons name="chevron-forward" size={18} color={Colors.danger} />}
               />
@@ -332,6 +372,12 @@ const makeStyles = (t: AccentTheme) =>
   name: { fontSize: 20, fontWeight: '800', color: Colors.foodText, letterSpacing: -0.3 },
   contact: { fontSize: 14, color: Colors.foodTextSecondary },
   since: { fontSize: 12, color: Colors.foodTextMuted, marginTop: 1 },
+  guestSignInBtn: {
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: BorderRadius.full,
+  },
+  guestSignInText: { fontSize: 13.5, fontWeight: '800', color: Colors.white },
 
   // Menu
   menu: { marginTop: Spacing.lg, gap: Spacing.md },

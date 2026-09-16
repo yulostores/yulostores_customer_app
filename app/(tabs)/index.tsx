@@ -20,6 +20,7 @@ import CartBar from '../../src/components/CartBar';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
+import { useAuth } from '../../src/context/AuthContext';
 import { useCart } from '../../src/context/CartContext';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import { useVegMode, type VegScope } from '../../src/context/VegModeContext';
@@ -416,6 +417,29 @@ function FoodTypeDot({ foodType }: { foodType: MenuItem['foodType'] }) {
         ]}
       />
     </View>
+  );
+}
+
+/**
+ * "Browsing as guest" strip — the one on-Home nudge to sign in, for a customer
+ * using the app via "Continue as guest" (app/sign-in.tsx). Not a hard gate: it
+ * just links to sign-in, same screen the cart's checkout button routes a guest
+ * to when they actually try to buy something.
+ */
+function GuestBanner() {
+  const styles = useThemedStyles(makeStyles);
+  const t = useAccentTheme();
+  return (
+    <Pressable
+      style={styles.guestBanner}
+      onPress={() => router.push('/sign-in')}
+      accessibilityRole="button"
+      accessibilityLabel="Browsing as guest. Sign in for a faster checkout."
+    >
+      <Ionicons name="person-circle-outline" size={18} color={t.accentDark} />
+      <Text style={styles.guestBannerText}>Browsing as guest</Text>
+      <Text style={[styles.guestBannerLink, { color: t.accentDark }]}>Sign in →</Text>
+    </Pressable>
   );
 }
 
@@ -915,6 +939,7 @@ export default function HomeScreen() {
   } = useHomeData();
 
   const { itemCount } = useCart();
+  const { isGuest } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -1070,6 +1095,9 @@ export default function HomeScreen() {
                  wash. It's the first thing the eye lands on, so it reads as a
                  single block rather than three floating rows. ── */}
           <HomeHeader />
+
+          {/* ── Guest nudge ── */}
+          {isGuest && <GuestBanner />}
 
           {/* ── Veg-mode confirmation strip ── */}
           {!!vegBannerText && (
@@ -1415,6 +1443,29 @@ const makeStyles = (t: AccentTheme) =>
     fontWeight: '700',
     color: Colors.foodVegGreen,
     textAlign: 'center',
+  },
+
+  // ── Guest nudge strip ──
+  guestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: t.accentLight,
+    marginHorizontal: Spacing.base,
+    marginTop: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+  },
+  guestBannerText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: Colors.foodTextSecondary,
+  },
+  guestBannerLink: {
+    fontSize: 12.5,
+    fontWeight: '800',
   },
 
   // ── Veg-mode confirmation strip ──
