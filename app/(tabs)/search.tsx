@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -57,12 +58,12 @@ function RecentRow({
 }) {
   return (
     <Pressable style={styles.recentRow} onPress={onPress}>
-      <Ionicons name="time-outline" size={26} color={Colors.foodTextMuted} />
+      <Ionicons name="time-outline" size={19} color={Colors.foodTextMuted} />
       <Text style={styles.recentText} numberOfLines={1}>
         {item.query}
       </Text>
       <Pressable onPress={onRemove} hitSlop={10} accessibilityLabel={`Remove ${item.query}`}>
-        <Ionicons name="close" size={20} color={Colors.foodTextMuted} />
+        <Ionicons name="close" size={16} color={Colors.foodTextMuted} />
       </Pressable>
     </Pressable>
   );
@@ -77,7 +78,7 @@ function PopularTile({ item, onPress }: { item: PopularSearch; onPress: () => vo
         style={styles.tileImage}
         imageStyle={styles.tileImageCircle}
         icon="fast-food-outline"
-        iconSize={30}
+        iconSize={22}
         showCaption
       />
       <Text style={styles.tileLabel} numberOfLines={2}>
@@ -91,7 +92,7 @@ function PopularTile({ item, onPress }: { item: PopularSearch; onPress: () => vo
 function VegBanner({ text }: { text: string }) {
   return (
     <View style={styles.vegBanner}>
-      <Ionicons name="radio-button-on" size={16} color={Colors.foodVegGreen} />
+      <Ionicons name="radio-button-on" size={13} color={Colors.foodVegGreen} />
       <Text style={styles.vegBannerText}>{text}</Text>
     </View>
   );
@@ -123,7 +124,7 @@ function SuggestionRow({
         uri={item.thumbnailUrl}
         style={styles.suggestionThumb}
         icon={item.type === 'restaurant' ? 'restaurant' : 'fast-food-outline'}
-        iconSize={18}
+        iconSize={15}
       />
       <View style={styles.suggestionBody}>
         <View style={styles.suggestionNameRow}>
@@ -499,14 +500,15 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <StatusBar style="dark" />
       <View style={styles.container}>
         {/* Header — back + search field */}
         <View style={styles.header}>
           <Pressable onPress={handleBack} hitSlop={8} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={Colors.foodText} />
+            <Ionicons name="arrow-back" size={22} color={Colors.foodText} />
           </Pressable>
           <View style={styles.searchBar}>
-            <Ionicons name="search" size={20} color={t.accent} />
+            <Ionicons name="search" size={18} color={t.accent} />
             <TextInput
               style={styles.input}
               placeholder="Search for restaurants and dishes"
@@ -522,7 +524,7 @@ export default function SearchScreen() {
             <View style={styles.searchDivider} />
             {query.length > 0 ? (
               <Pressable onPress={clearSearch} hitSlop={8}>
-                <Ionicons name="close-circle" size={20} color={Colors.foodTextMuted} />
+                <Ionicons name="close-circle" size={18} color={Colors.foodTextMuted} />
               </Pressable>
             ) : (
               <Image
@@ -579,25 +581,25 @@ const makeStyles = (t: AccentTheme) =>
     borderRadius: BorderRadius.full,
     borderWidth: 1,
     borderColor: Colors.foodBorderStrong,
-    paddingHorizontal: Spacing.base,
-    height: 48,
+    paddingHorizontal: Spacing.md,
+    height: 44,
     gap: Spacing.sm,
     ...Elevation.card,
   },
   input: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.foodText,
     paddingVertical: 0,
   },
   searchDivider: {
     width: 1,
-    height: 22,
+    height: 16,
     backgroundColor: Colors.foodBorderStrong,
   },
   voiceIcon: {
-    width: 22,
-    height: 22,
+    width: 18,
+    height: 18,
     tintColor: t.accent,
   },
 
@@ -605,11 +607,11 @@ const makeStyles = (t: AccentTheme) =>
   vegBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
     marginHorizontal: Spacing.base,
-    marginTop: Spacing.md,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.sm + 2,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
     borderColor: Colors.foodVegGreen,
@@ -617,8 +619,8 @@ const makeStyles = (t: AccentTheme) =>
   },
   vegBannerText: {
     flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
     color: Colors.foodVegGreen,
   },
 
@@ -630,27 +632,27 @@ const makeStyles = (t: AccentTheme) =>
     paddingBottom: 120,
   },
   sectionTitle: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
     color: Colors.foodText,
-    letterSpacing: -0.6,
-    marginBottom: Spacing.md,
+    letterSpacing: -0.2,
+    marginBottom: Spacing.sm,
   },
   sectionTitleSpaced: {
-    marginTop: Spacing.xl,
+    marginTop: Spacing.lg,
   },
 
   // Recent searches — a plain row (no card), per the Figma spec: just the icon,
-  // the term, and the "x", with generous vertical rhythm doing the separation.
+  // the term, and the "x", with compact vertical rhythm doing the separation.
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.base,
-    paddingVertical: Spacing.lg,
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
   },
   recentText: {
     flex: 1,
-    fontSize: 20,
+    fontSize: 14,
     fontWeight: '500',
     color: Colors.foodText,
   },
@@ -682,9 +684,9 @@ const makeStyles = (t: AccentTheme) =>
     borderRadius: TILE_SIZE / 2,
   },
   tileLabel: {
-    marginTop: Spacing.sm,
-    fontSize: 14,
-    fontWeight: '700',
+    marginTop: Spacing.xs,
+    fontSize: 12,
+    fontWeight: '600',
     color: Colors.foodText,
     textAlign: 'center',
   },
@@ -697,7 +699,7 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
     marginHorizontal: Spacing.base,
-    marginTop: Spacing.md,
+    marginTop: Spacing.sm,
     paddingVertical: Spacing.xs,
     ...Elevation.raised,
   },
@@ -706,31 +708,31 @@ const makeStyles = (t: AccentTheme) =>
     alignItems: 'center',
     gap: Spacing.md,
     paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   suggestionThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: Colors.foodBgSecondary,
   },
-  suggestionBody: { flex: 1, minWidth: 0, gap: 2 },
+  suggestionBody: { flex: 1, minWidth: 0, gap: 1 },
   suggestionNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   suggestionName: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: Colors.foodText,
   },
   suggestionNameMatch: {
     fontWeight: '800',
   },
   suggestionType: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.foodTextMuted,
   },
 
