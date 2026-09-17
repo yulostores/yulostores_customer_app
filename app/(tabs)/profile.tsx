@@ -8,8 +8,10 @@
  * The menu itself is a declarative config (`MENU` below) rendered generically —
  * add a row by adding an entry, not by writing markup.
  *
- * "Log out" is styled in the app's danger red and confirms before clearing the
- * session, so it never reads as just another navigation row.
+ * Layout follows the Swiggy/Zomato account-page idiom: a back arrow beside a
+ * large title, a tappable identity card (tap → edit profile), then one rounded
+ * card per menu row. "Log out" is styled in the app's danger red and confirms
+ * before clearing the session, so it never reads as just another navigation row.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -30,7 +32,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
-import { BorderRadius, Shadows, Spacing } from '../../src/constants/Theme';
+import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 import {
   ORANGE_ACCENT,
@@ -44,9 +46,10 @@ import {
   displayName,
   formatPhone,
   initialsFor,
-  memberSinceLabel,
   type CustomerProfile,
 } from '../../src/services/profile';
+
+const ROW_RADIUS = 20;
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -55,6 +58,12 @@ type IoniconName = keyof typeof Ionicons.glyphMap;
 type MenuRow =
   | { key: string; label: string; icon: IoniconName; kind: 'link'; route: string }
   | { key: string; label: string; icon: IoniconName; kind: 'toggle' | 'danger' };
+
+function goBack() {
+  // Profile is a root tab, so there is often nothing to pop — fall back to Home.
+  if (router.canGoBack()) router.back();
+  else router.navigate('/(tabs)');
+}
 
 const MENU: readonly MenuRow[] = [
   { key: 'orders', label: 'Order history', icon: 'time-outline', kind: 'link', route: '/(tabs)/orders' },
@@ -110,10 +119,14 @@ function IdentityCard({ profile, onEdit }: { profile: CustomerProfile; onEdit: (
     profile.name && profile.phone
       ? formatPhone(profile.phone)
       : profile.email ?? null;
-  const since = memberSinceLabel(profile.memberSince);
 
   return (
-    <View style={styles.identityCard}>
+    <Pressable
+      style={({ pressed }) => [styles.identityCard, pressed && styles.rowPressed]}
+      onPress={onEdit}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}, edit profile`}
+    >
       {profile.avatarUrl ? (
         <RemoteImage uri={profile.avatarUrl} style={styles.avatar} icon="person" iconSize={28} />
       ) : (
@@ -129,19 +142,8 @@ function IdentityCard({ profile, onEdit }: { profile: CustomerProfile; onEdit: (
       <View style={styles.identityText}>
         <Text style={styles.name} numberOfLines={1}>{name}</Text>
         {contact ? <Text style={styles.contact} numberOfLines={1}>{contact}</Text> : null}
-        {since ? <Text style={styles.since}>{since}</Text> : null}
       </View>
-
-      <Pressable
-        style={styles.editBtn}
-        onPress={onEdit}
-        hitSlop={10}
-        accessibilityRole="button"
-        accessibilityLabel="Edit profile"
-      >
-        <Ionicons name="create-outline" size={18} color={Colors.foodTextSecondary} />
-      </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
@@ -149,7 +151,7 @@ function IdentityCard({ profile, onEdit }: { profile: CustomerProfile; onEdit: (
 
 function Row({ row, onPress, right }: { row: MenuRow; onPress?: () => void; right: ReactNode }) {
   const danger = row.kind === 'danger';
-  const iconColor = danger ? Colors.danger : Colors.foodText;
+  const iconColor = danger ? Colors.danger : Colors.foodTextSecondary;
   const labelColor = danger ? Colors.danger : Colors.foodText;
 
   return (
@@ -165,7 +167,9 @@ function Row({ row, onPress, right }: { row: MenuRow; onPress?: () => void; righ
       accessibilityLabel={row.label}
     >
       <Ionicons name={row.icon} size={22} color={iconColor} />
-      <Text style={[styles.rowLabel, { color: labelColor }]}>{row.label}</Text>
+      <Text style={[styles.rowLabel, danger && styles.rowLabelDanger, { color: labelColor }]}>
+        {row.label}
+      </Text>
       {right}
     </Pressable>
   );
@@ -205,12 +209,27 @@ export default function ProfileScreen() {
 
   const addressCount = profile?.savedAddressCount ?? 0;
 
+  const header = (
+    <View style={styles.header}>
+      <Pressable
+        onPress={goBack}
+        hitSlop={12}
+        style={styles.backBtn}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
+        <Ionicons name="arrow-back" size={26} color={Colors.foodText} />
+      </Pressable>
+      <Text style={styles.title}>Profile</Text>
+    </View>
+  );
+
   // First load with nothing to show yet.
   if (isLoading && !profile) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <StatusBar style="dark" />
-        <Text style={styles.title}>Profile</Text>
+        {header}
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={accent} />
         </View>
@@ -221,7 +240,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <StatusBar style="dark" />
-      <Text style={styles.title}>Profile</Text>
+      {header}
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -262,7 +281,7 @@ export default function ProfileScreen() {
                   right={
                     <View style={styles.rowRight}>
                       {subtitle ? <Text style={styles.rowMeta}>{subtitle}</Text> : null}
-                      <Ionicons name="chevron-forward" size={18} color={Colors.foodTextMuted} />
+                      <Ionicons name="chevron-forward" size={20} color={Colors.foodText} />
                     </View>
                   }
                 />
@@ -298,7 +317,7 @@ export default function ProfileScreen() {
                 key={row.key}
                 row={isGuest ? { ...row, label: 'Exit guest mode' } : row}
                 onPress={confirmSignOut}
-                right={<Ionicons name="chevron-forward" size={18} color={Colors.danger} />}
+                right={<Ionicons name="chevron-forward" size={20} color={Colors.danger} />}
               />
             );
           })}
@@ -316,14 +335,20 @@ const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.foodBg },
 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.base,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.lg,
+  },
+  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   title: {
-    fontSize: 28,
+    fontSize: 34,
     fontWeight: '800',
     color: Colors.foodText,
-    letterSpacing: -0.5,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.base,
+    letterSpacing: -0.8,
   },
 
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -350,9 +375,10 @@ const makeStyles = (t: AccentTheme) =>
     alignItems: 'center',
     gap: Spacing.base,
     backgroundColor: Colors.foodSurface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    ...Shadows.sm,
+    borderRadius: ROW_RADIUS,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md + 2,
+    ...Elevation.card,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
   },
@@ -362,19 +388,10 @@ const makeStyles = (t: AccentTheme) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitials: { fontSize: 22, fontWeight: '800', color: Colors.white, letterSpacing: 0.5 },
-  identityText: { flex: 1, gap: 3 },
-  editBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.foodBgSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  name: { fontSize: 20, fontWeight: '800', color: Colors.foodText, letterSpacing: -0.3 },
-  contact: { fontSize: 14, color: Colors.foodTextSecondary },
-  since: { fontSize: 12, color: Colors.foodTextMuted, marginTop: 1 },
+  avatarInitials: { fontSize: 20, fontWeight: '600', color: Colors.white },
+  identityText: { flex: 1, gap: 4 },
+  name: { fontSize: 19, fontWeight: '600', color: Colors.foodText, letterSpacing: -0.2 },
+  contact: { fontSize: 15, color: Colors.foodTextSecondary, letterSpacing: 0.2 },
   guestSignInBtn: {
     paddingHorizontal: Spacing.base,
     paddingVertical: Spacing.sm + 2,
@@ -383,23 +400,24 @@ const makeStyles = (t: AccentTheme) =>
   guestSignInText: { fontSize: 13.5, fontWeight: '800', color: Colors.white },
 
   // Menu
-  menu: { marginTop: Spacing.lg, gap: Spacing.md },
+  menu: { marginTop: Spacing.xl, gap: Spacing.md },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.base,
-    minHeight: 58,
+    minHeight: 60,
     backgroundColor: Colors.foodSurface,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.base,
+    borderRadius: ROW_RADIUS,
+    paddingHorizontal: Spacing.base + 2,
     paddingVertical: Spacing.md,
-    ...Shadows.sm,
+    ...Elevation.card,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
   },
   rowDanger: { marginTop: Spacing.xs },
   rowPressed: { backgroundColor: Colors.foodBgSecondary },
-  rowLabel: { flex: 1, fontSize: 15, fontWeight: '600' },
+  rowLabel: { flex: 1, fontSize: 16.5, fontWeight: '500', letterSpacing: -0.1 },
+  rowLabelDanger: { fontWeight: '600' },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   rowMeta: { fontSize: 13, color: Colors.foodTextMuted },
   });
