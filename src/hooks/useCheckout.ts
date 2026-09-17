@@ -1,8 +1,12 @@
 /**
- * useCheckout.ts — data + the one action behind the Payment screen
- * (`app/checkout/payment.tsx`).
+ * useCheckout.ts — data + every mutation behind the checkout screen
+ * (`app/checkout/index.tsx`), a single scroll from cart review to a placed order.
  *
- * Load:  GET /api/checkout/summary  → the delivery address + the server bill.
+ * Load:  GET /api/checkout/summary  → address + lines + bill + "Complete your
+ *        meal" sections, all server-computed.
+ * Cart edits: the qty stepper and "Complete your meal" both go straight back to
+ *        the live cart endpoints (src/services/cart.ts) and fold the fresh
+ *        `{ cart, bill }` snapshot into `summary` in place — no follow-up GET.
  * Act:   `pay()` runs the whole thing —
  *          1. POST /api/orders/checkout   (places the order; idempotent)
  *          2. for an online method, run the resolved gateway
@@ -17,17 +21,26 @@
  * gateway, never a second checkout — unless the customer switches between an
  * online method and COD, which needs a fresh order (different `paymentMethod`).
  *
- * `overrides` carries the choices made on the checkout review page
- * (`app/checkout/index.tsx`) — the picked address plus tip / delivery
- * instructions / cutlery / veg-fleet. They're threaded through as route params
- * and folded into `POST /api/orders/checkout`. Omitted → the server bills the
- * account default with no extras, which is the standalone-Payment-screen case.
+ * `overrides` carries the screen's live picks — the address the customer chose
+ * on `app/address` (if different from the account default), tip, delivery
+ * instructions, cutlery / cooking / veg-fleet — read straight from component
+ * state (no route params: it's one screen now) and folded into
+ * `POST /api/orders/checkout`. Omitted → the server bills the account default
+ * with no extras.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useCart as useCartCache } from '../context/CartContext';
 import { logger, reportError } from '../lib/logger';
 import { ApiError } from '../services/api';
+import {
+  addItemToCart,
+  removeCartLine,
+  toCartCachePayload,
+  updateCartLine,
+  type CartSnapshot,
+} from '../services/cart';
 import {
   getCheckoutSummary,
   placeOrder,
@@ -80,6 +93,17 @@ interface UseCheckoutResult {
   refresh: () => Promise<void>;
   /** Place + pay. Safe to call again after a failure. */
   pay: () => Promise<void>;
+  /** Cart-line ids with an in-flight quantity / remove call. */
+  pendingLineIds: Set<string>;
+  /** A cart-line or "Complete your meal" add mutation failed. */
+  lineError: string | null;
+  /** Set an absolute quantity for a cart line; `0` removes it. */
+  setLineQty: (lineId: string, qty: number) => Promise<void>;
+  removeLine: (lineId: string) => Promise<void>;
+  /** Menu item id currently being added from "Complete your meal". */
+  addingMealItemId: string | null;
+  /** Add one "Complete your meal" pick straight to the cart. */
+  addMealItem: (menuItemId: string) => Promise<void>;
 }
 
 function messageFor(err: unknown, fallback: string): string {
@@ -112,6 +136,11 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
   const [actionError, setActionError] = useState<string | null>(null);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
   const [placedIsCod, setPlacedIsCod] = useState(false);
+
+  const { syncFromServer } = useCartCache();
+  const [pendingLineIds, setPendingLineIds] = useState<Set<string>>(new Set());
+  const [lineError, setLineError] = useState<string | null>(null);
+  const [addingMealItemId, setAddingMealItemId] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -189,6 +218,108 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     setSelectedMethodId(id);
     setActionError(null);
   }, []);
+
+  // Folds a fresh cart mutation's `{ cart, bill }` snapshot into the current summary —
+  // the mutation endpoints (src/services/cart.ts) return the exact same reshaped
+  // `cart`/`bill` this screen already renders, so no follow-up GET is needed. Only the
+  // cart-derived fields move; address / mealSections / vegFleetEligible are untouched
+  // until the next full `refresh()`.
+  const mergeCartSnapshot = useCallback((snap: CartSnapshot) => {
+    setSummary((prev) =>
+      prev
+        ? {
+            ...prev,
+            restaurant: snap.cart.restaurant,
+            restaurantName: snap.cart.restaurant?.name ?? prev.restaurantName,
+            lines: snap.cart.lines,
+            itemCount: snap.cart.itemCount,
+            bill: snap.bill,
+            hasItems: snap.cart.lines.length > 0,
+          }
+        : prev,
+    );
+    syncFromServer(toCartCachePayload(snap));
+  }, [syncFromServer]);
+
+  const markLinePending = useCallback((lineId: string, on: boolean) => {
+    setPendingLineIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(lineId);
+      else next.delete(lineId);
+      return next;
+    });
+  }, []);
+
+  const runLineMutation = useCallback(
+    async (lineId: string, op: () => Promise<CartSnapshot>) => {
+      setLineError(null);
+      markLinePending(lineId, true);
+      try {
+        mergeCartSnapshot(await op());
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          logger.warn('checkout', 'Cart-line mutation rejected — 401', { code: err.code });
+          if (mountedRef.current) setNotSignedIn(true);
+        } else if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+          logger.warn('checkout', `Cart-line mutation rejected — ${err.status} ${err.code}`, {
+            status: err.status,
+            code: err.code,
+          });
+          if (mountedRef.current) setLineError(messageFor(err, 'That change didn’t go through.'));
+        } else {
+          reportError('checkout', 'Cart-line mutation failed', err, { lineId });
+          if (mountedRef.current) setLineError('Something went wrong. Please try again.');
+        }
+      } finally {
+        if (mountedRef.current) markLinePending(lineId, false);
+      }
+    },
+    [mergeCartSnapshot, markLinePending],
+  );
+
+  const setLineQty = useCallback(
+    (lineId: string, qty: number) => runLineMutation(lineId, () => updateCartLine(lineId, qty)),
+    [runLineMutation],
+  );
+
+  const removeLine = useCallback(
+    (lineId: string) => runLineMutation(lineId, () => removeCartLine(lineId)),
+    [runLineMutation],
+  );
+
+  const addMealItem = useCallback(
+    async (menuItemId: string) => {
+      setLineError(null);
+      setAddingMealItemId(menuItemId);
+      try {
+        mergeCartSnapshot(await addItemToCart({ menuItemId, qty: 1, selectedOptions: [] }));
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          logger.warn('checkout', 'Add from "Complete your meal" rejected — 401', { code: err.code });
+          if (mountedRef.current) setNotSignedIn(true);
+        } else if (err instanceof ApiError && err.status === 400) {
+          // Needs customization (option groups) — the screen sends the customer to
+          // the item screen instead when optionGroupCount > 0, so this is unexpected.
+          logger.warn('checkout', 'Add from "Complete your meal" needs customization', {
+            code: err.code,
+          });
+          if (mountedRef.current) setLineError('That dish needs a customization first.');
+        } else if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+          logger.warn('checkout', `Add from "Complete your meal" rejected — ${err.status} ${err.code}`, {
+            status: err.status,
+            code: err.code,
+          });
+          if (mountedRef.current) setLineError(messageFor(err, 'Couldn’t add that item.'));
+        } else {
+          reportError('checkout', 'Add from "Complete your meal" failed', err, { menuItemId });
+          if (mountedRef.current) setLineError('Something went wrong. Please try again.');
+        }
+      } finally {
+        if (mountedRef.current) setAddingMealItemId(null);
+      }
+    },
+    [mergeCartSnapshot],
+  );
 
   const pay = useCallback(async () => {
     if (!summary || !summary.hasItems) {
@@ -321,5 +452,11 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     placedIsCod,
     refresh: load,
     pay,
+    pendingLineIds,
+    lineError,
+    setLineQty,
+    removeLine,
+    addingMealItemId,
+    addMealItem,
   };
 }

@@ -5,11 +5,13 @@
  * story):
  *
  *   GET  /api/checkout/summary
- *     → { address, cart, bill, upsellItems, vegFleetEligible }
+ *     → { address, cart, bill, mealSections, tipPresets, vegFleetEligible }
  *     The address is the account's default saved address (or the first one);
  *     `cart` + `bill` are the exact same shapes the cart screen renders (reused
  *     via cart.ts's `reshapeCartSnapshot`), so the checkout page shows the same
  *     lines and the same server-computed money, never its own arithmetic.
+ *     `mealSections` backs "Complete your meal" — a "Popular" bucket plus the
+ *     restaurant's own real menu categories, already excluding what's in cart.
  *
  *   POST /api/orders/checkout
  *     { addressId?, deliveryInstructions?, cookingRequests?, extraCutlery?,
@@ -17,7 +19,7 @@
  *     → { orderId, restaurantName, status, vegFleetOptIn, order,
  *         clientSecret?, razorpayOrder? }
  *     `paymentMethod` is only ever `'cod'` or `'online'` on the wire — the rich
- *     UPI / card / net-banking choice on the Payment screen is a client-side
+ *     UPI / card / net-banking choice on the checkout screen is a client-side
  *     label that all collapses to `'online'` here (and becomes a Razorpay
  *     method-hint once a real gateway is wired — see src/services/payments.ts).
  *
@@ -47,14 +49,23 @@ import {
 
 // ─── Wire shapes (only the fields the app reads) ─────────────────────────────
 
-interface RawUpsellItem {
+interface RawMealItem {
   _id: string;
   name: string;
+  description?: string | null;
   image?: string | null;
   foodType?: 'veg' | 'non_veg' | 'egg' | null;
   sellingPrice?: number;
   discountedPrice?: number | null;
   effectivePrice?: number;
+  badges?: string[];
+  optionGroupCount?: number;
+}
+
+interface RawMealSection {
+  id: string;
+  name: string;
+  items: RawMealItem[];
 }
 
 interface RawSummary {
@@ -64,8 +75,12 @@ interface RawSummary {
    *  reshaper. */
   cart?: unknown;
   bill?: unknown;
-  upsellItems?: RawUpsellItem[];
+  /** "Complete your meal" tabs — a synthetic "Popular" bucket plus the restaurant's
+   *  own real menu categories, each already excluding what's in the cart. */
+  mealSections?: RawMealSection[];
   vegFleetEligible?: boolean;
+  /** Suggested delivery-tip amounts, in rupees — server config, not a client list. */
+  tipPresets?: number[];
 }
 
 interface RawOrder {
@@ -89,14 +104,28 @@ interface RawCheckoutResponse {
 
 // ─── View types ─────────────────────────────────────────────────────────────
 
-/** One "you might also like" pick on the checkout page — tap opens the dish. */
-export interface UpsellItem {
+/** One "Complete your meal" pick — tap opens the dish, "+" adds it straight to cart. */
+export interface MealItem {
   id: string;
   name: string;
+  description: string | null;
   image: string | null;
   foodType: 'veg' | 'non_veg' | 'egg' | null;
   /** The price the cart will actually charge (matches the item screen). */
   price: number;
+  /** MRP, when higher than `price` — draw a strike-through against it. */
+  mrpPrice: number | null;
+  badges: string[];
+  /** `> 0` → "+" opens the customization screen instead of adding straight to cart. */
+  optionGroupCount: number;
+}
+
+/** One "Complete your meal" tab — "Popular" (bestsellers first) plus the
+ *  restaurant's own real menu categories, e.g. "Beverages", "Desserts". */
+export interface MealSection {
+  id: string;
+  name: string;
+  items: MealItem[];
 }
 
 export interface CheckoutSummary {
@@ -113,8 +142,10 @@ export interface CheckoutSummary {
   /** Server-computed bill. The customer-chosen `tip` is added on top for display
    *  and sent to the server at placement; it is not part of this figure. */
   bill: CartBill;
-  /** Bestseller / recent dishes from the same restaurant, minus what's in cart. */
-  upsellItems: UpsellItem[];
+  /** "Complete your meal" tabs, already scoped to the cart's restaurant. */
+  mealSections: MealSection[];
+  /** Suggested delivery-tip amounts, in rupees — server config. */
+  tipPresets: number[];
   /** Only then may the "veg-only delivery" toggle be shown / sent as true. */
   vegFleetEligible: boolean;
   hasItems: boolean;
@@ -161,14 +192,24 @@ export interface PlacedOrder {
 
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 
-function toUpsellItem(raw: RawUpsellItem): UpsellItem {
+function toMealItem(raw: RawMealItem): MealItem {
+  const price = num(raw.effectivePrice ?? raw.discountedPrice ?? raw.sellingPrice);
+  const mrp = raw.sellingPrice != null ? num(raw.sellingPrice) : null;
   return {
     id: String(raw._id),
     name: raw.name,
+    description: raw.description ?? null,
     image: raw.image ?? null,
     foodType: raw.foodType ?? null,
-    price: num(raw.effectivePrice ?? raw.discountedPrice ?? raw.sellingPrice),
+    price,
+    mrpPrice: mrp != null && mrp > price ? mrp : null,
+    badges: raw.badges ?? [],
+    optionGroupCount: raw.optionGroupCount ?? 0,
   };
+}
+
+function toMealSection(raw: RawMealSection): MealSection {
+  return { id: String(raw.id), name: raw.name, items: (raw.items ?? []).map(toMealItem) };
 }
 
 function toSummary(raw: RawSummary): CheckoutSummary {
@@ -183,7 +224,8 @@ function toSummary(raw: RawSummary): CheckoutSummary {
     lines: cart.lines,
     itemCount: cart.itemCount,
     bill,
-    upsellItems: (raw.upsellItems ?? []).map(toUpsellItem),
+    mealSections: (raw.mealSections ?? []).map(toMealSection),
+    tipPresets: (raw.tipPresets ?? []).filter((n) => typeof n === 'number' && n > 0),
     vegFleetEligible: Boolean(raw.vegFleetEligible),
     hasItems: cart.lines.length > 0,
   };

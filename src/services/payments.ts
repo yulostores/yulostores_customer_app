@@ -87,10 +87,10 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
   { id: 'cred', group: 'upi', label: 'CRED', hint: 'UPI', icon: 'shield-checkmark', tint: '#1C1C1C', wire: 'online', gatewayMethod: 'upi' },
   { id: 'card', group: 'card', label: 'Credit / Debit Card', hint: 'Visa · Mastercard · RuPay', icon: 'card', tint: '#1C1C1C', wire: 'online', gatewayMethod: 'card' },
   { id: 'netbanking', group: 'netbanking', label: 'Net Banking', hint: 'All Indian banks', icon: 'business', tint: '#0D8A16', wire: 'online', gatewayMethod: 'netbanking' },
-  { id: 'cod', group: 'cod', label: 'Pay on Delivery', hint: 'Cash / UPI on delivery', icon: 'cash', tint: '#0D8A16', wire: 'cod' },
+  { id: 'cod', group: 'cod', label: 'Pay on Delivery (Cash/UPI)', hint: 'Pay cash or ask for QR code', icon: 'cash', tint: '#0D8A16', wire: 'cod' },
 ];
 
-export const DEFAULT_METHOD_ID: PaymentMethodId = 'phonepe';
+export const DEFAULT_METHOD_ID: PaymentMethodId = 'cod';
 
 export function getMethod(id: PaymentMethodId): PaymentMethod {
   return PAYMENT_METHODS.find((m) => m.id === id) ?? PAYMENT_METHODS[0];

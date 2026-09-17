@@ -46,6 +46,9 @@ interface RawCartLine {
   unitPrice: number;
   qty: number;
   foodType?: FoodType | null;
+  /** The dish's current photo — attached fresh from MenuItem on every read, not
+   *  snapshotted (unlike name/unitPrice), so a restaurant's photo swap shows up here. */
+  image?: string | null;
   selectedOptions?: { optionId: string; qty?: number }[];
   resolvedOptions?: RawResolvedOption[];
 }
@@ -67,6 +70,12 @@ interface RawCart {
 
 interface RawBill {
   itemTotal?: number;
+  /** Pre-markdown total (sum of each line's mrpUnitPrice × qty) — equals `itemTotal`
+   *  when nothing on the cart carries a per-item discount. */
+  mrpTotal?: number;
+  /** `mrpTotal - itemTotal` — already netted into `itemTotal`; shown as its own
+   *  "Item discount" row for transparency, not subtracted again. */
+  itemDiscountAmount?: number;
   deliveryFee?: number;
   platformFee?: number;
   tax?: number;
@@ -99,6 +108,8 @@ export interface CartLine {
   qty: number;
   /** `null` only for a legacy line whose dish has since been deleted. */
   foodType: FoodType | null;
+  /** The dish's current photo, or `null` if it has none / was deleted. */
+  image: string | null;
   options: CartLineOption[];
 }
 
@@ -112,6 +123,8 @@ export interface CartRestaurant {
 /** Every money field the "Bill details" block shows, all computed server-side. */
 export interface CartBill {
   itemTotal: number;
+  mrpTotal: number;
+  itemDiscountAmount: number;
   deliveryFee: number;
   platformFee: number;
   tax: number;
@@ -152,13 +165,17 @@ function toLine(raw: RawCartLine): CartLine {
     unitPrice: num(raw.unitPrice),
     qty: Math.max(1, num(raw.qty) || 1),
     foodType: raw.foodType ?? null,
+    image: raw.image ?? null,
     options,
   };
 }
 
 function toBill(raw: RawBill): CartBill {
+  const itemTotal = num(raw.itemTotal);
   return {
-    itemTotal: num(raw.itemTotal),
+    itemTotal,
+    mrpTotal: raw.mrpTotal != null ? num(raw.mrpTotal) : itemTotal,
+    itemDiscountAmount: num(raw.itemDiscountAmount),
     deliveryFee: num(raw.deliveryFee),
     platformFee: num(raw.platformFee),
     tax: num(raw.tax),

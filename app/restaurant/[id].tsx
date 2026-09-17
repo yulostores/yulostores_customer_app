@@ -78,8 +78,18 @@ import type { MenuItem, Restaurant } from '../../src/types/restaurant';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HERO_HEIGHT = 240;
+const GRID_GAP = Spacing.md;
+const GRID_HPAD = Spacing.base;
+const CARD_WIDTH = (SCREEN_WIDTH - GRID_HPAD * 2 - GRID_GAP) / 2;
 
 const formatPrice = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
+
+/** Splits a flat list into rows of (at most) 2 for the two-column menu grid. */
+function chunkPairs<T>(items: T[]): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += 2) rows.push(items.slice(i, i + 2));
+  return rows;
+}
 
 /** Back out of the screen — falls back to the tabs when opened from a share link. */
 function goBack() {
@@ -290,9 +300,9 @@ function AddControl({
   );
 }
 
-// ─── Menu item row ──────────────────────────────────────────────────────
+// ─── Menu item card (2-column grid) ────────────────────────────────────
 
-function MenuItemRow({
+function MenuItemCard({
   item,
   restaurant,
   onOpen,
@@ -302,67 +312,89 @@ function MenuItemRow({
   onOpen: () => void;
 }) {
   const styles = useThemedStyles(makeStyles);
+  const isVeg = item.foodType === 'veg';
+  const dietColor = isVeg ? Colors.foodVegGreen : Colors.foodNonVegRed;
   const discounted =
     item.discountedPrice != null && item.discountedPrice < item.sellingPrice;
   const saving = discounted ? item.sellingPrice - (item.discountedPrice ?? 0) : 0;
-  const badges = (item.badges ?? []).slice(0, 2);
+  const badge = (item.badges ?? [])[0];
 
   return (
-    <Pressable style={styles.row} onPress={onOpen}>
-      <View style={styles.rowText}>
-        <FoodTypeDot foodType={item.foodType} />
-
-        {badges.length > 0 && (
-          <View style={styles.badgeRow}>
-            {badges.map((b) => (
-              <Text
-                key={b}
-                style={[
-                  styles.badge,
-                  b.toLowerCase().includes('best') && styles.badgeStrong,
-                ]}
-              >
-                {formatBadge(b)}
-              </Text>
-            ))}
-          </View>
-        )}
-
-        <Text style={styles.rowName} numberOfLines={2}>
-          {item.name}
-        </Text>
-
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>{formatPrice(item.effectivePrice)}</Text>
-          {discounted && (
-            <Text style={styles.priceStrike}>{formatPrice(item.sellingPrice)}</Text>
-          )}
-        </View>
-
-        {!!item.description && (
-          <Text style={styles.rowDesc} numberOfLines={2}>
-            {item.description}
-          </Text>
-        )}
-      </View>
-
-      <View style={styles.rowMedia}>
+    <Pressable style={styles.card} onPress={onOpen}>
+      <View style={styles.cardMediaWrap}>
         <RemoteImage
           uri={item.image}
-          style={styles.rowImage}
+          style={styles.cardImage}
           icon="fast-food-outline"
           iconSize={30}
         />
-        {discounted && saving > 0 && (
-          <View style={styles.saveRibbon}>
-            <Text style={styles.saveRibbonText}>Save {formatPrice(saving)}</Text>
+        <View style={styles.cardTagStack}>
+          <View style={styles.cardVegTag}>
+            <View style={[styles.dietDotSmall, { backgroundColor: dietColor }]} />
+            <Text style={[styles.cardVegTagText, { color: dietColor }]}>
+              {isVeg ? 'Veg' : 'Non-veg'}
+            </Text>
           </View>
-        )}
-        <View style={styles.addSlot}>
-          <AddControl item={item} restaurant={restaurant} />
+          {discounted && saving > 0 ? (
+            <View style={styles.cardSaveTag}>
+              <Text style={styles.cardSaveTagText}>Save {formatPrice(saving)}</Text>
+            </View>
+          ) : badge ? (
+            <View style={styles.cardBadgeTag}>
+              <Text style={styles.cardBadgeTagText}>{formatBadge(badge)}</Text>
+            </View>
+          ) : null}
         </View>
       </View>
+
+      <View style={styles.cardBody}>
+        <Text style={styles.cardName} numberOfLines={2}>
+          {item.name}
+        </Text>
+        {!!item.description && (
+          <Text style={styles.cardDesc} numberOfLines={2}>
+            {item.description}
+          </Text>
+        )}
+        <View style={styles.cardPriceRow}>
+          <Text style={styles.cardPrice}>{formatPrice(item.effectivePrice)}</Text>
+          {discounted && (
+            <Text style={styles.cardPriceStrike}>{formatPrice(item.sellingPrice)}</Text>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.cardAddSlot}>
+        <AddControl item={item} restaurant={restaurant} />
+      </View>
     </Pressable>
+  );
+}
+
+/** One row of the two-column menu grid — pads a lone trailing item with a spacer. */
+function MenuGridRow({
+  items,
+  restaurant,
+  onOpenItem,
+}: {
+  items: MenuItem[];
+  restaurant: Restaurant;
+  onOpenItem?: (item: MenuItem) => void;
+}) {
+  const styles = useThemedStyles(makeStyles);
+  const open = onOpenItem ?? ((item: MenuItem) => router.push(`/item/${item._id}`));
+  return (
+    <View style={styles.gridRow}>
+      {items.map((item) => (
+        <MenuItemCard
+          key={item._id}
+          item={item}
+          restaurant={restaurant}
+          onOpen={() => open(item)}
+        />
+      ))}
+      {items.length === 1 && <View style={styles.gridSpacer} />}
+    </View>
   );
 }
 
@@ -902,16 +934,15 @@ function SearchOverlay({
       )}
       {status === 'done' && results.length > 0 && (
         <FlatList
-          data={results}
-          keyExtractor={(i) => i._id}
+          data={chunkPairs(results)}
+          keyExtractor={(row) => row.map((i) => i._id).join('|')}
           contentContainerStyle={styles.overlayList}
           keyboardShouldPersistTaps="handled"
-          ItemSeparatorComponent={() => <View style={styles.divider} />}
-          renderItem={({ item }) => (
-            <MenuItemRow
-              item={item}
+          renderItem={({ item: row }) => (
+            <MenuGridRow
+              items={row}
               restaurant={restaurant}
-              onOpen={() => {
+              onOpenItem={(item) => {
                 onClose();
                 router.push(`/item/${item._id}`);
               }}
@@ -1012,7 +1043,7 @@ export default function RestaurantDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const listRef = useRef<SectionList<MenuItem, { key: string; meta: MenuSection }>>(null);
+  const listRef = useRef<SectionList<MenuItem[], { key: string; meta: MenuSection }>>(null);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -1038,7 +1069,7 @@ export default function RestaurantDetailScreen() {
       sections.map((s) => ({
         key: s.id,
         meta: s,
-        data: s.expanded ? s.items : [],
+        data: s.expanded ? chunkPairs(s.items) : [],
       })),
     [sections],
   );
@@ -1133,7 +1164,7 @@ export default function RestaurantDetailScreen() {
       <SectionList
         ref={listRef}
         sections={listData}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(row) => row.map((i) => i._id).join('|')}
         stickySectionHeadersEnabled
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -1186,14 +1217,7 @@ export default function RestaurantDetailScreen() {
             onRetry={() => retrySection(section.meta.id)}
           />
         )}
-        ItemSeparatorComponent={() => <View style={styles.divider} />}
-        renderItem={({ item }) => (
-          <MenuItemRow
-            item={item}
-            restaurant={restaurant}
-            onOpen={() => router.push(`/item/${item._id}`)}
-          />
-        )}
+        renderItem={({ item: row }) => <MenuGridRow items={row} restaurant={restaurant} />}
       />
     );
   }
@@ -1252,9 +1276,6 @@ const makeStyles = (t: AccentTheme) =>
   screen: { flex: 1, backgroundColor: Colors.foodBg },
   flex: { flex: 1 },
   listContent: { paddingBottom: 140 },
-  // Full-width, not inset: the list's own background is the page canvas, so an
-  // inset hairline let two 16px slivers of canvas show through between rows.
-  divider: { height: 1, backgroundColor: Colors.foodBorder },
 
   // ── Hero ──
   hero: { width: SCREEN_WIDTH, height: HERO_HEIGHT, backgroundColor: Colors.foodBgSecondary },
@@ -1467,52 +1488,79 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: Colors.foodSurface,
   },
 
-  // ── Menu item row ──
-  row: {
+  // ── Menu grid (2-column cards) ──
+  gridRow: {
     flexDirection: 'row',
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.base,
-    paddingVertical: Spacing.base,
-    backgroundColor: Colors.foodSurface,
+    gap: GRID_GAP,
+    paddingHorizontal: GRID_HPAD,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+    backgroundColor: Colors.foodBg,
   },
-  rowText: { flex: 1, gap: 4 },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
-  badge: {
-    fontSize: 10,
+  gridSpacer: { width: CARD_WIDTH },
+  card: {
+    width: CARD_WIDTH,
+    backgroundColor: Colors.foodSurface,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
+    marginBottom: Spacing.md,
+    ...Elevation.card,
+  },
+  cardMediaWrap: {
+    width: '100%',
+    height: 128,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    overflow: 'hidden',
+    backgroundColor: Colors.foodBgSecondary,
+  },
+  cardImage: { width: '100%', height: '100%' },
+  cardTagStack: { position: 'absolute', top: 8, left: 8, gap: 4, alignItems: 'flex-start' },
+  cardVegTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.foodSurface,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+    ...Elevation.card,
+  },
+  dietDotSmall: { width: 6, height: 6, borderRadius: 3 },
+  cardVegTagText: { fontSize: 9.5, fontWeight: '800' },
+  cardSaveTag: {
+    backgroundColor: Colors.foodVegGreen,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  cardSaveTagText: { fontSize: 9.5, fontWeight: '800', color: Colors.white },
+  cardBadgeTag: {
+    backgroundColor: Colors.foodSurface,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+    ...Elevation.card,
+  },
+  cardBadgeTagText: {
+    fontSize: 9.5,
     fontWeight: '800',
     color: Colors.foodTextSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
-  badgeStrong: { color: t.accentDark },
-  rowName: { fontSize: 15, fontWeight: '700', color: Colors.foodText, letterSpacing: -0.2 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  price: { fontSize: 14.5, fontWeight: '800', color: Colors.foodText },
-  priceStrike: {
-    fontSize: 12.5,
+  cardBody: { padding: Spacing.md, paddingBottom: Spacing.lg + 6, gap: 3 },
+  cardName: { fontSize: 14, fontWeight: '700', color: Colors.foodText, letterSpacing: -0.2 },
+  cardDesc: { fontSize: 11.5, color: Colors.foodTextMuted, lineHeight: 15 },
+  cardPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  cardPrice: { fontSize: 14, fontWeight: '800', color: Colors.foodText },
+  cardPriceStrike: {
+    fontSize: 11.5,
     color: Colors.foodTextMuted,
     textDecorationLine: 'line-through',
   },
-  rowDesc: { fontSize: 12, color: Colors.foodTextMuted, lineHeight: 17, marginTop: 2 },
-
-  rowMedia: { width: 116, alignItems: 'center' },
-  rowImage: {
-    width: 116,
-    height: 116,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.foodBgSecondary,
-  },
-  saveRibbon: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: Colors.foodVegGreen,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-  },
-  saveRibbonText: { fontSize: 9.5, fontWeight: '800', color: Colors.white },
-  addSlot: { position: 'absolute', bottom: -14, alignSelf: 'center' },
+  cardAddSlot: { position: 'absolute', left: 0, right: 0, bottom: -14, alignItems: 'center' },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
