@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -129,6 +130,7 @@ export default function ScanScreen() {
   if (isScanning) {
     return (
       <View style={styles.cameraContainer}>
+        <StatusBar style="light" />
         <CameraView
           style={StyleSheet.absoluteFill}
           onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
@@ -147,6 +149,7 @@ export default function ScanScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <StatusBar style="dark" />
       <View style={styles.container}>
         {/* Header */}
         <Text style={styles.title}>Scan QR Code</Text>

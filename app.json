@@ -80,7 +80,7 @@
           "defaultChannel": "default"
         }
       ],
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native/app.plugin.js"
     ],
     "extra": {
       "apiPort": 3000,

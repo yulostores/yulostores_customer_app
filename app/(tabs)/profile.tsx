@@ -14,6 +14,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, type Href } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -208,6 +209,7 @@ export default function ProfileScreen() {
   if (isLoading && !profile) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar style="dark" />
         <Text style={styles.title}>Profile</Text>
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={accent} />
@@ -218,6 +220,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar style="dark" />
       <Text style={styles.title}>Profile</Text>
 
       <ScrollView

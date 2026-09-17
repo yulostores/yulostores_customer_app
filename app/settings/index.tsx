@@ -34,10 +34,13 @@ import {
 } from '../../src/hooks/useAccentTheme';
 import { usePreferredLanguage } from '../../src/hooks/usePreferredLanguage';
 
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
 interface SettingsRow {
   key: string;
   label: string;
   route: Href;
+  icon: IoniconName;
   /** Trailing hint, e.g. the current language. */
   meta?: string | null;
 }
@@ -45,6 +48,15 @@ interface SettingsRow {
 function goBack() {
   if (router.canGoBack()) router.back();
   else router.navigate('/(tabs)/profile');
+}
+
+/** Legal rows are backend-defined, so the icon is a best-effort guess from the
+ *  doc's id/title — falls back to a plain document icon for anything unrecognized. */
+function iconForLegalDoc(id: string, title: string): IoniconName {
+  const key = `${id} ${title}`.toLowerCase();
+  if (key.includes('privacy')) return 'shield-checkmark-outline';
+  if (key.includes('refund') || key.includes('cancellation')) return 'cash-outline';
+  return 'document-text-outline';
 }
 
 function Row({ row }: { row: SettingsRow }) {
@@ -55,10 +67,11 @@ function Row({ row }: { row: SettingsRow }) {
       accessibilityRole="button"
       accessibilityLabel={row.label}
     >
+      <Ionicons name={row.icon} size={22} color={Colors.foodText} />
       <Text style={styles.rowLabel}>{row.label}</Text>
       <View style={styles.rowRight}>
         {row.meta ? <Text style={styles.rowMeta}>{row.meta}</Text> : null}
-        <Ionicons name="chevron-forward" size={20} color={Colors.foodText} />
+        <Ionicons name="chevron-forward" size={18} color={Colors.foodTextMuted} />
       </View>
     </Pressable>
   );
@@ -118,6 +131,7 @@ export default function SettingsScreen() {
     {
       key: 'language',
       label: 'Language',
+      icon: 'language-outline',
       route: '/settings/language',
       meta: currentLanguage?.endonym ?? null,
     },
@@ -127,6 +141,7 @@ export default function SettingsScreen() {
     rows.push({
       key: 'payment-methods',
       label: 'Payment methods',
+      icon: 'card-outline',
       route: '/settings/payment-methods',
     });
   }
@@ -135,6 +150,7 @@ export default function SettingsScreen() {
     rows.push({
       key: `legal-${doc.id}`,
       label: doc.title,
+      icon: iconForLegalDoc(doc.id, doc.title),
       route: { pathname: '/settings/legal/[doc]', params: { doc: doc.id } },
     });
   }
@@ -142,6 +158,7 @@ export default function SettingsScreen() {
   rows.push({
     key: 'about',
     label: `About ${config.about.appName}`,
+    icon: 'information-circle-outline',
     route: '/settings/about',
   });
 
@@ -241,19 +258,20 @@ const makeStyles = (t: AccentTheme) =>
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 60,
+    gap: Spacing.base,
+    minHeight: 58,
     backgroundColor: Colors.foodSurface,
     borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.base,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
     ...Shadows.sm,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
   },
   rowPressed: { backgroundColor: Colors.foodBgSecondary },
-  rowLabel: { flex: 1, fontSize: 16, fontWeight: '600', color: Colors.foodText },
+  rowLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.foodText },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  rowMeta: { fontSize: 13.5, color: Colors.foodTextMuted },
+  rowMeta: { fontSize: 13, color: Colors.foodTextMuted },
   });
 
 const styles = makeStyles(ORANGE_ACCENT);

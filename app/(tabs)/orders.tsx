@@ -15,6 +15,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -38,6 +39,7 @@ import {
   useThemedStyles,
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
+import { useCanGoBack } from '../../src/hooks/useCanGoBack';
 import { useOrders } from '../../src/hooks/useOrders';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
@@ -259,6 +261,9 @@ export default function OrdersScreen() {
   const { accent } = useAccentTheme();
   const { signOut } = useAuth();
   const { syncFromServer } = useCart();
+  // Order history is a root tab as well as a push target (Profile → "Order
+  // history"), so the back arrow only shows when something is stacked below.
+  const canGoBack = useCanGoBack();
   const {
     orders,
     total,
@@ -346,9 +351,14 @@ export default function OrdersScreen() {
 
   const header = (
     <View style={styles.header}>
-      <Pressable onPress={goBack} hitSlop={10} style={styles.backBtn}>
-        <Ionicons name="arrow-back" size={22} color={Colors.foodText} />
-      </Pressable>
+      {canGoBack ? (
+        <Pressable onPress={goBack} hitSlop={10} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={22} color={Colors.foodText} />
+        </Pressable>
+      ) : (
+        // Keeps the title optically centred between the two 36dp side slots.
+        <View style={styles.backBtn} />
+      )}
       <Text style={styles.headerTitle}>Order history</Text>
       <View style={styles.backBtn} />
     </View>
@@ -358,6 +368,7 @@ export default function OrdersScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={accent} />
@@ -370,6 +381,7 @@ export default function OrdersScreen() {
   if (notSignedIn) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar style="dark" />
         {header}
         <CenteredNotice
           icon="lock-closed-outline"
@@ -386,6 +398,7 @@ export default function OrdersScreen() {
   if (error && orders.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar style="dark" />
         {header}
         <CenteredNotice
           icon="alert-circle-outline"
@@ -400,6 +413,7 @@ export default function OrdersScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar style="dark" />
       {header}
 
       <FlatList

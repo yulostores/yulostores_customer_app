@@ -12,6 +12,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import {
   Pressable,
   ScrollView,
@@ -101,6 +102,7 @@ export default function HelpAndSupportScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar style="dark" />
       <View style={styles.header}>
         <Pressable onPress={goBack} hitSlop={10} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={Colors.foodText} />

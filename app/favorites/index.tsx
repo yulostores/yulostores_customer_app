@@ -11,6 +11,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
   Alert,
@@ -168,6 +169,7 @@ export default function FavoritesScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={accent} />
@@ -179,6 +181,7 @@ export default function FavoritesScreen() {
   if (notSignedIn) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar style="dark" />
         {header}
         <CenteredNotice
           icon="lock-closed-outline"
@@ -194,6 +197,7 @@ export default function FavoritesScreen() {
   if (error && restaurants.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar style="dark" />
         {header}
         <CenteredNotice
           icon="alert-circle-outline"
@@ -208,6 +212,7 @@ export default function FavoritesScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar style="dark" />
       {header}
       <FlatList
         data={restaurants}

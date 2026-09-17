@@ -157,7 +157,21 @@ function AppShell() {
         </Animated.View>
       )}
 
-      <StatusBar style="light" />
+      {/*
+        Only mounted for the splash screen itself (orange `splashBg` — white
+        icons are correct there). It used to be unconditional and permanently
+        mounted, which was the actual bug behind the "status bar icons
+        invisible" report: expo-status-bar merges multiple mounted <StatusBar>
+        instances "in the order they were mounted", and because this one sat
+        as the LAST sibling here — after <RootNavigator /> and everything
+        nested inside it, including every screen's own <StatusBar> — its
+        "light" effect fired after (and so beat) whatever style the visible
+        screen had set on the very first commit. Per-screen overrides looked
+        right in code and still lost. Unmounting this once the splash is gone
+        removes it from that merge entirely, so the visible screen's own
+        <StatusBar> is the only one left standing.
+      */}
+      {!splashDone && <StatusBar style="light" />}
     </>
   );
 }

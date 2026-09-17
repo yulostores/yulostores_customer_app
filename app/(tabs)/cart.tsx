@@ -37,6 +37,7 @@ import {
   useThemedStyles,
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
+import { useCanGoBack } from '../../src/hooks/useCanGoBack';
 import { useCartScreen } from '../../src/hooks/useCartScreen';
 import { logger } from '../../src/lib/logger';
 import { clearCart, type CartBill, type CartLine, type FoodType } from '../../src/services/cart';
@@ -350,6 +351,9 @@ export default function CartScreen() {
   const styles = useThemedStyles(makeStyles);
   const theme = useAccentTheme();
   const insets = useSafeAreaInsets();
+  // The cart is a root tab as well as a push target, so the back arrow only
+  // earns its place when something is actually stacked underneath.
+  const canGoBack = useCanGoBack();
   const { signOut, isGuest } = useAuth();
   const {
     snapshot,
@@ -459,7 +463,7 @@ export default function CartScreen() {
     body = (
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
+        contentContainerStyle={styles.scrollContent}
       >
         {!!cart.restaurant && (
           <Pressable
@@ -518,9 +522,11 @@ export default function CartScreen() {
 
       <View style={[styles.header, { justifyContent: 'space-between' }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-          <Pressable onPress={goBack} hitSlop={8} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={Colors.foodText} />
-          </Pressable>
+          {canGoBack && (
+            <Pressable onPress={goBack} hitSlop={8} style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={24} color={Colors.foodText} />
+            </Pressable>
+          )}
           <Text style={styles.title}>Your cart</Text>
         </View>
         {hasItems && (
@@ -533,7 +539,7 @@ export default function CartScreen() {
       {body}
 
       {hasItems && bill && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
+        <View style={styles.footer}>
           <Pressable
             style={[
               styles.cta,
@@ -561,6 +567,10 @@ export default function CartScreen() {
 const makeStyles = (t: AccentTheme) =>
   StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.foodBg },
+
+  // Clears the absolutely-positioned checkout footer; the tab bar below the
+  // screen already accounts for the device's bottom inset.
+  scrollContent: { paddingBottom: 120 },
 
   header: {
     flexDirection: 'row',
@@ -712,11 +722,16 @@ const makeStyles = (t: AccentTheme) =>
   actionErrorText: { flex: 1, fontSize: 12.5, fontWeight: '600', color: Colors.authDanger },
 
   // Footer CTA
+  // The cart is a tab screen, so its content box already stops at the top of
+  // the tab bar — which is what carries the device's bottom safe-area inset
+  // (see app/(tabs)/_layout.tsx). Padding for that inset again here would leave
+  // a dead strip under the checkout button.
   footer: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
+    paddingBottom: Spacing.md,
     backgroundColor: Colors.foodSurface,
     borderTopWidth: 1,
     borderTopColor: Colors.foodBorder,

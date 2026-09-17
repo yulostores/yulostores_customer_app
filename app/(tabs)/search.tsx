@@ -668,20 +668,24 @@ const makeStyles = (t: AccentTheme) =>
     alignItems: 'center',
     marginBottom: Spacing.md,
   },
-  // Placeholder shape (RemoteImage's `style`) — a dashed rounded square, only seen
-  // when the backend had no representative photo for the term.
+  // Placeholder shape (RemoteImage's `style`) — a dashed circle, same footprint and
+  // radius as the loaded photo so a missing image doesn't break the row's uniform look.
   tileImage: {
     width: TILE_SIZE,
     height: TILE_SIZE,
-    borderRadius: BorderRadius.lg,
+    borderRadius: TILE_SIZE / 2,
     borderWidth: 1,
     borderColor: Colors.foodBorder,
   },
-  // Loaded-photo shape (RemoteImage's `imageStyle`) — masked to a circle, no border.
+  // Loaded-photo shape (RemoteImage's `imageStyle`) — masked to a circle with a hairline
+  // ring, so every photo reads as the same size/radius/border regardless of source image.
   tileImageCircle: {
     width: TILE_SIZE,
     height: TILE_SIZE,
     borderRadius: TILE_SIZE / 2,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
+    backgroundColor: Colors.foodBgSecondary,
   },
   tileLabel: {
     marginTop: Spacing.xs,

@@ -10,6 +10,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
   FlatList,
@@ -167,6 +168,7 @@ export default function SupportRequestsScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={accent} />
@@ -178,6 +180,7 @@ export default function SupportRequestsScreen() {
   if (notSignedIn) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar style="dark" />
         {header}
         <CenteredNotice
           icon="lock-closed-outline"
@@ -193,6 +196,7 @@ export default function SupportRequestsScreen() {
   if (error && tickets.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <StatusBar style="dark" />
         {header}
         <CenteredNotice
           icon="alert-circle-outline"
@@ -207,6 +211,7 @@ export default function SupportRequestsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar style="dark" />
       {header}
       <FlatList
         data={tickets}
