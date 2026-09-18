@@ -3,8 +3,8 @@
  *
  * Endpoint:
  *   GET /api/orders/:id/tracking
- *   → { orderId, restaurantId, status, assignmentStatus, etaMinutes, timeline,
- *        restaurant, deliveryPartner, deliveryAddress, orderItems, paymentMethod,
+ *   → { orderId, restaurantId, status, assignmentStatus, etaMinutes, etaSource, route,
+ *        timeline, restaurant, deliveryPartner, deliveryAddress, orderItems, paymentMethod,
  *        paymentStatus, totalPaid }
  *
  * This is a customer-only endpoint (requires `customer` role token).
@@ -35,6 +35,29 @@ export interface TimelineEntry {
 export interface PartnerLocation {
   lat: number;
   lng: number;
+  /**
+   * Compass bearing in degrees (0-360), or null when the device had none — a stationary GPS fix
+   * reports no heading. The map rotates the rider marker to match, and falls back to the
+   * direction between the last two fixes when this is null.
+   */
+  heading?: number | null;
+  /** Metres per second, for display smoothing only. ETAs come from road routing, never from this. */
+  speed?: number | null;
+}
+
+/** Where the ETA came from, so the UI can hedge its wording rather than overstate a guess. */
+export type EtaSource = 'here' | 'estimate';
+
+export interface TrackingRoute {
+  /**
+   * HERE **flexible polyline** for the leg currently in progress — decode with
+   * src/lib/flexiblePolyline.ts, NOT with a Google polyline decoder; the formats differ.
+   * Null when the backend could not route, in which case the map draws no line at all rather
+   * than a straight one between the markers.
+   */
+  polyline: string | null;
+  /** Road distance for that leg, in km. */
+  distanceKm: number;
 }
 
 export interface DeliveryPartnerInfo {
@@ -100,8 +123,17 @@ export interface TrackingData {
   status: string;
   /** Delivery-assignment sub-status — finer-grained than order.status. */
   assignmentStatus: OrderAssignmentStatus;
-  /** Minutes until arrival, only non-null when partner is en route to customer. */
+  /**
+   * Minutes until arrival. Populated for every pre-delivery phase now, not just once the partner
+   * is carrying the food: before a rider is assigned it is remaining prep plus the
+   * restaurant-to-customer drive, and while the rider heads to the restaurant it covers both
+   * legs. Null only when an address or restaurant has no coordinates to route between.
+   */
   etaMinutes: number | null;
+  /** 'here' for a traffic-aware road ETA, 'estimate' for the straight-line fallback. */
+  etaSource: EtaSource | null;
+  /** Road route for the leg in progress, for the map to draw. Null when routing was unavailable. */
+  route: TrackingRoute | null;
   timeline: TimelineEntry[];
   restaurant: TrackingRestaurant;
   /** Null until a partner is assigned. */
@@ -121,6 +153,8 @@ interface RawTrackingResponse {
   status: string;
   assignmentStatus: OrderAssignmentStatus;
   etaMinutes: number | null;
+  etaSource: EtaSource | null;
+  route: TrackingRoute | null;
   timeline: TimelineEntry[];
   restaurant: TrackingRestaurant;
   deliveryPartner: DeliveryPartnerInfo | null;

@@ -143,16 +143,18 @@ export default function NotificationPreferencesScreen() {
           </View>
           <Text style={styles.cardHint}>
             {pushEnabled
-              ? 'This device is set up for push notifications. Manage system-level access in '
-              : 'To enable notifications, go to '}
-            <Text
-              style={styles.link}
-              onPress={openSystemSettings}
-              accessibilityRole="link"
-            >
-              settings
-            </Text>
+              ? 'This device is set up for push notifications. Manage system-level access in device settings.'
+              : 'To enable notifications, allow them for this app in device settings.'}
           </Text>
+          <Pressable
+            style={({ pressed }) => [styles.settingsBtn, pressed && styles.settingsBtnPressed]}
+            onPress={openSystemSettings}
+            accessibilityRole="button"
+            accessibilityLabel="Open device settings"
+          >
+            <Ionicons name="settings-outline" size={16} color={accentDark} />
+            <Text style={styles.settingsBtnText}>Open settings</Text>
+          </Pressable>
         </View>
 
         {/* One card per category the account actually has. */}
@@ -283,7 +285,19 @@ const makeStyles = (t: AccentTheme) =>
     lineHeight: 19,
     marginTop: Spacing.sm,
   },
-  link: { color: t.accent, fontWeight: '700' },
+  settingsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: BorderRadius.full,
+    backgroundColor: t.accentLight,
+  },
+  settingsBtnPressed: { opacity: 0.7 },
+  settingsBtnText: { fontSize: 13.5, fontWeight: '700', color: t.accentDark },
 
   statusPill: {
     paddingHorizontal: 12,

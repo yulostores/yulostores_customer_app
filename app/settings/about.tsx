@@ -215,17 +215,6 @@ export default function AboutScreen() {
           </>
         )}
 
-        {/* Company */}
-        <Text style={styles.sectionLabel}>Company</Text>
-        <View style={styles.card}>
-          <View style={styles.companyBlock}>
-            <Text style={styles.companyName}>{about.legalName}</Text>
-            {about.addressLines.map((line, i) => (
-              <Text key={i} style={styles.companyLine}>{line}</Text>
-            ))}
-          </View>
-        </View>
-
         {about.copyright ? <Text style={styles.copyright}>{about.copyright}</Text> : null}
       </ScrollView>
     </SafeAreaView>
@@ -325,10 +314,6 @@ const makeStyles = (t: AccentTheme) =>
   actionText: { flex: 1, gap: 1 },
   actionLabel: { fontSize: 14.5, fontWeight: '600', color: Colors.foodText },
   actionValue: { fontSize: 12.5, color: Colors.foodTextMuted },
-
-  companyBlock: { padding: Spacing.base, gap: 3 },
-  companyName: { fontSize: 14, fontWeight: '700', color: Colors.foodText, marginBottom: 2 },
-  companyLine: { fontSize: 13, color: Colors.foodTextSecondary, lineHeight: 18 },
 
   copyright: {
     fontSize: 12,

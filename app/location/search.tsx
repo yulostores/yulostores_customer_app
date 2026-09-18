@@ -36,30 +36,31 @@ export default function LocationSearchScreen() {
   const [locating, setLocating] = useState(false);
   const [touched, setTouched] = useState(false);
 
-  const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A request-id guard replaces the AbortController the Nominatim version used: search now goes
+  // through the shared API client, which owns its own timeout, so a superseded keystroke is
+  // handled by ignoring its late answer rather than by cancelling it in flight.
+  const requestRef = useRef(0);
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    abortRef.current?.abort();
 
     const q = query.trim();
     if (q.length < 3) {
+      requestRef.current += 1;
       setResults([]);
       setSearching(false);
       return;
     }
 
+    const requestId = ++requestRef.current;
     setSearching(true);
     timerRef.current = setTimeout(async () => {
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      const found = await searchPlaces(q, { near, signal: ctrl.signal });
-      if (!ctrl.signal.aborted) {
-        setResults(found);
-        setSearching(false);
-        setTouched(true);
-      }
+      const found = await searchPlaces(q, { near });
+      if (requestRef.current !== requestId) return;
+      setResults(found);
+      setSearching(false);
+      setTouched(true);
     }, DEBOUNCE_MS);
 
     return () => {
@@ -171,7 +172,8 @@ export default function LocationSearchScreen() {
           </Text>
         )}
 
-        <Text style={styles.attribution}>Search by OpenStreetMap</Text>
+        {/* HERE's terms require attribution wherever its search results are displayed. */}
+        <Text style={styles.attribution}>Search powered by HERE</Text>
       </ScrollView>
     </SafeAreaView>
   );

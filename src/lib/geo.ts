@@ -12,6 +12,7 @@
 
 import * as Location from 'expo-location';
 import { LOCATION_FIX_TIMEOUT_MS, REVERSE_GEOCODE_TIMEOUT_MS } from '../constants/network';
+import { reverseGeocode as reverseGeocodeRemote } from '../services/geo';
 import { TimeoutError, withDeadline } from './http';
 import { logger } from './logger';
 import type { LatLng, ResolvedPlace } from '../types/address';
@@ -105,10 +106,40 @@ const dedupeJoin = (parts: Array<string | undefined | null>) => {
 };
 
 /**
- * Human-readable address for a coordinate, or `null` when the device geocoder
- * has nothing (offline, rural point, throttled).
+ * Human-readable address for a coordinate, or `null` when nothing resolves.
+ *
+ * Tries the backend's HERE-backed reverse geocoder first and falls back to the on-device one.
+ * The order matters: the device geocoder is free and works offline, but it is noticeably worse at
+ * Indian addresses — it routinely answers a precise pin with a bare pincode or a road two blocks
+ * away, which is what makes a drag-to-pin flow feel untrustworthy. HERE goes first for quality;
+ * the device stays as the safety net for when the backend or the network is unreachable.
+ *
+ * Using HERE here also keeps the customer's pin and the restaurant's pin on the same provider
+ * (the backend geocodes restaurants through HERE too), so delivery-radius maths compares like
+ * with like.
  */
 export async function reverseGeocode(coords: LatLng): Promise<ResolvedPlace | null> {
+  const remote = await reverseGeocodeRemote(coords);
+  if (remote) {
+    return {
+      title: remote.title,
+      subtitle: remote.subtitle,
+      street: remote.street,
+      district: remote.district,
+      city: remote.city,
+      region: remote.region,
+      pincode: remote.pincode,
+      country: remote.country,
+    };
+  }
+  return reverseGeocodeOnDevice(coords);
+}
+
+/**
+ * On-device reverse geocoding (Android Geocoder / iOS CLGeocoder). No API key and works offline,
+ * but see {@link reverseGeocode} for why it is the fallback rather than the primary.
+ */
+async function reverseGeocodeOnDevice(coords: LatLng): Promise<ResolvedPlace | null> {
   let hit: Location.LocationGeocodedAddress | undefined;
   try {
     [hit] = await withDeadline(
@@ -197,4 +228,32 @@ export function haversineKm(a: LatLng, b: LatLng): number {
     Math.sin(dLat / 2) ** 2 +
     Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h));
+}
+
+// ─── Bearing ───────────────────────────────────────────────────────────────
+
+const toDeg = (rad: number) => (rad * 180) / Math.PI;
+
+/**
+ * Initial compass bearing from `a` to `b`, in degrees clockwise from north (0-360).
+ *
+ * Rotates the rider marker on the tracking map so it points the way the rider is travelling — one
+ * of the small details that separates a live-feeling map from a dot that slides around. Used only
+ * when the device's own heading is unavailable: a stationary GPS fix reports no heading, but two
+ * consecutive pings still say which way the rider went.
+ *
+ * This is the forward azimuth of the great-circle path. Over the few hundred metres between two
+ * pings that is indistinguishable from a straight line, but the formula costs nothing extra and
+ * avoids the distortion a flat approximation picks up away from the equator.
+ */
+export function bearingBetween(a: LatLng, b: LatLng): number {
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const dLng = toRad(b.longitude - a.longitude);
+
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+
+  // atan2 returns -180..180; the modulo brings it into the 0..360 the map expects.
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }

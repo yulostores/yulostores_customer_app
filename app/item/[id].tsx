@@ -381,7 +381,7 @@ export default function ItemDetailScreen() {
         style={[styles.circleBtn, { top: headerBtnTop, left: Spacing.base }]}
         hitSlop={8}
       >
-        <Ionicons name="arrow-back" size={22} color={item ? Colors.white : Colors.foodText} />
+        <Ionicons name="arrow-back" size={22} color={Colors.foodText} />
       </Pressable>
 
       {isLoading ? (
@@ -523,7 +523,7 @@ const makeStyles = (t: AccentTheme) =>
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: t.accent,
+    backgroundColor: Colors.foodSurface,
     alignItems: 'center',
     justifyContent: 'center',
     ...Elevation.raised,

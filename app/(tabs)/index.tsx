@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CartBar from '../../src/components/CartBar';
+import { useTabBarInset } from '../../src/components/TabBar';
 import { FoodTypeMark } from '../../src/components/FoodTypeMark';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
@@ -420,18 +421,17 @@ function GuestBanner() {
 }
 
 /**
- * Promotional banner — the live featured offer from the feed when one is
- * running, falling back to the bundled artwork when nothing is featured or the
- * offer has no image of its own.
+ * Promotional banner — only renders when the super admin has an active
+ * featured offer in the feed. No hardcoded fallback artwork.
  */
 function PromoBanner({ banner }: { banner: HomeBanner | null }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [banner?.image]);
 
-  const remote = banner?.image && !failed ? banner.image : null;
+  if (!banner?.image || failed) return null;
 
   return (
-    <Pressable 
+    <Pressable
       style={styles.bannerWrap}
       onPress={() => {
         if (banner?.restaurantId) {
@@ -439,31 +439,21 @@ function PromoBanner({ banner }: { banner: HomeBanner | null }) {
         }
       }}
     >
-      {remote ? (
-        <Image
-          source={{ uri: remote }}
-          style={styles.bannerImage}
-          resizeMode="cover"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <Image
-          source={require('../../assets/Images/Banner.png')}
-          style={styles.bannerImage}
-          resizeMode="cover"
-        />
-      )}
+      <Image
+        source={{ uri: banner.image }}
+        style={styles.bannerImage}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+      />
 
-      {banner && (
-        <View style={styles.bannerOverlay}>
-          <Text style={styles.bannerOffer} numberOfLines={1}>
-            {banner.offerName}
-          </Text>
-          {!!banner.code && (
-            <Text style={styles.bannerCode}>Use code {banner.code}</Text>
-          )}
-        </View>
-      )}
+      <View style={styles.bannerOverlay}>
+        <Text style={styles.bannerOffer} numberOfLines={1}>
+          {banner.offerName}
+        </Text>
+        {!!banner.code && (
+          <Text style={styles.bannerCode}>Use code {banner.code}</Text>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -898,6 +888,12 @@ function StatusView({
 
 // ─── Main Screen ───────────────────────────────────────────────────────────
 
+/**
+ * Room the sticky cart needs above the tab bar — its 80dp pill plus the gap it
+ * leaves under itself. Mirrors `BAR_HEIGHT` in `CartBar`.
+ */
+const CART_BAR_ALLOWANCE = 92;
+
 export default function HomeScreen() {
   const styles = useThemedStyles(makeStyles);
   const t = useAccentTheme();
@@ -915,6 +911,7 @@ export default function HomeScreen() {
   } = useHomeData();
 
   const { itemCount } = useCart();
+  const tabBarInset = useTabBarInset();
   const { isGuest } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -1057,7 +1054,9 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.scrollContent,
-            itemCount > 0 && styles.scrollContentWithCart,
+            // The tab bar floats over the page, so the feed has to end above it
+            // — and above the sticky cart too when that is showing.
+            { paddingBottom: tabBarInset + (itemCount > 0 ? CART_BAR_ALLOWANCE : 0) },
           ]}
           refreshControl={
             <RefreshControl
@@ -1093,7 +1092,7 @@ export default function HomeScreen() {
 
         {/* Floating sticky cart — sits above the tab bar, renders itself only
             once the cart has something in it. */}
-        <View style={styles.cartDock} pointerEvents="box-none">
+        <View style={[styles.cartDock, { bottom: tabBarInset }]} pointerEvents="box-none">
           <CartBar />
         </View>
       </View>
@@ -1127,17 +1126,13 @@ const makeStyles = (t: AccentTheme) =>
     paddingBottom: Spacing.md,
   },
   scrollContent: {
-    paddingBottom: 16,
-  },
-  // Extra room so the last card clears the floating CartBar when it's showing.
-  scrollContentWithCart: {
-    paddingBottom: 108,
+    // paddingBottom is applied at render time — it depends on the floating tab
+    // bar's height and on whether the sticky cart is up.
   },
   cartDock: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 12,
   },
 
   // ── Location header ──
@@ -1454,8 +1449,6 @@ const makeStyles = (t: AccentTheme) =>
     marginHorizontal: Spacing.base,
     marginTop: Spacing.sm,
     borderRadius: BorderRadius.md,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.foodVegGreen,
     paddingHorizontal: Spacing.md,
     paddingVertical: 8,
     marginBottom: 0,

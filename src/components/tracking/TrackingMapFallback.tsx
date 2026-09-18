@@ -14,10 +14,19 @@ import { Colors } from '../../constants/Colors';
 import type { PartnerLocation } from '../../services/tracking';
 
 export interface TrackingMapProps {
+  /** Live rider position. `heading` is null when the device reported none. */
   partnerLocation: PartnerLocation | null;
   /** GeoJSON order: [lng, lat]. */
   destination: [number, number] | null | undefined;
   restaurant: { lat: number; lng: number } | null;
+  /**
+   * HERE flexible polyline for the leg currently in progress, or null when the backend could not
+   * route. Null draws no line at all rather than a straight one between the markers — a fake
+   * path is worse than no path, because customers read it as the road the rider is actually on.
+   */
+  routePolyline?: string | null;
+  /** Drives which leg is emphasised and how the rider marker is coloured. */
+  assignmentStatus?: string;
 }
 
 export default function TrackingMapFallback({ message }: { message: string }) {

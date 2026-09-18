@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTabBarInset } from '../../src/components/TabBar';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import {
@@ -74,6 +75,7 @@ function resolveScan(raw: string): ScanTarget {
 export default function ScanScreen() {
   const styles = useThemedStyles(makeStyles);
   const { accent } = useAccentTheme();
+  const tabBarInset = useTabBarInset();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
@@ -177,8 +179,9 @@ export default function ScanScreen() {
           </Pressable>
         </View>
 
-        {/* Info cards */}
-        <View style={styles.infoRow}>
+        {/* Info cards — the last thing on the page, so they carry the clearance
+            for the floating tab bar. */}
+        <View style={[styles.infoRow, { paddingBottom: tabBarInset }]}>
           <View style={styles.infoCard}>
             <Ionicons name="flash-outline" size={22} color={accent} />
             <Text style={styles.infoTitle}>Quick Order</Text>
@@ -286,7 +289,6 @@ const makeStyles = (t: AccentTheme) =>
   infoRow: {
     flexDirection: 'row',
     gap: Spacing.md,
-    paddingBottom: 24,
   },
   infoCard: {
     flex: 1,

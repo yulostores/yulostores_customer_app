@@ -16,12 +16,20 @@ push changes to it afterwards **without** rebuilding or re-sending anything.
 | File | Role |
 |---|---|
 | [`app.json`](../app.json) | Declarative native config. `runtimeVersion.policy = appVersion`, `updates` block, `version`. |
-| [`app.config.js`](../app.config.js) | Thin dynamic layer over `app.json`. Injects `extra.apiUrl` (and optionally the Google Maps key) from env vars at build/update time. Locally the env vars are unset, so dev keeps auto-detecting the LAN dev server — unchanged. |
-| [`eas.json`](../eas.json) | Build + update profiles. `preview` / `production` set `EXPO_PUBLIC_API_URL` to the DigitalOcean URL and build an APK for internal distribution. |
+| [`app.config.js`](../app.config.js) | Thin dynamic layer over `app.json`. Injects `extra.apiUrl` and `extra.hereApiKey` from env vars at build/update time. Locally the env vars are unset, so dev keeps auto-detecting the LAN dev server — unchanged. |
+| [`eas.json`](../eas.json) | Build + update profiles. `preview` / `production` set `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_HERE_API_KEY`, and build an APK (preview) / AAB (production). |
 | [`src/constants/Api.ts`](../src/constants/Api.ts) | Resolves the API base URL. `extra.apiUrl` wins when set; otherwise LAN auto-detect. `src/lib/socket.ts` reuses the same base URL, so real-time order tracking follows automatically. |
 
-`EXPO_PUBLIC_API_URL` is read on Expo's servers when a build **or** an `eas update` is
-produced, so the production URL is baked into the binary and into every OTA bundle.
+Both `EXPO_PUBLIC_*` values are read on Expo's servers when a build is produced, so they are
+baked into the binary.
+
+**`eas update` is the trap.** It does *not* pick up a build profile's `env` block on its own — it
+reads your local `.env` instead. An OTA published without `--environment <profile>` therefore
+ships whatever this machine happens to have, and anything missing arrives as `null`: a null API
+URL breaks every request, and a null HERE key means the map renders no tiles at all. This has
+bitten the project before, which is why the `ota:preview` / `ota:production` scripts in
+`package.json` now pass `--environment` explicitly. Publish through those scripts rather than by
+hand.
 
 ---
 
@@ -117,7 +125,8 @@ DigitalOcean App Platform env vars when ready.
 |---|---|---|
 | OTP | `SMS_PROVIDER=bypass` | **Any** 6-digit code signs in as the entered phone number. No SMS is sent. Fine for testing. |
 | Payments | no `RAZORPAY_*` keys | Payments fall back to simulated / marked-paid. |
-| Google Maps (Android) | placeholder key in `app.json` | Map views render blank. Add a real key to the `env` block of the `preview`/`production` profiles in `eas.json` as `EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY` — `app.config.js` already reads it. The build still succeeds without it. |
+| HERE map tiles | `EXPO_PUBLIC_HERE_API_KEY` set in `eas.json` + `.env` | Renders the tiles under both maps. Without it the map is blank. This key is embedded in the JS bundle by design — a client map key has to be, so it is secured by the usage restrictions on the HERE portal, not by secrecy. |
+| HERE routing / search | backend `HERE_API_KEY` unset | Tracking ETAs fall back to straight-line estimates and draw no route line; address search returns nothing. This is a **separate, server-side key** set in the backend's `.env`, and it should be IP-restricted rather than shared with the app's key. |
 | Crash reporting | `sentryDsn` is `null` | `reportError` is a no-op seam; no crashes are collected. |
 
 Not affected by deployment: **CORS / `ALLOWED_ORIGINS`** (the native app sends no `Origin`

@@ -36,7 +36,24 @@ export const HERE_API_KEY: string = typeof extra.hereApiKey === 'string' ? extra
  * later — it's a single query param, not a different integration.
  */
 function hereTileUrlTemplate(): string {
-  return `https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png8?style=explore.day&apiKey=${HERE_API_KEY}`;
+  const params = new URLSearchParams({
+    style: 'explore.day',
+    // 512px images for a tile whose geographic extent is unchanged — the standard "@2x" retina
+    // pattern. The source below still declares `tileSize: 256`, because that describes the tile's
+    // extent in the web-Mercator grid, not the pixel count of the image; MapLibre downsamples the
+    // larger image into the same space, which is what makes the map crisp instead of soft on the
+    // 2x and 3x screens every modern phone has.
+    size: '512',
+    // Label and icon scale. HERE's default (100) is sized for a 256px tile, so a 512px tile needs
+    // 200 to keep text the same physical size rather than half of it. 400 is available if labels
+    // still read too small on a large device.
+    ppi: '200',
+    apiKey: HERE_API_KEY,
+  });
+  // `png` rather than `png8`: the 8-bit variant is limited to a 256-colour palette, which bands
+  // visibly across the large flat landscape fills this style uses and muddies the boundary
+  // between the map and the orange route line drawn over it.
+  return `https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png?${params.toString()}`;
 }
 
 /**

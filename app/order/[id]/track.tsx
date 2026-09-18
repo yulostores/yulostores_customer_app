@@ -433,6 +433,16 @@ export default function TrackingScreen() {
   const isDelivered = tracking.status === 'delivered';
   const isCancelled = tracking.status === 'cancelled';
 
+  // The backend returns an ETA for every pre-delivery phase now, not only once the rider is
+  // carrying the food, so the customer sees a number from the moment they pay — which is what
+  // every mature delivery app does and what this screen used to withhold.
+  const showEta = !isDelivered && !isCancelled && tracking.etaMinutes != null;
+
+  // A straight-line fallback estimate is a genuinely worse number than a traffic-aware routed
+  // one, so it is worded as the approximation it is rather than presented with the same
+  // confidence. See `etaSource` in src/services/tracking.ts.
+  const etaPrefix = tracking.etaSource === 'here' ? 'Arriving in' : 'Arriving in about';
+
   const stages = ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] as TrackingStage[];
   const currentStageIndex = stages.indexOf(tracking.status as TrackingStage);
 
@@ -446,6 +456,8 @@ export default function TrackingScreen() {
           partnerLocation={partnerLocation}
           destination={tracking.deliveryAddress?.coordinates ?? null}
           restaurant={tracking.restaurant.coordinates}
+          routePolyline={tracking.route?.polyline ?? null}
+          assignmentStatus={tracking.assignmentStatus}
         />
 
         {/* Back button */}
@@ -476,10 +488,10 @@ export default function TrackingScreen() {
               <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
             </View>
 
-            {/* ETA — only shown when on the way with a fresh estimate */}
-            {isOnTheWay && tracking.etaMinutes != null && (
+            {/* ETA — shown through every phase of the order, not only after pickup */}
+            {showEta && (
               <Text style={styles.etaLabel}>
-                Arriving in{' '}
+                {etaPrefix}{' '}
                 <Text style={styles.etaValue}>{tracking.etaMinutes} min{tracking.etaMinutes !== 1 ? 's' : ''}</Text>
               </Text>
             )}
@@ -494,7 +506,9 @@ export default function TrackingScreen() {
           {isDelivered && <Text style={styles.headingText}>Order delivered 🎉</Text>}
           {isCancelled && <Text style={[styles.headingText, { color: Colors.danger }]}>Order cancelled</Text>}
 
-          {/* ETA countdown (large) */}
+          {/* ETA countdown (large) — reserved for the leg where the rider is actually carrying
+              the food, so the big number keeps meaning "almost there" rather than competing with
+              the softer earlier estimates now shown in the pill row above. */}
           {isOnTheWay && tracking.etaMinutes != null && (
             <Text style={styles.etaCountdown}>{tracking.etaMinutes} mins</Text>
           )}

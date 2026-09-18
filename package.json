@@ -41,8 +41,8 @@
     "web": "expo start --web",
     "build:preview": "eas build --profile preview --platform android",
     "build:production": "eas build --profile production --platform android",
-    "ota:preview": "eas update --channel preview --message",
-    "ota:production": "eas update --channel production --message"
+    "ota:preview": "eas update --channel preview --environment preview --message",
+    "ota:production": "eas update --channel production --environment production --message"
   },
   "private": true
 }

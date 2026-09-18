@@ -7,10 +7,10 @@
  *     - `order_status_updated`    → status, etaMinutes, timeline update
  *     - `delivery_assignment_updated` → assignmentStatus + partner details (accepted/picked up/delivered)
  *     - `partner_location_updated` → live lat/lng of the partner bike icon
- *  3. 30-second polling fallback in case the socket drops while the app is
- *     foregrounded (e.g. spotty wifi). The polling interval is cancelled the
- *     moment the socket delivers an update, so it never runs in parallel with
- *     a healthy socket connection.
+ *  3. A 30-second REST refresh that runs for the whole time the screen is open. It still covers
+ *     a dropped socket, but it is no longer only a fallback: the route polyline and the
+ *     traffic-aware ETA are computed server-side and ride on the REST payload alone, so they
+ *     would otherwise never update while the socket happily streamed rider positions.
  *
  * The hook is fully self-contained: mount it once on the tracking screen and
  * it handles connect/join/leave/disconnect lifecycle automatically.
@@ -59,14 +59,20 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
   const [error, setError] = useState<string | null>(null);
   const [vegFleet, setVegFleet] = useState<VegFleetState | null>(null);
 
-  // Ref to the polling timer so we can cancel it when a socket update arrives.
+  // Ref to the refresh timer, so the effect can tear it down on unmount.
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Last assignment status we know of. Lets a socket ping notice that the delivery has moved to
+  // its next leg and pull a fresh route immediately, instead of drawing the previous leg's line
+  // until the next scheduled refresh.
+  const assignmentRef = useRef<OrderAssignmentStatus | null>(null);
 
   // ─── REST fetch ────────────────────────────────────────────────────────────
   const fetchTracking = useCallback(async () => {
     try {
       const data = await getOrderTracking(orderId);
       setTracking(data);
+      assignmentRef.current = data.assignmentStatus;
       setError(null);
       // Seed the live partner location from the initial response so the bike
       // icon appears immediately rather than waiting for the first socket ping.
@@ -147,12 +153,6 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
           timeline: updatedTimeline,
         };
       });
-
-      // Cancel the polling timer — the socket is healthy.
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
     };
     socket.on('order_status_updated', onStatusUpdate);
 
@@ -171,6 +171,7 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     }) => {
       if (String(payload.orderId) !== orderId) return;
       logger.debug('useOrderTracking', 'delivery_assignment_updated', payload);
+      assignmentRef.current = payload.assignmentStatus;
 
       setTracking((prev) => {
         if (!prev) return prev;
@@ -193,27 +194,37 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
             : prev.deliveryPartner,
         };
       });
-
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
     };
     socket.on('delivery_assignment_updated', onAssignmentUpdate);
 
     // ── partner_location_updated ──────────────────────────────────────────────
+    // Fires for both delivery legs now (rider → restaurant as well as rider → customer), so the
+    // customer can watch the rider approach the restaurant rather than only seeing them appear
+    // after pickup. `heading` is null on a stationary fix; the map falls back to the direction
+    // between consecutive pings in that case.
     const onLocationUpdate = (payload: {
       orderId: string;
       lat: number;
       lng: number;
+      heading?: number | null;
+      speed?: number | null;
+      assignmentStatus?: OrderAssignmentStatus | null;
     }) => {
       if (String(payload.orderId) !== orderId) return;
-      setPartnerLocation({ lat: payload.lat, lng: payload.lng });
+      setPartnerLocation({
+        lat: payload.lat,
+        lng: payload.lng,
+        heading: payload.heading ?? null,
+        speed: payload.speed ?? null,
+      });
 
-      // Cancel the polling timer — the socket is healthy.
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
+      // The route and the ETA travel only on the REST payload, so a stream of socket pings would
+      // otherwise leave the drawn route trailing further and further behind the rider. Refetching
+      // on a leg change is the cheap fix for the case that matters most — pickup, where the route
+      // flips from rider→restaurant to rider→customer and the old line becomes actively wrong.
+      if (payload.assignmentStatus && payload.assignmentStatus !== assignmentRef.current) {
+        assignmentRef.current = payload.assignmentStatus;
+        fetchTracking().catch(() => {});
       }
     };
     socket.on('partner_location_updated', onLocationUpdate);
@@ -242,10 +253,16 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     };
     socket.on('veg_fleet_status_updated', onVegFleetUpdate);
 
-    // ─── Polling fallback ──────────────────────────────────────────────────────
-    // Starts 30 s after mount. If the socket fires first, the timer is cleared
-    // (see the cancel calls above). If the socket is silent (dropped, app
-    // backgrounded, etc.) the poll keeps the screen from going stale forever.
+    // ─── Periodic refresh ──────────────────────────────────────────────────────
+    // This used to be a pure fallback that cancelled itself as soon as the socket proved healthy.
+    // It cannot be any more, because the socket no longer carries everything the screen shows:
+    // the route polyline and the traffic-aware ETA are computed server-side and arrive only on
+    // the REST payload. A cancelled timer would leave a healthy socket moving the rider marker
+    // along a route line and beside an ETA that were both frozen at mount.
+    //
+    // The cost of keeping it running is bounded on the server, where routes are cached per
+    // order-leg (see yulo_backend's routing.service.js), so a refresh during an active delivery
+    // usually costs a cache read rather than a HERE transaction.
     pollTimerRef.current = setInterval(() => {
       fetchTracking().catch(() => {});
     }, POLL_INTERVAL_MS);
@@ -267,12 +284,7 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
       socket.off('delivery_assignment_updated', onAssignmentUpdate);
       socket.off('partner_location_updated', onLocationUpdate);
       socket.off('veg_fleet_status_updated', onVegFleetUpdate);
-      appStateSub.remove();
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-    };
+      appStateSub.remove();    };
   }, [orderId, fetchTracking]);
 
   const refetch = useCallback(async () => {

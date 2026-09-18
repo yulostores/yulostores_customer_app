@@ -23,6 +23,7 @@ import {
   reverseGeocode,
 } from '../../src/lib/geo';
 import { logger, reportError } from '../../src/lib/logger';
+import { checkServiceability, type ServiceabilityResult } from '../../src/services/geo';
 import type { LatLng, ResolvedPlace } from '../../src/types/address';
 
 export default function LocationMapScreen() {
@@ -44,14 +45,27 @@ export default function LocationMapScreen() {
   const [place, setPlace] = useState<ResolvedPlace | null>(null);
   const [resolving, setResolving] = useState(true);
   const [locating, setLocating] = useState(false);
+  const [coverage, setCoverage] = useState<ServiceabilityResult | null>(null);
 
   const resolve = useCallback(async (coords: LatLng) => {
     centerRef.current = coords;
     const id = ++reqRef.current;
     setResolving(true);
-    const next = await reverseGeocode(coords);
+
+    // Naming the place and checking whether anyone delivers there are independent questions, so
+    // they run together rather than in sequence — the customer waits for the slower of the two
+    // instead of for both. The coverage check is a local geo query, not a paid lookup, so it is
+    // cheap enough to re-run every time the pin settles.
+    const [next, serviceable] = await Promise.all([
+      reverseGeocode(coords),
+      checkServiceability(coords),
+    ]);
+
+    // The request-id guard keeps a slow answer for an abandoned pin from overwriting the current
+    // one — the same pattern the reverse geocode already used.
     if (id === reqRef.current) {
       setPlace(next);
+      setCoverage(serviceable);
       setResolving(false);
     }
   }, []);
@@ -156,6 +170,21 @@ export default function LocationMapScreen() {
             </View>
           </View>
 
+          {/* Advisory, never blocking. Finding out that nothing delivers here is far better
+              learned at the pin than from an empty home feed afterwards — but a customer who
+              knows something we don't (a new restaurant, a radius about to change) can still
+              proceed, and a failed check reports as serviceable so an API hiccup never traps
+              anyone. */}
+          {!resolving && coverage && !coverage.serviceable && (
+            <View style={styles.coverageWarning}>
+              <Ionicons name="alert-circle" size={16} color={Colors.warning} />
+              <Text style={styles.coverageText}>
+                No restaurants deliver to this spot yet. You can still save it, but a pin closer
+                to a market area will give you more choice.
+              </Text>
+            </View>
+          )}
+
           <ActionButton
             label="Confirm location & proceed"
             onPress={confirm}
@@ -244,6 +273,16 @@ const makeStyles = (t: AccentTheme) =>
   addrText: { flex: 1 },
   addrTitle: { fontSize: 16, fontWeight: '700', color: Colors.foodText },
   addrSub: { fontSize: 13, color: Colors.foodTextSecondary, marginTop: 2, lineHeight: 18 },
+  coverageWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    marginTop: Spacing.base,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.warning + '14',
+  },
+  coverageText: { flex: 1, fontSize: 12, lineHeight: 17, color: Colors.foodTextSecondary },
   confirm: { marginTop: Spacing.base, marginBottom: Spacing.sm },
   });
 

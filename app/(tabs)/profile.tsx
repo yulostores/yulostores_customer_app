@@ -17,10 +17,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useRef, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -175,6 +176,33 @@ function Row({ row, onPress, right }: { row: MenuRow; onPress?: () => void; righ
   );
 }
 
+// ─── Veg-fleet confirmation sheet ───────────────────────────────────────────
+
+/** Shown once, right after the customer turns the veg-fleet switch on — a
+ *  bottom sheet confirming what the preference actually does. */
+function VegFleetConfirmSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const styles = useThemedStyles(makeStyles);
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetIconCircle}>
+            <Ionicons name="leaf" size={26} color={Colors.foodVegGreen} />
+          </View>
+          <Text style={styles.sheetHeading}>Veg-fleet preference on</Text>
+          <Text style={styles.sheetBody}>
+            Your order will be handled by our veg fleet delivery partner.
+          </Text>
+          <Pressable style={styles.sheetBtn} onPress={onClose} accessibilityRole="button">
+            <Text style={styles.sheetBtnText}>Got it</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
@@ -183,6 +211,7 @@ export default function ProfileScreen() {
   const { isGuest, signOut } = useAuth();
   const { profile, isLoading, isRefreshing, error, refresh } = useProfile();
   const vegFleet = useVegFleetPreference();
+  const [showVegFleetConfirm, setShowVegFleetConfirm] = useState(false);
 
   // Pick up name/avatar changes made on the edit-profile screen — skip the
   // very first focus, since useProfile already loads once on mount.
@@ -299,7 +328,10 @@ export default function ProfileScreen() {
                     ) : (
                       <Switch
                         value={vegFleet.enabled}
-                        onValueChange={vegFleet.setEnabled}
+                        onValueChange={(next) => {
+                          vegFleet.setEnabled(next);
+                          if (next) setShowVegFleetConfirm(true);
+                        }}
                         disabled={!vegFleet.available || vegFleet.isSaving}
                         trackColor={{ false: Colors.toggleTrackOff, true: Colors.foodVegGreen }}
                         thumbColor={Colors.toggleThumb}
@@ -325,6 +357,11 @@ export default function ProfileScreen() {
 
         <View style={{ height: Spacing['2xl'] }} />
       </ScrollView>
+
+      <VegFleetConfirmSheet
+        visible={showVegFleetConfirm}
+        onClose={() => setShowVegFleetConfirm(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -420,6 +457,55 @@ const makeStyles = (t: AccentTheme) =>
   rowLabelDanger: { fontWeight: '600' },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   rowMeta: { fontSize: 13, color: Colors.foodTextMuted },
+
+  // Veg-fleet confirmation sheet
+  sheetBackdrop: { flex: 1, backgroundColor: Colors.locScrim, justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: Colors.foodSurface,
+    ...Elevation.sheet,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xl,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.foodBorder,
+    marginBottom: Spacing.lg,
+  },
+  sheetIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.foodPureVegBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  sheetHeading: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.foodText,
+    letterSpacing: -0.3,
+    marginBottom: Spacing.sm,
+  },
+  sheetBody: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: Colors.foodTextSecondary,
+    marginBottom: Spacing.lg,
+  },
+  sheetBtn: {
+    backgroundColor: Colors.foodVegGreen,
+    borderRadius: BorderRadius.full,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+  },
+  sheetBtnText: { fontSize: 16, fontWeight: '700', color: Colors.white },
   });
 
 const styles = makeStyles(ORANGE_ACCENT);

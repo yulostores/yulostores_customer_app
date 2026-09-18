@@ -39,6 +39,7 @@ import {
   useThemedStyles,
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
+import { useTabBarInset } from '../../src/components/TabBar';
 import { useCanGoBack } from '../../src/hooks/useCanGoBack';
 import { useOrders } from '../../src/hooks/useOrders';
 import { logger, reportError } from '../../src/lib/logger';
@@ -264,6 +265,7 @@ export default function OrdersScreen() {
   // Order history is a root tab as well as a push target (Profile → "Order
   // history"), so the back arrow only shows when something is stacked below.
   const canGoBack = useCanGoBack();
+  const tabBarInset = useTabBarInset();
   const {
     orders,
     total,
@@ -419,7 +421,8 @@ export default function OrdersScreen() {
       <FlatList
         data={orders}
         keyExtractor={(o) => o.id}
-        contentContainerStyle={styles.list}
+        // The tab bar floats over the page — the last card has to clear it.
+        contentContainerStyle={[styles.list, { paddingBottom: tabBarInset }]}
         renderItem={({ item }) => (
           <OrderCard
             order={item}
@@ -494,7 +497,6 @@ const makeStyles = (t: AccentTheme) =>
     paddingHorizontal: Spacing.base,
     gap: Spacing.md,
     paddingTop: Spacing.md,
-    paddingBottom: 24,
   },
   count: { fontSize: 13, color: Colors.foodTextMuted, marginBottom: Spacing.xs },
 

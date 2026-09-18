@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -214,6 +214,7 @@ export default function SearchScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const inputRef = useRef<TextInput>(null);
 
   const {
     popular,
@@ -295,6 +296,19 @@ export default function SearchScreen() {
     appliedInitialQueryRef.current = q;
     runSearch(q);
   }, [initialQuery, runSearch]);
+
+  // This screen is a tab, so it stays mounted after the first visit — `autoFocus`
+  // only fires on that first mount. Re-focus on every visit instead, so tapping
+  // the Home search bar always drops the cursor in and opens the keyboard. A
+  // `?query=` chip tap is about to run its own search, so it skips this rather
+  // than stealing the keyboard from the results.
+  useFocusEffect(
+    useCallback(() => {
+      if (initialQuery?.trim()) return;
+      const timer = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
+    }, [initialQuery]),
+  );
 
   const clearSearch = useCallback(() => {
     setQuery('');
@@ -510,6 +524,7 @@ export default function SearchScreen() {
           <View style={styles.searchBar}>
             <Ionicons name="search" size={18} color={t.accent} />
             <TextInput
+              ref={inputRef}
               style={styles.input}
               placeholder="Search for restaurants and dishes"
               placeholderTextColor={Colors.foodTextMuted}
@@ -519,7 +534,6 @@ export default function SearchScreen() {
               returnKeyType="search"
               autoCapitalize="none"
               autoCorrect={false}
-              autoFocus={!hasSearched}
             />
             <View style={styles.searchDivider} />
             {query.length > 0 ? (
@@ -527,11 +541,20 @@ export default function SearchScreen() {
                 <Ionicons name="close-circle" size={18} color={Colors.foodTextMuted} />
               </Pressable>
             ) : (
-              <Image
-                source={require('../../assets/Images/Icons/Button - Voice search.png')}
-                style={styles.voiceIcon}
-                resizeMode="contain"
-              />
+              // Voice capture isn't wired up yet — tapping the mic focuses the
+              // field instead of doing nothing, same spirit as the Home bar's mic.
+              <Pressable
+                onPress={() => inputRef.current?.focus()}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Voice search"
+              >
+                <Image
+                  source={require('../../assets/Images/Icons/Button - Voice search.png')}
+                  style={styles.voiceIcon}
+                  resizeMode="contain"
+                />
+              </Pressable>
             )}
           </View>
         </View>
@@ -589,6 +612,7 @@ const makeStyles = (t: AccentTheme) =>
   input: {
     flex: 1,
     fontSize: 14,
+    fontWeight: '500',
     color: Colors.foodText,
     paddingVertical: 0,
   },

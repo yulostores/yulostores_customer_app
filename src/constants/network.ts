@@ -18,10 +18,9 @@ export const API_TIMEOUT_MS = 12_000;
 /** Auth / OTP endpoints — an SMS-gateway round-trip can sit behind these. */
 export const AUTH_TIMEOUT_MS = 15_000;
 
-/** Third-party place search (OpenStreetMap Nominatim) — only feeds a typeahead. */
-export const PLACES_TIMEOUT_MS = 8_000;
-
-/** On-device reverse geocoding (Android Geocoder / iOS CLGeocoder). */
+/** On-device reverse geocoding (Android Geocoder / iOS CLGeocoder), the fallback path in
+ *  src/lib/geo.ts. Place search and the primary reverse geocode both go through /api/geo/* now,
+ *  so they run on the shared API client's timeout rather than one of their own. */
 export const REVERSE_GEOCODE_TIMEOUT_MS = 8_000;
 
 /** Acquiring a fresh GPS fix. */

@@ -14,6 +14,16 @@
  */
 
 import { apiGet } from './api';
+import {
+  FALLBACK_TAB_BAR,
+  type TabBarConfig,
+  type TabBarItem,
+  type TabBarLayout,
+  type TabBarPalette,
+  type TabBarThemes,
+} from './navigation';
+
+export type { TabBarConfig, TabBarItem, TabBarLayout, TabBarPalette, TabBarThemes };
 
 // ─── View types ─────────────────────────────────────────────────────────────
 
@@ -96,6 +106,13 @@ export interface AppConfig {
   };
   about: AboutInfo;
   legal: LegalDocSummary[];
+  /**
+   * The bottom tab bar, end to end — which destinations it shows, in what
+   * order, with what labels, icons, colours and proportions. Never null: when
+   * the server omits it (an older backend) the synchronous twin in
+   * `navigation.ts` stands in, so the bar always has something to draw.
+   */
+  tabBar: TabBarConfig;
 }
 
 // ─── Wire shapes (all fields optional — reshape fills the gaps) ──────────────
@@ -144,12 +161,30 @@ interface RawLegalSummary {
   canonicalUrl?: string | null;
 }
 
+interface RawTabBarItem {
+  id?: string;
+  route?: string;
+  label?: string;
+  shape?: string;
+  iconSource?: string;
+  icon?: string;
+  activeIcon?: string;
+  badge?: string | null;
+}
+
+interface RawTabBar {
+  items?: RawTabBarItem[];
+  themes?: Record<string, Record<string, unknown>>;
+  layout?: Record<string, unknown>;
+}
+
 interface RawConfig {
   languages?: RawLanguage[];
   defaultLanguage?: string;
   payments?: { groups?: RawPaymentGroup[]; methods?: RawPaymentMethod[] };
   about?: RawAbout;
   legal?: RawLegalSummary[];
+  tabBar?: RawTabBar;
 }
 
 interface RawLegalDocument extends RawLegalSummary {
@@ -189,6 +224,78 @@ function reshapeAbout(a: RawAbout | undefined): AboutInfo {
     addressLines,
     socialLinks,
     copyright: str(a?.copyright),
+  };
+}
+
+/**
+ * A tab bar from the wire, field by field, with the twin standing in for
+ * anything the server left out. Every value is checked because this drives the
+ * app's primary navigation: an unknown `shape` or a missing colour must not be
+ * able to render an invisible or untappable bar. An item with no `route` is
+ * dropped — it would point nowhere — and if that leaves nothing at all, the
+ * twin's item list is used instead of an empty bar.
+ */
+function reshapeTabBar(raw: RawTabBar | undefined): TabBarConfig {
+  const items: TabBarItem[] = (raw?.items ?? [])
+    .filter((i): i is RawTabBarItem => !!i && typeof i.route === 'string' && !!i.route.trim())
+    .map((i, index) => {
+      const icon = str(i.icon, 'ellipse-outline');
+      return {
+        id: str(i.id, `tab-${index}`),
+        route: i.route as string,
+        label: str(i.label, str(i.id, 'Tab')),
+        shape: i.shape === 'fab' ? ('fab' as const) : ('pill' as const),
+        iconSource: i.iconSource === 'asset' ? ('asset' as const) : ('ionicons' as const),
+        icon,
+        activeIcon: str(i.activeIcon, icon),
+        badge: i.badge === 'cart' ? ('cart' as const) : null,
+      };
+    });
+
+  // Fill each palette key from the server, falling back per key rather than per
+  // palette, so a backend that adds one colour and forgets another still paints.
+  const palette = (key: keyof TabBarThemes): TabBarPalette => {
+    const src = raw?.themes?.[key] ?? {};
+    const base = FALLBACK_TAB_BAR.themes[key];
+    const pick = (k: keyof TabBarPalette) => str(src[k], base[k]);
+    return {
+      bar: pick('bar'),
+      activePill: pick('activePill'),
+      activeTint: pick('activeTint'),
+      inactiveTint: pick('inactiveTint'),
+      fab: pick('fab'),
+      fabTint: pick('fabTint'),
+      badge: pick('badge'),
+      badgeTint: pick('badgeTint'),
+    };
+  };
+
+  const rawLayout = raw?.layout ?? {};
+  const baseLayout = FALLBACK_TAB_BAR.layout;
+  const dp = (k: keyof TabBarLayout): number => {
+    const v = rawLayout[k];
+    // 0 is meaningful for the insets, so only a non-finite or negative value falls back.
+    return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : baseLayout[k];
+  };
+
+  return {
+    items: items.length ? items : FALLBACK_TAB_BAR.items,
+    themes: { default: palette('default'), pure_veg: palette('pure_veg') },
+    layout: {
+      barHeight: dp('barHeight'),
+      barRadius: dp('barRadius'),
+      barPadding: dp('barPadding'),
+      sideInset: dp('sideInset'),
+      bottomInset: dp('bottomInset'),
+      pillHeight: dp('pillHeight'),
+      pillRadius: dp('pillRadius'),
+      pillPaddingX: dp('pillPaddingX'),
+      pillGap: dp('pillGap'),
+      iconSize: dp('iconSize'),
+      labelSize: dp('labelSize'),
+      fabSize: dp('fabSize'),
+      fabIconSize: dp('fabIconSize'),
+    },
   };
 }
 
@@ -238,6 +345,7 @@ function reshapeConfig(c: RawConfig | undefined): AppConfig {
     payments: { groups, methods },
     about: reshapeAbout(c?.about),
     legal,
+    tabBar: reshapeTabBar(c?.tabBar),
   };
 }
 
