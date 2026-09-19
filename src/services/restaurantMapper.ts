@@ -37,6 +37,10 @@ export interface RawRestaurant {
   delivery?: { estimatedMinutes?: number };
   startingPrice?: number | null;
   isPureVeg?: boolean;
+  /** Straight-line km from the customer, attached by the geo-scoped endpoints (home feed,
+   *  geo-browse, location-scoped search) — the same figure the backend's delivery-zone
+   *  check used. Absent on non-geo endpoints. */
+  distanceKm?: number;
   operatingHours?: {
     day: string;
     isOpen: boolean;
@@ -121,10 +125,11 @@ export function isOpenNow(hours: RawRestaurant['operatingHours']): boolean {
 /**
  * Reshape one wire restaurant into the view type.
  *
- * @param from  the customer's location, when known — only then can `distanceKm`
- *              be derived. Endpoints that aren't geo-scoped (text search) pass
- *              nothing and the field stays undefined, which cards already treat
- *              as "distance unknown".
+ * @param from  the customer's location, when known. `distanceKm` is the server's
+ *              own figure when the endpoint sent one; otherwise it is derived from
+ *              this point. Endpoints that aren't geo-scoped pass nothing and the
+ *              field stays undefined, which cards already treat as "distance
+ *              unknown".
  */
 export function toRestaurant(
   r: RawRestaurant,
@@ -133,12 +138,14 @@ export function toRestaurant(
   // `location.coordinates` is GeoJSON — [lng, lat], not [lat, lng].
   const coords = r.location?.coordinates;
   const distanceKm =
-    from && coords && coords.length === 2
-      ? haversineKm(
-          { latitude: from.lat, longitude: from.lng },
-          { latitude: coords[1], longitude: coords[0] },
-        )
-      : undefined;
+    typeof r.distanceKm === 'number'
+      ? r.distanceKm
+      : from && coords && coords.length === 2
+        ? haversineKm(
+            { latitude: from.lat, longitude: from.lng },
+            { latitude: coords[1], longitude: coords[0] },
+          )
+        : undefined;
 
   return {
     _id: r._id,

@@ -35,6 +35,7 @@ import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { useTabBar } from '../hooks/useTabBar';
+import { useCameraOpen } from '../lib/cameraOpen';
 import {
   FALLBACK_TAB_BAR,
   type TabBarItem,
@@ -203,6 +204,7 @@ function FabTab({ item, focused, badgeCount, palette, layout, onPress }: TabProp
 export default function TabBar({ state, navigation }: TabBarProps) {
   const { items, palette, layout, cartCount } = useTabBar();
   const insets = useSafeAreaInsets();
+  const cameraOpen = useCameraOpen();
 
   const current = state.routes[state.index]?.name;
 
@@ -214,6 +216,9 @@ export default function TabBar({ state, navigation }: TabBarProps) {
   // The bar belongs to the destinations it contains. Anywhere else in `(tabs)`
   // — cart, search, profile — is a screen you back out of, not a tab.
   if (!visible.some((item) => item.route === current)) return null;
+
+  // The QR scanner's camera is full-screen; the bar steps aside until it closes.
+  if (cameraOpen) return null;
 
   const press = (item: TabBarItem) => () => {
     const route = state.routes.find((r) => r.name === item.route);

@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
-import { router } from 'expo-router';
+import { router, useFocusEffect, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -22,6 +22,7 @@ import {
   useThemedStyles,
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
+import { setCameraOpen } from '../../src/lib/cameraOpen';
 import { reportError } from '../../src/lib/logger';
 
 /**
@@ -77,10 +78,53 @@ export default function ScanScreen() {
   const { accent } = useAccentTheme();
   const tabBarInset = useTabBarInset();
 
+  const isFocused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
-  const [isScanning, setIsScanning] = useState(false);
+  // True once the user has closed the camera or a scan has been handled. Cleared
+  // every time the tab regains focus, so arriving here always opens the camera.
+  const [dismissed, setDismissed] = useState(false);
   const [scanned, setScanned] = useState(false);
+  // True once the permission prompt for this visit has been answered.
+  const [asked, setAsked] = useState(false);
+  const requestedRef = useRef(false);
 
+  // The camera is up whenever this tab is focused and we're allowed to use it.
+  // Only one preview may be active app-wide, so it unmounts the moment the tab
+  // loses focus (expo-camera docs) — deriving it from focus does that for free.
+  const wantsCamera = isFocused && !dismissed;
+  const isScanning = wantsCamera && !!permission?.granted;
+  // Permission not read yet, or the OS prompt is up: hold a black screen rather
+  // than flashing the intro page between the tap and the camera.
+  const isResolving = wantsCamera && !isScanning && (!permission || (permission.canAskAgain && !asked));
+
+  useFocusEffect(
+    useCallback(() => {
+      setDismissed(false);
+      setScanned(false);
+      return () => {
+        requestedRef.current = false;
+        setAsked(false);
+      };
+    }, []),
+  );
+
+  useEffect(() => {
+    if (!isFocused || !permission || permission.granted || !permission.canAskAgain) return;
+    if (requestedRef.current) return;
+    requestedRef.current = true;
+    requestPermission()
+      .catch((err) => reportError('scan', 'Camera permission request failed', err))
+      .finally(() => setAsked(true));
+  }, [isFocused, permission, requestPermission]);
+
+  // The tab bar steps aside for as long as the camera (or the moment before it) is up.
+  useEffect(() => {
+    setCameraOpen(isScanning || isResolving);
+  }, [isScanning, isResolving]);
+  useEffect(() => () => setCameraOpen(false), []);
+
+  // The intro page's button — reached when permission was refused, or after the
+  // camera was closed by hand.
   const handleOpenCamera = async () => {
     if (!permission?.granted) {
       const result = await requestPermission();
@@ -90,13 +134,20 @@ export default function ScanScreen() {
       }
     }
     setScanned(false);
-    setIsScanning(true);
+    setDismissed(false);
+  };
+
+  // A scan that led nowhere (cancelled, unrecognised, unopenable) goes straight
+  // back to the camera so the customer can try again.
+  const resumeScanning = () => {
+    setScanned(false);
+    setDismissed(false);
   };
 
   const handleBarCodeScanned = ({ data }: { type: string; data: string }) => {
     if (scanned) return; // guard against a second frame firing before the camera unmounts
     setScanned(true);
-    setIsScanning(false);
+    setDismissed(true);
 
     const target = resolveScan(data);
 
@@ -107,14 +158,14 @@ export default function ScanScreen() {
 
     if (target.kind === 'external') {
       Alert.alert('Open this link?', target.url, [
-        { text: 'Cancel', style: 'cancel', onPress: () => setScanned(false) },
+        { text: 'Cancel', style: 'cancel', onPress: resumeScanning },
         {
           text: 'Open',
           onPress: () => {
             Linking.openURL(target.url).catch((err) => {
               reportError('scan', 'Could not open scanned link', err, { url: target.url });
               Alert.alert('Couldn’t open that link', 'The scanned code could not be opened.');
-              setScanned(false);
+              resumeScanning();
             });
           },
         },
@@ -125,9 +176,17 @@ export default function ScanScreen() {
     Alert.alert(
       'Unrecognised QR code',
       "That doesn't look like a Yulo Stores code. Scan the QR printed on your restaurant table.",
-      [{ text: 'OK', onPress: () => setScanned(false) }],
+      [{ text: 'OK', onPress: resumeScanning }],
     );
   };
+
+  if (isResolving) {
+    return (
+      <View style={styles.cameraContainer}>
+        <StatusBar style="light" />
+      </View>
+    );
+  }
 
   if (isScanning) {
     return (
@@ -141,7 +200,7 @@ export default function ScanScreen() {
           }}
         />
         <SafeAreaView style={styles.cameraOverlay} edges={['top', 'bottom']}>
-           <Pressable style={styles.closeBtn} onPress={() => setIsScanning(false)}>
+           <Pressable style={styles.closeBtn} onPress={() => setDismissed(true)}>
              <Ionicons name="close-circle" size={40} color={Colors.white} />
            </Pressable>
         </SafeAreaView>

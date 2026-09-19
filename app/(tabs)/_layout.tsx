@@ -19,9 +19,10 @@ import TabBar from '../../src/components/TabBar';
  * absolutely and reserves no layout height), so a screen with a scroll view
  * pads its content by `useTabBarInset()` to keep its last row clear of it.
  *
- * The bar is a permanent fixture — it never slides away or auto-hides. The
- * phone's own navigation bar is the one that fades out after a few idle seconds;
- * that lives in `useSystemNavBarAutoHide` at the app root.
+ * The bar never slides away or auto-hides, with one exception: it steps aside
+ * while the QR scanner's camera is open (`src/lib/cameraOpen.ts`). The phone's
+ * own navigation bar is the one that fades out after a few idle seconds; that
+ * lives in `useSystemNavBarAutoHide` at the app root.
  */
 export default function TabLayout() {
   return (

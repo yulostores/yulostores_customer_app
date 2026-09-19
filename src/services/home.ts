@@ -1,8 +1,9 @@
 /**
  * home.ts — the Home screen's single data source.
  *
- * One call to `GET /api/home/feed?lat=&lng=&radius=` returns everything the
- * Home sections need — nearby restaurants (geo-sorted), the same set re-sorted
+ * One call to `GET /api/home/feed?lat=&lng=` returns everything the
+ * Home sections need — restaurants that deliver to the location (geo-sorted; each
+ * restaurant's own delivery zone decides, the app sends no radius), the same set re-sorted
  * by rating, a handful of recommended items, the curated quick-filter chips and
  * the featured offer banner — all built server-side in one round-trip
  * (see yulo_backend/server/services/home.service.js).
@@ -78,8 +79,15 @@ interface RawHomeFeed {
 /** Recommended-restaurants row shows a curated few, not the whole nearby list. */
 const RECOMMENDED_RESTAURANTS_LIMIT = 10;
 
-/** Matches the backend's own default (`home.controller.js`), stated explicitly. */
-export const DEFAULT_FEED_RADIUS_KM = 5;
+/**
+ * Open restaurants first, closed ones after — each group keeping the backend's
+ * nearest-first order (Array.prototype.sort is stable). A closed restaurant can't take
+ * an order, so it shouldn't sit above ones that can just because it is a few hundred
+ * metres nearer. Same convention as Swiggy/Zomato, which grey closed places to the bottom.
+ */
+function openFirst(restaurants: Restaurant[]): Restaurant[] {
+  return [...restaurants].sort((a, b) => Number(b.isOpen) - Number(a.isOpen));
+}
 
 // ─── Reshape helpers ──────────────────────────────────────────────────────
 
@@ -177,22 +185,20 @@ export interface HomeFeedData {
 export async function fetchHomeFeed(coords: {
   lat: number;
   lng: number;
-  radiusKm?: number;
   vegMode?: boolean;
   vegScope?: 'all_restaurants' | 'pure_veg_only';
 }): Promise<HomeFeedData> {
   const feed = await apiGet<RawHomeFeed>('/api/home/feed', {
     lat: coords.lat,
     lng: coords.lng,
-    radius: coords.radiusKm ?? DEFAULT_FEED_RADIUS_KM,
     // The server compares this against the literal string 'true' (home.controller.js) —
     // send it only when on, same convention as `vegOnly` in restaurants.ts.
     vegMode: coords.vegMode ? 'true' : undefined,
     vegScope: coords.vegMode ? coords.vegScope ?? 'all_restaurants' : undefined,
   });
 
-  const nearbyRestaurants = (feed.nearbyRestaurants ?? []).map((r) =>
-    toRestaurant(r, coords),
+  const nearbyRestaurants = openFirst(
+    (feed.nearbyRestaurants ?? []).map((r) => toRestaurant(r, coords)),
   );
   const recommendedRestaurants = (feed.recommendedRestaurants ?? [])
     .map((r) => toRestaurant(r, coords))

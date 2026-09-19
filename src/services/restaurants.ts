@@ -10,15 +10,17 @@
  * present (`listRestaurants` in restaurant.controller.js):
  *
  *   • no `q` → geo-browse. `lat`/`lng` are REQUIRED; without them the server
- *     400s with VALIDATION_ERROR "lat and lng are required". Sorted by $near,
- *     which is why it cannot also report `total`/`pages`.
+ *     400s with VALIDATION_ERROR "lat and lng are required". Lists only the
+ *     restaurants whose own delivery zone covers that point, nearest first, and
+ *     reports `hasMore` instead of `total`/`pages`.
  *   • with `q` → case-insensitive match on restaurant name, cuisine, OR the name
- *     of an available dish the restaurant serves. Needs no location and does
- *     return `total`/`pages`.
+ *     of an available dish the restaurant serves. With `lat`/`lng` it is scoped
+ *     to the same delivery zones (nearest first, `hasMore`); without them it is
+ *     unscoped and returns `total`/`pages`.
  *
- * Note this endpoint does NOT accept a `cuisine` filter or a `limit` — page
- * size is fixed server-side at {@link PAGE_SIZE}. (yulo_backend/API.md still
- * documents both; the controller is the authority.)
+ * Neither mode takes a radius — delivery reach is each restaurant's own setting,
+ * decided server-side. Nor a `cuisine` filter or a `limit` — page size is fixed
+ * server-side at {@link PAGE_SIZE}.
  */
 
 import type {
@@ -42,14 +44,13 @@ export const PAGE_SIZE = 20;
 // ─── Request parameter types ───────────────────────────────────────────────
 
 export interface ListRestaurantsParams {
-  /** Free-text query, matched against name and cuisine. Switches off geo-sort. */
+  /** Free-text query, matched against name and cuisine. Geo-sorted and delivery-scoped
+   *  only when `lat`/`lng` come with it. */
   q?: string;
   /** Required unless `q` is given. */
   lat?: number;
   /** Required unless `q` is given. */
   lng?: number;
-  /** Geo-browse radius in km. Server default 5. */
-  radius?: number;
   page?: number;
   minRating?: number;
   hasOffers?: boolean;
@@ -60,10 +61,12 @@ export interface ListRestaurantsParams {
 
 interface RestaurantsResponse {
   restaurants: RawRestaurant[];
-  /** Absent on the geo-browse branch — $near cannot be counted. */
+  /** Absent on the geo-scoped branches — the geo scan isn't counted. */
   total?: number;
   page: number;
   pages?: number;
+  /** Sent instead of `total`/`pages` on the geo-scoped branches: is there another page? */
+  hasMore?: boolean;
 }
 
 interface RestaurantDetailResponse {
@@ -153,7 +156,6 @@ export async function fetchRestaurants(
     q: query || undefined,
     lat: params?.lat,
     lng: params?.lng,
-    radius: params?.radius,
     page: params?.page,
     minRating: params?.minRating,
     // The server compares these against the literal string 'true', so send them
@@ -173,11 +175,13 @@ export async function fetchRestaurants(
   return {
     restaurants,
     pagination: {
-      // Geo-browse sends neither: fall back to what this page proves is there,
-      // and treat a full page as "there may be more".
+      // Geo-scoped requests send neither: fall back to what this page proves is there.
       total: data.total ?? restaurants.length,
       page,
-      pages: data.pages ?? (restaurants.length < PAGE_SIZE ? page : page + 1),
+      // `hasMore` is exact. Older backends sent nothing, so a full page was the only hint.
+      pages:
+        data.pages ??
+        ((data.hasMore ?? restaurants.length >= PAGE_SIZE) ? page + 1 : page),
     },
   };
 }

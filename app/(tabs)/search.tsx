@@ -20,6 +20,7 @@ import { FoodTypeMark } from '../../src/components/FoodTypeMark';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
+import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import { useVegMode } from '../../src/context/VegModeContext';
 import {
   ORANGE_ACCENT,
@@ -206,6 +207,14 @@ export default function SearchScreen() {
   // `isPureVeg`); "all restaurants" scope leaves the list alone, same as Home.
   const vegOnly = vegEnabled && vegScope === 'pure_veg_only';
 
+  // Search is scoped to the customer's delivery location, like Home: only restaurants that
+  // deliver there are returned, so a result is always something they can order from. With no
+  // saved location yet the backend falls back to an unscoped search.
+  const { activeLocation } = useDeliveryLocation();
+  const lat = activeLocation?.coordinates.latitude;
+  const lng = activeLocation?.coordinates.longitude;
+  const hasLocation = lat != null && lng != null;
+
   // A cuisine chip (Home, or Browse by cuisine) links here with `?query=`.
   const { query: initialQuery } = useLocalSearchParams<{ query?: string }>();
 
@@ -255,9 +264,12 @@ export default function SearchScreen() {
         // dishes a restaurant serves — so a search for a dish returns the places
         // that sell it.
         // `vegOnly` mirrors the app-wide "Pure veg restaurants only" scope so the
-        // results are filtered server-side, never in the client.
+        // results are filtered server-side, never in the client. `lat`/`lng` scope the
+        // results to restaurants that deliver to the customer (see above).
         const { restaurants } = await fetchRestaurants({
           q: term,
+          lat,
+          lng,
           vegOnly: vegOnly || undefined,
         });
         setResults(restaurants);
@@ -284,7 +296,7 @@ export default function SearchScreen() {
         setIsSearching(false);
       }
     },
-    [refreshRecent, vegOnly],
+    [refreshRecent, vegOnly, lat, lng],
   );
 
   // Run an incoming `?query=` exactly once per distinct value — a fresh tap on
@@ -372,7 +384,11 @@ export default function SearchScreen() {
         <StatusBlock
           icon="search-outline"
           title="No restaurants found"
-          message={`Nothing matched "${query.trim()}". Try a different term.`}
+          message={
+            hasLocation
+              ? `No restaurant delivering to your address matched "${query.trim()}". Try a different term or change your delivery location.`
+              : `Nothing matched "${query.trim()}". Try a different term.`
+          }
         />
       );
     }
