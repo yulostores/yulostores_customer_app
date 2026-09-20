@@ -22,6 +22,7 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
+import { hasUsablePoint } from '../lib/address';
 import { DEFAULT_REGION, fromGeoJSON } from '../lib/geo';
 import { logger, reportError } from '../lib/logger';
 import { ApiError } from '../services/api';
@@ -40,30 +41,47 @@ const STORAGE_KEY = 'yulo.activeLocation.v1';
 const joinParts = (parts: Array<string | undefined | null>) =>
   parts.map((p) => p?.trim()).filter(Boolean).join(', ');
 
+/**
+ * A saved address as the "Deliver to" bar and every geo-scoped fetch read it.
+ *
+ * `unlocated` is the part that matters. These used to fall back to {@link DEFAULT_REGION}
+ * (New Delhi) whenever `location?.coordinates` was missing — and the truthiness check let
+ * an EMPTY array through, which is exactly what the server stored for an address whose
+ * geocode failed. `fromGeoJSON([])` then produced `{ latitude: undefined, longitude:
+ * undefined }`, which was cached as the active location: the home feed requires lat/lng, so
+ * it never fetched, and the customer sat on "choose a delivery location" with one already
+ * chosen. A New Delhi fallback would not have been better — it would have shown a customer
+ * in Ranchi a feed of Delhi restaurants they cannot order from.
+ *
+ * So an address with no usable point is now marked as such and carries no coordinates, and
+ * the screens that need a point say so instead of loading nothing.
+ */
 export function activeFromSaved(a: SavedAddress): ActiveLocation {
+  const located = hasUsablePoint(a);
   return {
     id: a._id,
     label: a.label,
     customLabel: a.customLabel ?? null,
     line: joinParts([a.street, a.city]) || 'Saved address',
-    sublocality: joinParts([a.city, a.state, a.pincode]) || undefined,
-    coordinates: a.location?.coordinates
-      ? fromGeoJSON(a.location.coordinates as [number, number])
+    sublocality: joinParts([a.area, a.city, a.state, a.pincode]) || undefined,
+    coordinates: located
+      ? fromGeoJSON(a.location!.coordinates as [number, number])
       : DEFAULT_REGION,
+    unlocated: !located,
     pincode: a.pincode,
   };
 }
 
 function activeFromPayload(p: AddressPayload, opts: { syncPending: boolean }): ActiveLocation {
+  const located = hasUsablePoint(p);
   return {
     id: null,
     label: p.label,
     customLabel: p.customLabel ?? null,
     line: joinParts([p.street, p.city]) || 'Selected location',
-    sublocality: joinParts([p.city, p.state, p.pincode]) || undefined,
-    coordinates: p.location?.coordinates
-      ? fromGeoJSON(p.location.coordinates)
-      : DEFAULT_REGION,
+    sublocality: joinParts([p.area, p.city, p.state, p.pincode]) || undefined,
+    coordinates: located ? fromGeoJSON(p.location!.coordinates) : DEFAULT_REGION,
+    unlocated: !located,
     pincode: p.pincode,
     syncPending: opts.syncPending,
   };

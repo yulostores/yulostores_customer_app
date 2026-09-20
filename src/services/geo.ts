@@ -56,10 +56,24 @@ export interface ResolvedPlaceDetails {
 }
 
 export interface ServiceabilityResult {
+  /** At least one restaurant will DELIVER to this pin. Drives the warning on the map. */
   serviceable: boolean;
+  /** How many restaurants deliver here. */
   restaurantCount: number;
   /** Distance to the closest restaurant that covers this point, in km. */
   nearestKm: number | null;
+  /**
+   * How many restaurants the customer will SEE here — everything inside the platform's
+   * 25 km discovery radius, whether or not it delivers this far.
+   *
+   * The two numbers answer different questions, and conflating them is what made the
+   * warning on the map misleading: "no restaurants deliver here" reads as "this is a dead
+   * zone" when the truth is often "there are twelve restaurants nearby, none of which has
+   * set a radius that reaches you".
+   */
+  browsableCount: number;
+  /** Distance to the closest restaurant the customer can see, delivering or not. */
+  nearestBrowsableKm: number | null;
 }
 
 // ─── Wire shapes ───────────────────────────────────────────────────────────
@@ -157,6 +171,12 @@ export async function checkServiceability(coords: LatLng): Promise<Serviceabilit
     logger.warn('geo', 'Serviceability check failed — assuming serviceable', {
       reason: err instanceof ApiError ? err.code : String(err),
     });
-    return { serviceable: true, restaurantCount: 0, nearestKm: null };
+    return {
+      serviceable: true,
+      restaurantCount: 0,
+      nearestKm: null,
+      browsableCount: 0,
+      nearestBrowsableKm: null,
+    };
   }
 }

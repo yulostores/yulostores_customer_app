@@ -52,6 +52,21 @@ export interface Restaurant {
    * send it. Undefined when either point is unknown.
    */
   distanceKm?: number;
+  /**
+   * Whether this restaurant will actually deliver to the customer's pin.
+   *
+   * Listing and delivering are two different radii. Every live restaurant within the
+   * platform's 25 km discovery radius is listed, nearest first; each one then has its own
+   * (usually smaller) delivery radius. `false` means "you can see it and browse its menu,
+   * but it won't come this far" — a state worth rendering, because the alternative, which
+   * is what this replaced, was the restaurant simply not existing as far as the customer
+   * was concerned. That is how a newly-added store nobody had set a radius for stayed
+   * invisible to its whole city.
+   *
+   * Undefined on non-geo endpoints (search without a location, favourites, restaurant
+   * detail), where the question has no answer — treat it as "unknown", not as false.
+   */
+  deliversToPin?: boolean;
   /** Every dish on this restaurant's menu is vegetarian. */
   isPureVeg?: boolean;
   /**

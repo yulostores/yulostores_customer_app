@@ -31,11 +31,27 @@ export interface SavedAddress {
   _id: string;
   label: AddressLabel;
   customLabel?: string | null;
+  /** Flat / house / block number — the line a rider reads at the door. */
+  houseNumber?: string | null;
+  floor?: string | null;
+  /** Building / apartment / society name. */
+  building?: string | null;
+  landmark?: string | null;
+  /** Locality / neighbourhood / sector, between the street and the city. */
+  area?: string | null;
+  /**
+   * The composed one-line form, built server-side from the parts above plus the geocoded
+   * street. Still the field to render when only one line fits — it is also what every
+   * order placed before the parts existed carries.
+   */
   street?: string;
   city?: string;
   state?: string;
   pincode?: string;
+  country?: string | null;
+  formattedAddress?: string | null;
   location?: GeoPoint;
+  locationSource?: 'device' | 'map_pin' | 'geocoded' | 'unknown';
   contactName?: string | null;
   contactPhone?: string | null;
   isDefault?: boolean;
@@ -50,10 +66,24 @@ export interface SavedAddress {
 export interface AddressPayload {
   label: AddressLabel;
   customLabel?: string;
+  /**
+   * The parts, sent as their own fields. They used to be joined into `street` with commas
+   * before being sent, which meant the server stored one opaque line: the rider could not
+   * tell the flat number from the landmark, and the edit screen could not repopulate the
+   * form it had just collected. `street` is composed server-side from these.
+   */
+  houseNumber?: string;
+  floor?: string;
+  building?: string;
+  landmark?: string;
+  area?: string;
+  /** Only the geocoded road/street line — the flat number belongs in `houseNumber`. */
   street?: string;
   city?: string;
   state?: string;
   pincode?: string;
+  country?: string;
+  formattedAddress?: string;
   location?: { type: 'Point'; coordinates: [number, number] };
   contactName?: string;
   contactPhone?: string;
@@ -101,6 +131,13 @@ export interface ActiveLocation {
   /** Locality / city line under it. */
   sublocality?: string;
   coordinates: LatLng;
+  /**
+   * True when this address has no usable map point, so `coordinates` is a placeholder
+   * rather than where the customer is. Every geo-scoped screen must check this before
+   * using `coordinates` — an unplaceable address used to silently become New Delhi (or
+   * `{latitude: undefined}`, which quietly stopped the home feed fetching at all).
+   */
+  unlocated?: boolean;
   pincode?: string;
   syncPending?: boolean;
 }

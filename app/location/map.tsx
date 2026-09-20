@@ -179,8 +179,13 @@ export default function LocationMapScreen() {
             <View style={styles.coverageWarning}>
               <Ionicons name="alert-circle" size={16} color={Colors.warning} />
               <Text style={styles.coverageText}>
-                No restaurants deliver to this spot yet. You can still save it, but a pin closer
-                to a market area will give you more choice.
+                {/* Two different situations that used to produce the same flat "nothing
+                    delivers here". One is a genuinely empty area; the other is a customer
+                    surrounded by restaurants none of which has set a radius reaching them,
+                    which is a far more common — and far more fixable — thing to be told. */}
+                {coverage.browsableCount > 0
+                  ? `${coverage.browsableCount} restaurant${coverage.browsableCount === 1 ? '' : 's'} nearby, but none of them delivers this far yet. You can still save this spot and browse their menus.`
+                  : 'No restaurants near this spot yet. You can still save it, but a pin closer to a market area will give you more choice.'}
               </Text>
             </View>
           )}

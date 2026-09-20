@@ -45,9 +45,13 @@ const EMPTY: HomeData = {
 export function useHomeData(): UseHomeDataResult {
   const { activeLocation, hydrated } = useDeliveryLocation();
   const { enabled: vegMode, scope: vegScope } = useVegMode();
-  const lat = activeLocation?.coordinates.latitude;
-  const lng = activeLocation?.coordinates.longitude;
-  const hasLocation = lat != null && lng != null;
+  // `unlocated` addresses carry a placeholder coordinate, not a real one — fetching with it
+  // would show a feed for somewhere the customer isn't. Treated as "no location" so the
+  // screen prompts for one instead. See ActiveLocation.unlocated.
+  const located = activeLocation != null && !activeLocation.unlocated;
+  const lat = located ? activeLocation.coordinates.latitude : undefined;
+  const lng = located ? activeLocation.coordinates.longitude : undefined;
+  const hasLocation = lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng);
 
   const [data, setData] = useState<HomeData>(EMPTY);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,7 +77,7 @@ export function useHomeData(): UseHomeDataResult {
     // No delivery location yet → nothing to fetch. Keep the skeleton up only
     // until the cached location has had its chance to hydrate; after that the
     // screen shows its "choose a location" prompt.
-    if (lat == null || lng == null) {
+    if (!hasLocation) {
       if (isCurrent()) {
         setData(EMPTY);
         setError(null);
@@ -86,7 +90,7 @@ export function useHomeData(): UseHomeDataResult {
     setError(null);
 
     try {
-      const feed = await fetchHomeFeed({ lat, lng, vegMode, vegScope });
+      const feed = await fetchHomeFeed({ lat: lat!, lng: lng!, vegMode, vegScope });
       if (isCurrent()) setData(feed);
     } catch (err) {
       // 4xx is a handled, expected failure (bad params, nothing nearby) — warn,
@@ -107,7 +111,7 @@ export function useHomeData(): UseHomeDataResult {
     } finally {
       if (isCurrent()) setIsLoading(false);
     }
-  }, [lat, lng, hydrated, vegMode, vegScope]);
+  }, [lat, lng, hasLocation, hydrated, vegMode, vegScope]);
 
   useEffect(() => {
     load();

@@ -35,6 +35,7 @@ import {
   useThemedStyles,
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
+import { hasUsablePoint } from '../../src/lib/address';
 import { reportError } from '../../src/lib/logger';
 import {
   removeAddress,
@@ -54,7 +55,9 @@ const LABEL_META: Record<
 };
 
 function formatAddressLines(a: SavedAddress): { primary: string; secondary: string } {
-  const parts = [a.street, a.city, a.state, a.pincode].filter(Boolean);
+  // `street` is the server-composed line (flat, building, floor, landmark, road), so the
+  // parts are not re-joined here — that would print the flat number twice.
+  const parts = [a.street, a.area, a.city, a.state, a.pincode].filter(Boolean);
   const primary = a.customLabel ?? (a.label.charAt(0).toUpperCase() + a.label.slice(1));
   const secondary = parts.join(', ') || 'No address details saved';
   return { primary, secondary };
@@ -111,6 +114,19 @@ function AddressCard({
           ) : null}
         </View>
         <Text style={styles.cardSub} numberOfLines={2}>{secondary}</Text>
+        {/* An address with no map point cannot load a restaurant list — choosing it used to
+            leave the customer on a "pick a delivery location" prompt with one already
+            picked, and nothing on this screen said why. Naming it, with the fix, beats
+            leaving them to guess. */}
+        {!hasUsablePoint(address) ? (
+          <View style={styles.unlocatedRow}>
+            <Ionicons name="warning-outline" size={13} color={Colors.warning} />
+            <Text style={styles.unlocatedText}>
+              We couldn&apos;t place this address on the map — add the pincode and area, or
+              re-pin it, to see restaurants here.
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Three-dot menu */}
@@ -485,6 +501,18 @@ const makeStyles = (t: AccentTheme) =>
     lineHeight: 18,
     color: Colors.foodTextSecondary,
     marginTop: 3,
+  },
+  unlocatedRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.xs,
+    marginTop: 5,
+  },
+  unlocatedText: {
+    flex: 1,
+    fontSize: 11.5,
+    lineHeight: 15,
+    color: Colors.foodTextMuted,
   },
   defaultBadge: {
     backgroundColor: t.accent + '18',

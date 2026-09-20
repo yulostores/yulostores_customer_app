@@ -5,9 +5,9 @@
  *
  * UX (Zomato/Swiggy style):
  *  ① Geo-resolved location card with "Change" link
- *  ② Editable address chips: Street · Pincode · City · State
+ *  ② Editable address chips: Street · Area · Pincode · City · State
  *     Pre-filled from reverse-geocode, each individually tappable to edit
- *  ③ House / Flat / Block no. (required)
+ *  ③ House / Flat / Block no. (required) + Building (optional)
  *  ④ Floor (optional) + Landmark (optional) row
  *  ⑤ Address label: Home / Work / Other
  *  ⑥ Receiver details (collapsible optional section)
@@ -15,7 +15,11 @@
  *  ⑧ Save Address CTA
  *
  * Every field is sent to the backend as a separate named field so the DB stores
- * pincode / state / street / city individually, not collapsed into one line.
+ * house number / floor / landmark / street / area / pincode / city / state
+ * individually, not collapsed into one line. The server composes the one-line
+ * `street` used for display from those parts — which is what makes editing an
+ * address work: the form below repopulates from the parts, where before it could
+ * only ever show the comma-joined result and made the customer retype it.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -238,12 +242,17 @@ export default function LocationConfirmScreen() {
 
   // ── Pre-fill all fields — from an existing saved address in edit mode, or
   // from the reverse geocode when adding a new one ──────────────────────────
-  const [house, setHouse] = useState('');
-  const [floor, setFloor] = useState('');
-  const [landmark, setLandmark] = useState('');
+  // Repopulated from the stored parts in edit mode. These were unrecoverable before —
+  // the app joined them into `street` before sending, so re-opening a saved address
+  // showed an empty flat-number field above a street line that already contained it.
+  const [house, setHouse] = useState(existing?.houseNumber ?? '');
+  const [floor, setFloor] = useState(existing?.floor ?? '');
+  const [building, setBuilding] = useState(existing?.building ?? '');
+  const [landmark, setLandmark] = useState(existing?.landmark ?? '');
 
   // Address sub-components — individually editable
   const [street, setStreet] = useState(existing?.street ?? place?.street ?? '');
+  const [area, setArea] = useState(existing?.area ?? place?.district ?? '');
   const [pincode, setPincode] = useState(existing?.pincode ?? place?.pincode ?? '');
   const [city, setCity] = useState(existing?.city ?? place?.city ?? '');
   const [state, setState] = useState(existing?.state ?? place?.region ?? '');
@@ -274,65 +283,52 @@ export default function LocationConfirmScreen() {
     }).start();
   };
 
-  const canSave = isEdit
-    ? street.trim().length > 0 &&
-      (label !== 'other' || customLabel.trim().length > 0) &&
-      !saving
-    : house.trim().length > 0 &&
-      (label !== 'other' || customLabel.trim().length > 0) &&
-      !saving;
+  // The flat number is what a rider actually needs, in both modes. Editing used to fall
+  // back to requiring `street` instead, because the flat number wasn't recoverable from a
+  // saved address — it is now, so the same rule applies to both.
+  const canSave =
+    house.trim().length > 0 &&
+    (label !== 'other' || customLabel.trim().length > 0) &&
+    !saving;
 
   const onSave = async () => {
     if (!canSave) return;
     setSaving(true);
     setError(null);
     try {
-      if (isEdit && existing) {
-        const payload: Partial<AddressPayload> = {
-          label,
-          street: street.trim(),
-          city: city.trim() || undefined,
-          state: state.trim() || undefined,
-          pincode: pincode.trim() || undefined,
-          contactName: contactName.trim() || undefined,
-          contactPhone: contactPhone.trim() || undefined,
-          isDefault,
-        };
-        if (label === 'other' && customLabel.trim()) payload.customLabel = customLabel.trim();
+      const form = {
+        house,
+        floor,
+        building,
+        landmark,
+        area,
+        street,
+        city,
+        state,
+        pincode,
+        label,
+        customLabel,
+        contactName,
+        contactPhone,
+        isDefault,
+      };
 
+      if (isEdit && existing) {
+        // Send every part, and let the server work out whether anything actually MOVED.
+        // It compares values rather than which keys arrived, so re-sending an unchanged
+        // street no longer re-geocodes the address and overwrites the pin the customer
+        // dragged — which is what happened when they edited only the receiver's phone.
+        // No `location` here on purpose: editing details must never move the pin. The
+        // map screen is where a pin is changed.
+        const payload = buildAddressPayload(coordinates, place, form);
+        delete payload.location;
         await updateAddress(existing._id, payload);
         await refreshSaved();
         router.replace('/address');
         return;
       }
 
-      // Build the payload manually so each field is sent as a separate DB column
-      const streetLine = [
-        house.trim(),
-        floor.trim() ? `Floor ${floor.trim()}` : undefined,
-        landmark.trim() || undefined,
-      ]
-        .filter(Boolean)
-        .join(', ') || street || place?.title || undefined;
-
-      const payload = buildAddressPayload(coordinates, place, {
-        house,
-        floor,
-        landmark,
-        label,
-        customLabel,
-        contactName,
-        contactPhone,
-        isDefault,
-      });
-
-      // Override with individually corrected sub-fields
-      payload.street = streetLine;
-      payload.city = city.trim() || place?.city;
-      payload.state = state.trim() || place?.region;
-      payload.pincode = pincode.trim() || place?.pincode;
-
-      await saveAddress(payload);
+      await saveAddress(buildAddressPayload(coordinates, place, form));
       // Go to saved addresses list so the user sees their new entry
       router.replace('/address');
     } catch (err) {
@@ -405,10 +401,19 @@ export default function LocationConfirmScreen() {
             <View style={styles.chipFullRow}>
               <EditableChip
                 icon="navigate-circle-outline"
-                label="STREET / AREA"
+                label="STREET / ROAD"
                 value={street}
-                placeholder={place?.street ?? 'Street, area, colony…'}
+                placeholder={place?.street ?? 'Street or road name'}
                 onChangeText={setStreet}
+              />
+            </View>
+            <View style={styles.chipFullRow}>
+              <EditableChip
+                icon="trail-sign-outline"
+                label="AREA / LOCALITY"
+                value={area}
+                placeholder={place?.district ?? 'Colony, sector, neighbourhood'}
+                onChangeText={setArea}
               />
             </View>
             <View style={styles.chipRow}>
@@ -443,46 +448,52 @@ export default function LocationConfirmScreen() {
           {/* Divider */}
           <View style={styles.divider} />
 
-          {/* ③ House / flat details — add mode only; editing corrects the single
-              street line above instead of re-composing it from parts. */}
-          {!isEdit ? (
-            <>
-              <Text style={styles.sectionTitle}>FLAT / HOUSE DETAILS</Text>
+          {/* ③ House / flat details. Shown when editing too, now that these come back
+              from the server as their own fields — the edit screen used to hide them
+              because it had no way to recover them from the joined street line, which
+              meant a customer could never correct a wrong flat number. */}
+          <Text style={styles.sectionTitle}>FLAT / HOUSE DETAILS</Text>
 
+          <Field
+            label="House / Flat / Block no."
+            required
+            value={house}
+            onChangeText={setHouse}
+            placeholder="e.g. B-402"
+            autoFocus={!isEdit && pincode.length > 0}
+            returnKeyType="next"
+          />
+
+          <Field
+            label="Building / Apartment (optional)"
+            value={building}
+            onChangeText={setBuilding}
+            placeholder="e.g. Sunrise Apartments"
+            returnKeyType="next"
+          />
+
+          <View style={styles.pairRow}>
+            <View style={styles.flex}>
               <Field
-                label="House / Flat / Block no."
-                required
-                value={house}
-                onChangeText={setHouse}
-                placeholder="e.g. B-402, Sunrise Apartments"
-                autoFocus={pincode.length > 0}
-                returnKeyType="next"
+                label="Floor (optional)"
+                value={floor}
+                onChangeText={setFloor}
+                placeholder="e.g. 4th"
+                keyboardType="default"
               />
+            </View>
+            <View style={styles.flex}>
+              <Field
+                label="Landmark (optional)"
+                value={landmark}
+                onChangeText={setLandmark}
+                placeholder="e.g. Near City Mall"
+              />
+            </View>
+          </View>
 
-              <View style={styles.pairRow}>
-                <View style={styles.flex}>
-                  <Field
-                    label="Floor (optional)"
-                    value={floor}
-                    onChangeText={setFloor}
-                    placeholder="e.g. 4th"
-                    keyboardType="default"
-                  />
-                </View>
-                <View style={styles.flex}>
-                  <Field
-                    label="Landmark (optional)"
-                    value={landmark}
-                    onChangeText={setLandmark}
-                    placeholder="e.g. Near City Mall"
-                  />
-                </View>
-              </View>
-
-              {/* Divider */}
-              <View style={styles.divider} />
-            </>
-          ) : null}
+          {/* Divider */}
+          <View style={styles.divider} />
 
           {/* ④ Address label */}
           <Text style={styles.sectionTitle}>SAVE ADDRESS AS</Text>
@@ -548,11 +559,9 @@ export default function LocationConfirmScreen() {
             />
           </Pressable>
 
-          {!canSave && (isEdit ? street.trim().length === 0 : house.trim().length === 0) ? (
+          {!canSave && house.trim().length === 0 ? (
             <Text style={styles.requiredHint}>
-              {isEdit
-                ? '* Street / area is required to save this address'
-                : '* House / Flat number is required to save this address'}
+              * House / Flat number is required to save this address
             </Text>
           ) : null}
         </ScrollView>

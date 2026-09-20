@@ -793,6 +793,20 @@ function RestaurantNearbyCard({ restaurant }: { restaurant: Restaurant }) {
             {restaurant.isOpen ? 'Open now' : 'Closed'}
           </Text>
         </View>
+
+        {/* Listed, but out of this restaurant's own delivery reach. Explicitly `=== false`:
+            undefined means the endpoint didn't answer the question (no pin), which is not
+            the same as a no. Saying so beats the alternative it replaced — the restaurant
+            silently not appearing at all, which is how a whole city's worth of newly-added
+            stores went missing. */}
+        {restaurant.deliversToPin === false && (
+          <View style={styles.tooFarNote}>
+            <Ionicons name="bicycle-outline" size={13} color={Colors.foodTextMuted} />
+            <Text style={styles.tooFarText}>
+              Too far to deliver here — browse the menu or pick a closer address
+            </Text>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -1742,6 +1756,18 @@ const makeStyles = (t: AccentTheme) =>
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     ...Elevation.card,
+  },
+  tooFarNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+  tooFarText: {
+    flex: 1,
+    fontSize: 11.5,
+    color: Colors.foodTextMuted,
+    lineHeight: 15,
   },
   nearbyCoverWrap: {
     position: 'relative',

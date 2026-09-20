@@ -41,6 +41,10 @@ export interface RawRestaurant {
    *  geo-browse, location-scoped search) — the same figure the backend's delivery-zone
    *  check used. Absent on non-geo endpoints. */
   distanceKm?: number;
+  /** Whether THIS restaurant's own delivery radius covers the customer's pin. Attached by
+   *  the same geo-scoped endpoints as `distanceKm`. Absent on non-geo endpoints, which is
+   *  not the same as false — see Restaurant.deliversToPin. */
+  deliversToPin?: boolean;
   operatingHours?: {
     day: string;
     isOpen: boolean;
@@ -171,6 +175,10 @@ export function toRestaurant(
     startingPrice: r.startingPrice ?? null,
     isPureVeg: r.isPureVeg ?? false,
     distanceKm,
+    // Passed through untouched, including undefined: "this endpoint didn't say" and "this
+    // restaurant doesn't deliver here" must stay distinguishable, or a favourites list
+    // (which carries no pin) would mark every restaurant undeliverable.
+    deliversToPin: r.deliversToPin,
     isFavorited: r.isFavorited,
   };
 }
