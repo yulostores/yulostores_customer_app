@@ -44,6 +44,7 @@ import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
+import { hasUsablePoint } from '../../src/lib/address';
 import {
   ORANGE_ACCENT,
   useAccentTheme,
@@ -168,19 +169,49 @@ function AddressBlock({ address }: { address: SavedAddress | null }) {
     );
   }
   const { label, line } = addressBits(address);
+  // An address the server could not place on the map even after the retry it runs while
+  // building this summary (yulo_backend services/user.service.js `ensureAddressLocated`).
+  // The order is still allowed through — a postal address the customer knows is real is
+  // not a reason to refuse them dinner — but it is the last moment anyone can cheaply fix
+  // it, and it is worth saying what it costs: the drop distance, the partner matching that
+  // ranks on it, and the live map on the tracking screen all need a point.
+  const located = hasUsablePoint(address);
   return (
-    <Pressable style={styles.addressCard} onPress={() => router.push('/address')}>
-      <View style={styles.addrIcon}>
-        <Ionicons name="location-sharp" size={20} color={accent} />
-      </View>
-      <View style={styles.addrText}>
-        <Text style={styles.addrTitle}>Delivering to {label}</Text>
-        <Text style={styles.addrLine} numberOfLines={2}>
-          {line}
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={Colors.foodTextMuted} />
-    </Pressable>
+    <View style={styles.addressGroup}>
+      <Pressable style={styles.addressCard} onPress={() => router.push('/address')}>
+        <View style={styles.addrIcon}>
+          <Ionicons name="location-sharp" size={20} color={accent} />
+        </View>
+        <View style={styles.addrText}>
+          <Text style={styles.addrTitle}>Delivering to {label}</Text>
+          <Text style={styles.addrLine} numberOfLines={2}>
+            {line}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={Colors.foodTextMuted} />
+      </Pressable>
+
+      {!located && (
+        <Pressable
+          style={styles.addrUnlocated}
+          onPress={() =>
+            router.push({
+              pathname: '/location/map',
+              params: { editId: address._id, from: 'checkout' },
+            })
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Pin this address on the map"
+        >
+          <Ionicons name="warning-outline" size={16} color={Colors.warning} />
+          <Text style={styles.addrUnlocatedText}>
+            We couldn&apos;t find this address on the map. Drop a pin so your order can be
+            tracked and reach you faster.
+          </Text>
+          <Text style={[styles.addrUnlocatedAction, { color: accent }]}>Pin</Text>
+        </Pressable>
+      )}
+    </View>
   );
 }
 
@@ -618,11 +649,14 @@ export default function CheckoutScreen() {
   });
 
   const displayAddress = useMemo<SavedAddress | null>(() => {
-    const picked =
-      activeLocation?.id != null
-        ? savedAddresses.find((a) => a._id === activeLocation.id) ?? null
-        : null;
-    return picked ?? summary?.address ?? null;
+    // The summary's address is a snapshot taken when the page loaded; the context's copy is
+    // refetched whenever an address is written. Prefer the live copy of whichever address
+    // this order is going to — otherwise a customer who just dropped a pin comes back to
+    // the same "we couldn't find this address on the map" notice they went to fix.
+    const chosenId = activeLocation?.id ?? summary?.address?._id ?? null;
+    const fresh =
+      chosenId != null ? savedAddresses.find((a) => a._id === chosenId) ?? null : null;
+    return fresh ?? summary?.address ?? null;
   }, [activeLocation?.id, savedAddresses, summary?.address]);
 
   const bill = summary?.bill ?? null;
@@ -975,6 +1009,7 @@ const makeStyles = (t: AccentTheme) =>
   },
 
   // Address
+  addressGroup: { gap: Spacing.sm },
   addressCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -997,6 +1032,19 @@ const makeStyles = (t: AccentTheme) =>
   addrText: { flex: 1, gap: 2 },
   addrTitle: { fontSize: 14.5, fontWeight: '800', color: Colors.foodText },
   addrLine: { fontSize: 13, color: Colors.foodTextSecondary, lineHeight: 18 },
+  // A well inside the address block rather than a second card: it belongs to the address
+  // above it, and it must not compete with it for the first look.
+  addrUnlocated: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.foodBgSecondary,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.base,
+  },
+  addrUnlocatedText: { flex: 1, fontSize: 12.5, color: Colors.foodTextSecondary, lineHeight: 17 },
+  addrUnlocatedAction: { fontSize: 13, fontWeight: '800' },
 
   // Delivery instructions
   instructionsLink: {

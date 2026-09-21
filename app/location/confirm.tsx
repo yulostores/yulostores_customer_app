@@ -209,15 +209,22 @@ export default function LocationConfirmScreen() {
   const styles = useThemedStyles(makeStyles);
   const fieldStyles = useThemedStyles(makeFieldStyles);
   const { accent } = useAccentTheme();
-  const { lat, lng, place: placeRaw, editId } = useLocalSearchParams<{
+  const { lat, lng, place: placeRaw, editId, from } = useLocalSearchParams<{
     lat?: string;
     lng?: string;
     place?: string;
     editId?: string;
+    /** Where to go back to once saved — checkout sends its own name so a re-pin
+     *  started there returns there instead of stranding the customer on the
+     *  address list with an order still waiting to be paid for. */
+    from?: string;
   }>();
   const { saveAddress, savedAddresses, refreshSaved } = useDeliveryLocation();
 
   const isEdit = !!editId;
+  // A pin arrived with this navigation, as opposed to an edit opened straight from the
+  // address list. Only then may an edit write `location` — see `onSave`.
+  const repinned = !!lat && !!lng;
   const existing = useMemo(
     () => (editId ? savedAddresses.find((a) => a._id === editId) ?? null : null),
     [editId, savedAddresses],
@@ -291,6 +298,14 @@ export default function LocationConfirmScreen() {
     (label !== 'other' || customLabel.trim().length > 0) &&
     !saving;
 
+  // Back to whoever sent us here: the checkout screen already on the stack (so the order
+  // is still there, now with a located address), or the saved-address list, where a new
+  // entry is what the customer expects to see.
+  const leaveTo = () => {
+    if (from === 'checkout') router.dismissTo('/checkout');
+    else router.replace('/address');
+  };
+
   const onSave = async () => {
     if (!canSave) return;
     setSaving(true);
@@ -318,19 +333,20 @@ export default function LocationConfirmScreen() {
         // It compares values rather than which keys arrived, so re-sending an unchanged
         // street no longer re-geocodes the address and overwrites the pin the customer
         // dragged — which is what happened when they edited only the receiver's phone.
-        // No `location` here on purpose: editing details must never move the pin. The
-        // map screen is where a pin is changed.
         const payload = buildAddressPayload(coordinates, place, form);
-        delete payload.location;
+        // `location` only survives when this edit came through the map, which is the one
+        // place a pin is ever chosen. Opened from the address list there is no pin in the
+        // route at all — `coordinates` would be the {0, 0} its params default to — and
+        // editing details must never move the customer's existing pin.
+        if (!repinned) delete payload.location;
         await updateAddress(existing._id, payload);
         await refreshSaved();
-        router.replace('/address');
+        leaveTo();
         return;
       }
 
       await saveAddress(buildAddressPayload(coordinates, place, form));
-      // Go to saved addresses list so the user sees their new entry
-      router.replace('/address');
+      leaveTo();
     } catch (err) {
       reportError('location', 'Address save failed on confirm screen', err, {
         label,

@@ -29,13 +29,27 @@ import type { LatLng, ResolvedPlace } from '../../src/types/address';
 export default function LocationMapScreen() {
   const styles = useThemedStyles(makeStyles);
   const { accent } = useAccentTheme();
-  const params = useLocalSearchParams<{ lat?: string; lng?: string; source?: string }>();
+  // `editId` means "re-pin THIS saved address" rather than "add a new one" — it is carried
+  // through to the confirm screen untouched, which is where it decides between a create and
+  // an update. Checkout hands it over for an address the geocoder could never place.
+  const params = useLocalSearchParams<{
+    lat?: string;
+    lng?: string;
+    source?: string;
+    editId?: string;
+    from?: string;
+  }>();
   const { activeLocation } = useDeliveryLocation();
 
+  // An `unlocated` active location carries a placeholder, not a place (see
+  // ActiveLocation.unlocated) — opening the map on it would present that placeholder as the
+  // customer's own area, which is exactly the confusion a re-pin is here to end.
+  const lastKnown =
+    activeLocation && !activeLocation.unlocated ? activeLocation.coordinates : null;
   const initialCenter: LatLng =
     params.lat && params.lng
       ? { latitude: Number(params.lat), longitude: Number(params.lng) }
-      : activeLocation?.coordinates ?? DEFAULT_REGION;
+      : lastKnown ?? DEFAULT_REGION;
 
   const mapRef = useRef<MapCanvasHandle>(null);
   const centerRef = useRef<LatLng>(initialCenter);
@@ -103,6 +117,8 @@ export default function LocationMapScreen() {
         lat: String(centerRef.current.latitude),
         lng: String(centerRef.current.longitude),
         place: place ? JSON.stringify(place) : '',
+        ...(params.editId ? { editId: params.editId } : {}),
+        ...(params.from ? { from: params.from } : {}),
       },
     });
   };
