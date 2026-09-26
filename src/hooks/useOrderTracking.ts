@@ -18,8 +18,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
+import { ApiError } from '../services/api';
 import { getAccessToken } from '../services/session';
 import {
+  cancelOrder,
   getOrderTracking,
   getVegFleetStatus,
   keepWaitingVegFleet,
@@ -50,6 +52,9 @@ interface UseOrderTrackingResult {
   keepWaiting: () => Promise<void>;
   /** Accepts any available partner instead of waiting (`searching` state only). */
   useAnyPartner: () => Promise<void>;
+  /** Withdraws the order while the restaurant hasn't accepted it. Throws `ApiError`
+   *  `ORDER_NOT_CANCELLABLE` once it has; the screen is refreshed either way. */
+  cancel: () => Promise<void>;
 }
 
 export function useOrderTracking(orderId: string): UseOrderTrackingResult {
@@ -67,10 +72,19 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
   // until the next scheduled refresh.
   const assignmentRef = useRef<OrderAssignmentStatus | null>(null);
 
+  // Fetches overlap — the 30 s poll, socket events, app-resume and pull-to-refresh can all
+  // be in flight at once — and can resolve out of order. Only the most recently started one
+  // may write state, so a slow response from before the restaurant accepted can't flip the
+  // screen back to "waiting" after a newer one said "accepted".
+  const latestFetchRef = useRef(0);
+
   // ─── REST fetch ────────────────────────────────────────────────────────────
   const fetchTracking = useCallback(async () => {
+    const seq = ++latestFetchRef.current;
+    const isStale = () => seq !== latestFetchRef.current;
     try {
       const data = await getOrderTracking(orderId);
+      if (isStale()) return;
       setTracking(data);
       assignmentRef.current = data.assignmentStatus;
       setError(null);
@@ -80,6 +94,7 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
         setPartnerLocation(data.deliveryPartner.currentLocation);
       }
     } catch (err: unknown) {
+      if (isStale()) return;
       const message = err instanceof Error ? err.message : 'Failed to load tracking';
       logger.warn('useOrderTracking', 'fetchTracking failed', { orderId, message });
       setError(message);
@@ -90,7 +105,8 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     // Kept out of the try/catch above so a hiccup here never blocks the main
     // tracking display.
     try {
-      setVegFleet(await getVegFleetStatus(orderId));
+      const fleet = await getVegFleetStatus(orderId);
+      if (!isStale()) setVegFleet(fleet);
     } catch (err) {
       logger.warn('useOrderTracking', 'veg-fleet status fetch failed', {
         orderId,
@@ -126,9 +142,17 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
       orderId: string;
       status: string;
       etaMinutes?: number | null;
+      cancellationReason?: string | null;
     }) => {
       if (String(payload.orderId) !== orderId) return;
       logger.debug('useOrderTracking', 'order_status_updated', payload);
+
+      // Who cancelled, the refund state, acceptedAt and the fresh ETA/route only come on the
+      // REST payload, so pull it straight away rather than on the next 30 s tick. Starting a
+      // fetch also makes any older one still in flight stale (see latestFetchRef), so it
+      // can't overwrite this newer status. The patch below flips the screen instantly
+      // in the meantime.
+      fetchTracking().catch(() => {});
 
       setTracking((prev) => {
         if (!prev) return prev;
@@ -146,11 +170,19 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
           return { ...entry, completed, timestamp };
         });
 
+        const cancelled = payload.status === 'cancelled';
         return {
           ...prev,
           status: payload.status,
           etaMinutes: payload.etaMinutes ?? null,
-          timeline: updatedTimeline,
+          // A cancelled order has no position on the happy path — keep the stages it
+          // actually reached (as the server does) instead of un-ticking all of them.
+          timeline: cancelled ? prev.timeline : updatedTimeline,
+          awaitingRestaurantApproval: payload.status === 'placed',
+          approvalExpiresAt: payload.status === 'placed' ? prev.approvalExpiresAt : null,
+          cancellation: cancelled
+            ? prev.cancellation ?? { reason: payload.cancellationReason ?? null, by: null, at: null }
+            : null,
         };
       });
     };
@@ -284,7 +316,12 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
       socket.off('delivery_assignment_updated', onAssignmentUpdate);
       socket.off('partner_location_updated', onLocationUpdate);
       socket.off('veg_fleet_status_updated', onVegFleetUpdate);
-      appStateSub.remove();    };
+      appStateSub.remove();
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
   }, [orderId, fetchTracking]);
 
   const refetch = useCallback(async () => {
@@ -309,6 +346,21 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     }
   }, [orderId]);
 
+  const cancel = useCallback(async () => {
+    try {
+      await cancelOrder(orderId);
+    } catch (err) {
+      // Too late to cancel is an expected outcome (the restaurant answered first), not a fault.
+      if (!(err instanceof ApiError && err.code === 'ORDER_NOT_CANCELLABLE')) {
+        reportError('useOrderTracking', 'customer cancel failed', err, { orderId });
+      }
+      throw err;
+    } finally {
+      // Success or not (most often the restaurant just accepted it), show the real state.
+      await fetchTracking();
+    }
+  }, [orderId, fetchTracking]);
+
   return {
     tracking,
     partnerLocation,
@@ -318,5 +370,6 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     vegFleet,
     keepWaiting,
     useAnyPartner,
+    cancel,
   };
 }

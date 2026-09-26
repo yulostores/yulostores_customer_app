@@ -4,6 +4,11 @@
  * Reached with `router.replace` from the Payment screen once the order is placed
  * and (for online methods) paid. Params carry enough for an instant render;
  * `GET /api/orders/:id` then confirms the authoritative status / payment state.
+ *
+ * Placing an order no longer means it is confirmed: it goes to the restaurant first, who
+ * accept or reject it (yulo_backend services/orderApproval.service.js). So this screen
+ * says "sent to the restaurant" and points at the tracking screen, where the decision
+ * shows up live.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -77,7 +82,11 @@ export default function OrderSuccessScreen() {
 
   const total = order?.grandTotal || paramTotal;
   const paid = order ? order.paymentStatus === 'paid' : !isCod;
-  const eta = etaText(order?.estimatedDeliveryTime ?? null);
+  const status = order?.status ?? 'placed';
+  const accepted = status !== 'placed' && status !== 'cancelled';
+  const cancelled = status === 'cancelled';
+  // The ETA only means something once the restaurant has accepted.
+  const eta = accepted ? etaText(order?.estimatedDeliveryTime ?? null) : null;
 
   const paymentLine = isCod
     ? 'Pay on delivery'
@@ -91,15 +100,25 @@ export default function OrderSuccessScreen() {
       <View style={{ height: insets.top }} />
 
       <View style={styles.body}>
-        <View style={styles.badge}>
-          <Ionicons name="checkmark" size={44} color={Colors.white} />
+        <View style={[styles.badge, cancelled && { backgroundColor: Colors.danger }]}>
+          <Ionicons name={cancelled ? 'close' : 'checkmark'} size={44} color={Colors.white} />
         </View>
 
-        <Text style={styles.title}>Order placed</Text>
+        <Text style={styles.title}>
+          {cancelled ? 'Order cancelled' : accepted ? 'Order accepted' : 'Order sent to the restaurant'}
+        </Text>
         <Text style={styles.subtitle}>
-          {isCod
-            ? 'Your order is confirmed. Keep the exact amount ready for delivery.'
-            : 'Your payment went through and your order is confirmed.'}
+          {cancelled
+            ? 'This order was cancelled. Open it to see why.'
+            : accepted
+              ? isCod
+                ? 'The restaurant accepted your order. Keep the exact amount ready for delivery.'
+                : 'The restaurant accepted your order and it’s being prepared.'
+              : isCod
+                ? 'Waiting for the restaurant to accept it. Keep the exact amount ready for delivery.'
+                : paid
+                  ? 'Your payment went through. Waiting for the restaurant to accept — if they can’t, you’ll get a full refund.'
+                  : 'Waiting for the restaurant to accept your order.'}
         </Text>
 
         {!loaded ? (
@@ -128,9 +147,15 @@ export default function OrderSuccessScreen() {
       </View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
-        <Pressable style={styles.primaryBtn} onPress={() => router.replace('/(tabs)/orders')}>
-          <Text style={styles.primaryBtnText}>View my orders</Text>
-        </Pressable>
+        {orderId ? (
+          <Pressable style={styles.primaryBtn} onPress={() => router.replace(`/order/${orderId}/track`)}>
+            <Text style={styles.primaryBtnText}>Track order</Text>
+          </Pressable>
+        ) : (
+          <Pressable style={styles.primaryBtn} onPress={() => router.replace('/(tabs)/orders')}>
+            <Text style={styles.primaryBtnText}>View my orders</Text>
+          </Pressable>
+        )}
         <Pressable style={styles.secondaryBtn} onPress={() => router.replace('/(tabs)')}>
           <Text style={styles.secondaryBtnText}>Back to home</Text>
         </Pressable>

@@ -20,7 +20,10 @@ import { reshapeCartSnapshot, type CartSnapshot } from './cart';
 
 // ─── Status helpers ────────────────────────────────────────────────────────
 
-/** The lifecycle a delivery order moves through (yulo_backend Order.js). */
+/**
+ * The lifecycle a delivery order moves through (yulo_backend Order.js). `placed` means
+ * the restaurant hasn't accepted it yet; `confirmed` is the restaurant accepting it.
+ */
 export type OrderStatus =
   | 'placed'
   | 'confirmed'
@@ -39,8 +42,8 @@ interface StatusMeta {
 }
 
 const STATUS_META: Record<string, StatusMeta> = {
-  placed: { label: 'Order placed', icon: 'receipt-outline', tone: 'accent' },
-  confirmed: { label: 'Confirmed', icon: 'checkmark-circle-outline', tone: 'accent' },
+  placed: { label: 'Waiting for restaurant', icon: 'hourglass-outline', tone: 'accent' },
+  confirmed: { label: 'Accepted', icon: 'checkmark-circle-outline', tone: 'accent' },
   preparing: { label: 'Being prepared', icon: 'flame-outline', tone: 'accent' },
   ready: { label: 'Ready', icon: 'bag-check-outline', tone: 'accent' },
   out_for_delivery: { label: 'On the way', icon: 'bicycle-outline', tone: 'accent' },
@@ -77,6 +80,10 @@ interface RawOrder {
   estimatedDeliveryTime?: string | null;
   createdAt?: string | null;
   deliveredAt?: string | null;
+  acceptedAt?: string | null;
+  cancelledBy?: string | null;
+  cancellationReason?: string | null;
+  refundStatus?: string | null;
   deliveryAddress?: {
     label?: string | null;
     street?: string;
@@ -111,6 +118,10 @@ export interface OrderSummary {
   deliveredViaVegFleet: boolean;
   /** A "Reorder" action makes sense for this row (a finished delivery order). */
   canReorder: boolean;
+  /** Cancelled rows only: "Rejected by restaurant", "Cancelled by you", … */
+  cancelledLabel: string | null;
+  /** Cancelled after payment, and the money hasn't gone back yet. */
+  refundPending: boolean;
   createdAt: string | null;
 }
 
@@ -150,6 +161,20 @@ function titleOf(items: RawOrderItem[]): string {
 
 const TERMINAL_STATUSES = new Set(['delivered', 'cancelled']);
 
+function cancelledLabelOf(raw: RawOrder): string {
+  switch (raw.cancelledBy) {
+    case 'restaurant':
+    case 'kitchen':
+    case 'waiter':
+      // Rejected before acceptance, or cancelled by the restaurant after it.
+      return raw.acceptedAt ? 'Cancelled by restaurant' : 'Rejected by restaurant';
+    case 'customer':
+      return 'Cancelled by you';
+    default:
+      return 'Cancelled';
+  }
+}
+
 function toSummary(raw: RawOrder): OrderSummary {
   const items = raw.items ?? [];
   const status = raw.status ?? 'placed';
@@ -169,6 +194,8 @@ function toSummary(raw: RawOrder): OrderSummary {
     // The backend only lets `delivery` orders reorder; offer it once the order is
     // finished (a still-active order shows "Track" instead).
     canReorder: type === 'delivery' && TERMINAL_STATUSES.has(status),
+    cancelledLabel: status === 'cancelled' ? cancelledLabelOf(raw) : null,
+    refundPending: status === 'cancelled' && raw.refundStatus === 'pending',
     createdAt: raw.createdAt ?? null,
   };
 }

@@ -65,10 +65,13 @@ import { useOrderTracking } from '../../../src/hooks/useOrderTracking';
 import { ApiError } from '../../../src/services/api';
 import { submitReview } from '../../../src/services/orders';
 import {
+  cancellationMessage,
   formatRupees,
   shortOrderId,
   stageLabel,
   trackingStatusLabel,
+  type RefundStatus,
+  type TrackingData,
   type TrackingStage,
   type VegFleetState,
 } from '../../../src/services/tracking';
@@ -275,6 +278,165 @@ function VegFleetCard({
   );
 }
 
+// ─── Waiting-for-the-restaurant card ─────────────────────────────────────
+
+/** Seconds until `iso`, ticking once a second; null when there is no deadline. */
+function useSecondsUntil(iso: string | null): number | null {
+  const target = iso ? new Date(iso).getTime() : NaN;
+  const compute = () => (Number.isFinite(target) ? Math.max(0, Math.round((target - Date.now()) / 1000)) : null);
+  const [left, setLeft] = useState<number | null>(compute);
+  useEffect(() => {
+    setLeft(compute());
+    if (!Number.isFinite(target)) return;
+    const timer = setInterval(() => setLeft(compute()), 1000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+  return left;
+}
+
+function ApprovalCard({
+  tracking,
+  onCancel,
+}: {
+  tracking: TrackingData;
+  onCancel: () => Promise<void>;
+}) {
+  const styles = useThemedStyles(makeStyles);
+  const secondsLeft = useSecondsUntil(tracking.approvalExpiresAt);
+  const [cancelling, setCancelling] = useState(false);
+  const paid = tracking.paymentStatus === 'paid';
+
+  const confirmCancel = () => {
+    if (cancelling) return;
+    Alert.alert(
+      'Cancel this order?',
+      paid
+        ? 'The restaurant hasn’t accepted it yet. Your payment will be refunded.'
+        : 'The restaurant hasn’t accepted it yet, so you can still cancel.',
+      [
+        { text: 'Keep order', style: 'cancel' },
+        {
+          text: 'Cancel order',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelling(true);
+            try {
+              await onCancel();
+            } catch (err) {
+              Alert.alert(
+                'Could not cancel',
+                err instanceof ApiError && err.code === 'ORDER_NOT_CANCELLABLE'
+                  ? err.message
+                  : 'Please check your connection and try again.',
+              );
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  return (
+    <View style={[styles.card, styles.approvalCard]}>
+      <View style={styles.approvalHeaderRow}>
+        <View style={styles.approvalIcon}>
+          <Ionicons name="hourglass-outline" size={18} color={Colors.warning} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.approvalTitle}>
+            Waiting for {tracking.restaurant.name ?? 'the restaurant'} to accept
+          </Text>
+          <Text style={styles.approvalHint}>
+            We’ve sent your order to the restaurant. You’ll see it here the moment they accept.
+          </Text>
+        </View>
+      </View>
+
+      {secondsLeft != null && (
+        <Text style={styles.approvalCountdown}>
+          {secondsLeft > 0
+            ? `If they don’t respond in ${formatCountdown(secondsLeft)}, we’ll cancel it${paid ? ' and refund you' : ''}.`
+            : // The server's sweep runs once a minute, and the restaurant can still accept
+              // until it does — so don't promise the cancellation has happened.
+              `The restaurant hasn’t responded yet. If they don’t soon, we’ll cancel it${paid ? ' and refund you' : ''}.`}
+        </Text>
+      )}
+
+      <Pressable
+        style={({ pressed }) => [styles.cancelOrderBtn, pressed && styles.actionBtnPressed]}
+        onPress={confirmCancel}
+        disabled={cancelling}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel order"
+      >
+        {cancelling ? (
+          <ActivityIndicator size="small" color={Colors.danger} />
+        ) : (
+          <Text style={styles.cancelOrderText}>Cancel order</Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── Cancelled card ───────────────────────────────────────────────────────
+
+function refundLine(refundStatus: RefundStatus, amount: number): string | null {
+  if (refundStatus === 'pending') {
+    return `Your refund of ${formatRupees(amount)} is being processed to your original payment method.`;
+  }
+  if (refundStatus === 'refunded') return `${formatRupees(amount)} has been refunded.`;
+  return null;
+}
+
+function CancelledCard({ tracking }: { tracking: TrackingData }) {
+  const styles = useThemedStyles(makeStyles);
+  const refund = refundLine(tracking.refundStatus, tracking.totalPaid);
+  return (
+    <View style={[styles.card, styles.cancelledCard]}>
+      <View style={styles.approvalHeaderRow}>
+        <Ionicons name="close-circle" size={22} color={Colors.danger} />
+        <Text style={[styles.approvalHint, { flex: 1, color: Colors.foodText }]}>
+          {cancellationMessage(tracking.cancellation, tracking.acceptedAt)}
+        </Text>
+      </View>
+      {refund && (
+        <View style={styles.refundRow}>
+          <Ionicons name="wallet-outline" size={16} color={Colors.success} />
+          <Text style={styles.refundText}>{refund}</Text>
+        </View>
+      )}
+      <Pressable
+        style={({ pressed }) => [styles.browseBtn, pressed && styles.actionBtnPressed]}
+        onPress={() => router.navigate('/(tabs)')}
+      >
+        <Text style={styles.actionBtnText}>Browse restaurants</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// Big heading under the status pill, per status.
+function headingFor(status: string): string {
+  switch (status) {
+    case 'placed':
+      return 'Order sent to the restaurant';
+    case 'confirmed':
+      return 'The restaurant accepted your order';
+    case 'preparing':
+      return 'Your order is being prepared';
+    case 'ready':
+      return 'Your order is ready';
+    case 'out_for_delivery':
+      return 'Your order is on the way';
+    default:
+      return 'Your order';
+  }
+}
+
 // ─── Rate-your-order card ──────────────────────────────────────────────────
 
 function ReviewCard({ orderId }: { orderId: string }) {
@@ -366,7 +528,7 @@ export default function TrackingScreen() {
   const { accent } = useAccentTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { tracking, partnerLocation, loading, error, refetch, vegFleet, keepWaiting, useAnyPartner } =
+  const { tracking, partnerLocation, loading, error, refetch, vegFleet, keepWaiting, useAnyPartner, cancel } =
     useOrderTracking(id ?? '');
 
   const [refreshing, setRefreshing] = useState(false);
@@ -401,7 +563,10 @@ export default function TrackingScreen() {
 
   // ─── Loading / error states ───────────────────────────────────────────────
 
-  if (loading) {
+  // No data and no error yet means the first answer is still on its way (the initial fetch
+  // can be superseded by a newer one a socket event started) — keep the spinner rather
+  // than flash "Order not found".
+  if (loading || (!tracking && !error)) {
     return (
       <View style={[styles.centered, { paddingTop: insets.top }]}>
         <StatusBar style="dark" />
@@ -432,19 +597,22 @@ export default function TrackingScreen() {
   const isOnTheWay = tracking.status === 'out_for_delivery';
   const isDelivered = tracking.status === 'delivered';
   const isCancelled = tracking.status === 'cancelled';
+  const isAwaitingApproval = tracking.status === 'placed';
 
   // The backend returns an ETA for every pre-delivery phase now, not only once the rider is
   // carrying the food, so the customer sees a number from the moment they pay — which is what
   // every mature delivery app does and what this screen used to withhold.
-  const showEta = !isDelivered && !isCancelled && tracking.etaMinutes != null;
+  // Not while the restaurant is still deciding: they may yet reject it, and the clock only
+  // really starts once they accept.
+  const showEta = !isDelivered && !isCancelled && !isAwaitingApproval && tracking.etaMinutes != null;
 
   // A straight-line fallback estimate is a genuinely worse number than a traffic-aware routed
   // one, so it is worded as the approximation it is rather than presented with the same
   // confidence. See `etaSource` in src/services/tracking.ts.
   const etaPrefix = tracking.etaSource === 'here' ? 'Arriving in' : 'Arriving in about';
 
-  const stages = ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered'] as TrackingStage[];
-  const currentStageIndex = stages.indexOf(tracking.status as TrackingStage);
+  // A cancelled order shows only the stages it reached, then the cancellation itself.
+  const timeline = isCancelled ? tracking.timeline.filter((e) => e.completed) : tracking.timeline;
 
   return (
     <View style={[styles.root, { backgroundColor: Colors.foodBg }]}>
@@ -499,9 +667,7 @@ export default function TrackingScreen() {
 
           {/* Order heading */}
           {!isDelivered && !isCancelled && (
-            <Text style={styles.headingText}>
-              {isOnTheWay ? 'Your order is on the way' : `Your order is being ${tracking.status === 'preparing' ? 'prepared' : tracking.status}`}
-            </Text>
+            <Text style={styles.headingText}>{headingFor(tracking.status)}</Text>
           )}
           {isDelivered && <Text style={styles.headingText}>Order delivered 🎉</Text>}
           {isCancelled && <Text style={[styles.headingText, { color: Colors.danger }]}>Order cancelled</Text>}
@@ -532,6 +698,10 @@ export default function TrackingScreen() {
           )}
         </View>
 
+        {/* ── RESTAURANT DECISION ──────────────────────────────────────────── */}
+        {isAwaitingApproval && <ApprovalCard tracking={tracking} onCancel={cancel} />}
+        {isCancelled && <CancelledCard tracking={tracking} />}
+
         {/* ── VEG-FLEET SEARCH ─────────────────────────────────────────────── */}
         {vegFleet && vegFleet.status !== 'not_requested' && (
           <VegFleetCard vegFleet={vegFleet} onKeepWaiting={keepWaiting} onUseAnyPartner={useAnyPartner} />
@@ -544,11 +714,11 @@ export default function TrackingScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Delivery timeline</Text>
           <View style={styles.timeline}>
-            {tracking.timeline.map((entry, i) => {
+            {timeline.map((entry, i) => {
               const isCurrent = entry.stage === tracking.status && !isDelivered;
               const isDone = entry.completed && !isCurrent;
               const isPending = !entry.completed && !isCurrent;
-              const isLast = i === tracking.timeline.length - 1;
+              const isLast = i === timeline.length - 1 && !isCancelled;
               const timeStr = formatTime(entry.timestamp);
 
               return (
@@ -586,6 +756,23 @@ export default function TrackingScreen() {
                 </View>
               );
             })}
+            {isCancelled && (
+              <View style={styles.timelineRow}>
+                <View style={styles.timelineLeft}>
+                  <View style={styles.dotCancelled}>
+                    <Ionicons name="close" size={10} color="#fff" />
+                  </View>
+                </View>
+                <View style={styles.timelineRight}>
+                  <Text style={[styles.timelineLabel, { color: Colors.danger, fontWeight: '700' }]}>
+                    Cancelled
+                  </Text>
+                  {formatTime(tracking.cancellation?.at ?? null) ? (
+                    <Text style={styles.timelineTime}>{formatTime(tracking.cancellation?.at ?? null)}</Text>
+                  ) : null}
+                </View>
+              </View>
+            )}
           </View>
         </View>
 
@@ -684,7 +871,7 @@ export default function TrackingScreen() {
           ))}
 
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total paid</Text>
+            <Text style={styles.totalLabel}>{tracking.paymentStatus === 'paid' ? 'Total paid' : 'Total'}</Text>
             <Text style={styles.totalValue}>{formatRupees(tracking.totalPaid)}</Text>
           </View>
 
@@ -870,6 +1057,15 @@ const makeStyles = (t: AccentTheme) =>
     borderColor: Colors.info + '44',
     marginTop: 5,
   },
+  dotCancelled: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
   dotPending: {
     width: 14,
     height: 14,
@@ -1025,6 +1221,58 @@ const makeStyles = (t: AccentTheme) =>
     marginTop: Spacing.md,
   },
   vegFleetNoteRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+
+  // ── Restaurant decision (waiting / cancelled) ──
+  approvalCard: { borderColor: Colors.warning + '66', backgroundColor: Colors.warning + '0D' },
+  approvalHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm },
+  approvalIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.warning + '22',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  approvalTitle: { fontSize: 15, fontWeight: '800', color: Colors.foodText },
+  approvalHint: { fontSize: 13, lineHeight: 19, color: Colors.foodTextSecondary, marginTop: 2 },
+  approvalCountdown: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: Colors.foodTextSecondary,
+    marginTop: Spacing.md,
+  },
+  cancelOrderBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.md,
+    paddingVertical: 11,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.danger,
+    backgroundColor: Colors.foodSurface,
+  },
+  cancelOrderText: { fontSize: 14, fontWeight: '700', color: Colors.danger },
+  cancelledCard: { borderColor: Colors.danger + '55' },
+  refundRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.success + '14',
+  },
+  refundText: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600', color: Colors.foodText },
+  browseBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.md,
+    paddingVertical: 11,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.foodBorderStrong,
+    backgroundColor: Colors.foodSurface,
+  },
   vegFleetNoteText: { flex: 1, fontSize: 13, color: Colors.foodTextSecondary, lineHeight: 18 },
 
   // ── Rate-your-order card ──

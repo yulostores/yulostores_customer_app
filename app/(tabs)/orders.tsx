@@ -175,7 +175,10 @@ function OrderCard({
             <Text style={[styles.statusText, { color: toneColor }]}>{meta.label}</Text>
           </View>
         ) : order.status === 'cancelled' ? (
-          <Text style={styles.cancelled}>Cancelled</Text>
+          <Text style={styles.cancelled}>
+            {order.cancelledLabel ?? 'Cancelled'}
+            {order.refundPending ? <Text style={styles.refundNote}> · Refund in progress</Text> : null}
+          </Text>
         ) : null}
 
         <View style={styles.actionRow}>
@@ -537,6 +540,7 @@ const makeStyles = (t: AccentTheme) =>
   },
   statusText: { fontSize: 12, fontWeight: '700' },
   cancelled: { fontSize: 12.5, fontWeight: '600', color: Colors.danger, marginTop: Spacing.xs },
+  refundNote: { fontWeight: '600', color: Colors.foodTextSecondary },
 
   actionRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm },
   trackBtn: {

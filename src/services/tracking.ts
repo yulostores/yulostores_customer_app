@@ -7,8 +7,15 @@
  *        timeline, restaurant, deliveryPartner, deliveryAddress, orderItems, paymentMethod,
  *        paymentStatus, totalPaid }
  *
+ *   POST /api/orders/:id/cancel   — the customer withdrawing an order the restaurant
+ *                                    hasn't accepted yet (409 ORDER_NOT_CANCELLABLE after)
+ *
  * This is a customer-only endpoint (requires `customer` role token).
  * All money values are plain rupee numbers (not paise).
+ *
+ * A new order starts `placed`, which means "sent to the restaurant, waiting for them to
+ * accept". It moves on to `confirmed` when the restaurant accepts, or to `cancelled` when
+ * they reject it, the customer cancels it, or nobody answers before `approvalExpiresAt`.
  */
 
 import { apiGet, apiPost } from './api';
@@ -109,6 +116,21 @@ export interface TrackingDeliveryAddress {
 
 // ─── Main tracking data ──────────────────────────────────────────────────────
 
+// ─── Cancellation ────────────────────────────────────────────────────────────
+
+/** Who ended the order (yulo_backend Order.cancelledBy) — `system` is the approval timeout. */
+export type CancelledBy = 'restaurant' | 'kitchen' | 'waiter' | 'customer' | 'admin' | 'system' | string;
+
+export interface OrderCancellation {
+  /** Customer-facing reason — e.g. the restaurant's rejection reason. */
+  reason: string | null;
+  by: CancelledBy | null;
+  at: string | null;
+}
+
+/** `pending` when a paid order was cancelled and the money is owed back. */
+export type RefundStatus = 'none' | 'pending' | 'refunded';
+
 export type OrderAssignmentStatus =
   | 'unassigned'
   | 'assigned'
@@ -121,6 +143,19 @@ export interface TrackingData {
   restaurantId: string;
   /** The canonical order lifecycle status. */
   status: string;
+  /** `status === 'placed'` — the restaurant hasn't accepted or rejected it yet. */
+  awaitingRestaurantApproval: boolean;
+  /**
+   * ISO time the order is auto-cancelled if still unanswered, on THIS DEVICE's clock
+   * (rebuilt from the server's `approvalSecondsLeft`, so a wrong phone clock can't skew
+   * the countdown); null once decided.
+   */
+  approvalExpiresAt: string | null;
+  /** ISO time the restaurant accepted it, or null. */
+  acceptedAt: string | null;
+  /** Set only when `status === 'cancelled'`. */
+  cancellation: OrderCancellation | null;
+  refundStatus: RefundStatus;
   /** Delivery-assignment sub-status — finer-grained than order.status. */
   assignmentStatus: OrderAssignmentStatus;
   /**
@@ -151,6 +186,13 @@ interface RawTrackingResponse {
   orderId: string;
   restaurantId: string;
   status: string;
+  // Optional on the wire: an older backend doesn't send these.
+  awaitingRestaurantApproval?: boolean;
+  approvalExpiresAt?: string | null;
+  approvalSecondsLeft?: number | null;
+  acceptedAt?: string | null;
+  cancellation?: OrderCancellation | null;
+  refundStatus?: string | null;
   assignmentStatus: OrderAssignmentStatus;
   etaMinutes: number | null;
   etaSource: EtaSource | null;
@@ -173,7 +215,30 @@ interface RawTrackingResponse {
  */
 export async function getOrderTracking(orderId: string): Promise<TrackingData> {
   const raw = await apiGet<RawTrackingResponse>(`/api/orders/${orderId}/tracking`);
-  return raw;
+  const refundStatus: RefundStatus =
+    raw.refundStatus === 'pending' || raw.refundStatus === 'refunded' ? raw.refundStatus : 'none';
+  const { approvalSecondsLeft, ...rest } = raw;
+  const approvalExpiresAt =
+    typeof approvalSecondsLeft === 'number' && Number.isFinite(approvalSecondsLeft)
+      ? new Date(Date.now() + Math.max(0, approvalSecondsLeft) * 1000).toISOString()
+      : raw.approvalExpiresAt ?? null;
+  return {
+    ...rest,
+    awaitingRestaurantApproval: raw.awaitingRestaurantApproval ?? raw.status === 'placed',
+    approvalExpiresAt,
+    acceptedAt: raw.acceptedAt ?? null,
+    cancellation: raw.cancellation ?? null,
+    refundStatus,
+  };
+}
+
+/**
+ * `POST /api/orders/:id/cancel` — only while the order is still waiting for the
+ * restaurant. Throws `ApiError` `ORDER_NOT_CANCELLABLE` (409) once it has been accepted
+ * (or already cancelled), including when the restaurant answered at the same moment.
+ */
+export async function cancelOrder(orderId: string): Promise<void> {
+  await apiPost(`/api/orders/${orderId}/cancel`);
 }
 
 // ─── Veg-only fleet assignment ────────────────────────────────────────────
@@ -233,9 +298,9 @@ export async function vegFleetFallback(orderId: string): Promise<VegFleetState> 
 export function trackingStatusLabel(status: string, assignmentStatus: OrderAssignmentStatus): string {
   switch (status) {
     case 'placed':
-      return 'Order placed';
+      return 'Waiting for restaurant';
     case 'confirmed':
-      return 'Order confirmed';
+      return 'Accepted by restaurant';
     case 'preparing':
       return 'Being prepared';
     case 'ready':
@@ -251,13 +316,38 @@ export function trackingStatusLabel(status: string, assignmentStatus: OrderAssig
   }
 }
 
+/**
+ * Customer-facing explanation of why an order was cancelled. `acceptedAt` separates a
+ * rejection (never accepted) from the restaurant cancelling an order it had accepted.
+ */
+export function cancellationMessage(c: OrderCancellation | null, acceptedAt: string | null = null): string {
+  switch (c?.by) {
+    case 'restaurant':
+    case 'kitchen':
+    case 'waiter': {
+      const lead = acceptedAt ? 'The restaurant cancelled your order' : 'The restaurant couldn’t take your order';
+      return c.reason ? `${lead}: ${c.reason}` : `${lead}.`;
+    }
+    case 'customer':
+      return 'You cancelled this order.';
+    case 'system':
+      // Mostly the approval timeout ("The restaurant didn't respond in time"), but an admin
+      // cancellation is recorded as 'system' too — so trust the server's reason.
+      return c.reason
+        ? `${c.reason.trim().replace(/[.!\s]+$/, '')}. Your order was cancelled.`
+        : 'This order was cancelled.';
+    default:
+      return c?.reason ? `This order was cancelled: ${c.reason}` : 'This order was cancelled.';
+  }
+}
+
 /** Human-readable label for each timeline stage (matches Zomato's style). */
 export function stageLabel(stage: TrackingStage): string {
   switch (stage) {
     case 'placed':
-      return 'Order placed';
+      return 'Sent to restaurant';
     case 'confirmed':
-      return 'Confirmed';
+      return 'Accepted by restaurant';
     case 'preparing':
       return 'Preparing';
     case 'ready':
