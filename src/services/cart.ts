@@ -13,6 +13,14 @@
  * (`cart.service.js`) on each call — the client never adds up money itself, it
  * renders `bill` as received.
  *
+ * `bill.charges` is the pricing engine's full breakdown (charges.service.js):
+ * integer-paise `lines` in the order a bill reads — item total, discount, GST on
+ * food, delivery fee, platform fee, tip, round off, "To pay" — which screens draw
+ * as-is. `bill.deliveryIssue` says why the delivery fee can't be priced yet
+ * (no map point on the address, out of range, …); while it is set the delivery
+ * line has no amount and the legacy `deliveryFee` / `grandTotal` leave delivery
+ * out — never show those as "FREE" or as the amount to pay.
+ *
  * Every response carries the SAME `{ cart, bill }` shape, so a mutation's result
  * is a full fresh snapshot the caller can swap in without a follow-up GET.
  *
@@ -68,6 +76,20 @@ interface RawCart {
   restaurant?: RawCartRestaurant | null;
 }
 
+interface RawChargeLine {
+  key?: string;
+  label?: string;
+  /** `null` for a line whose amount isn't known yet (delivery while `pending`). */
+  amountPaise?: number | null;
+  sublabel?: string | null;
+}
+
+interface RawCharges {
+  lines?: RawChargeLine[];
+  grandTotal?: number;
+  delivery?: { pending?: boolean; paidBy?: string | null } | null;
+}
+
 interface RawBill {
   itemTotal?: number;
   /** Pre-markdown total (sum of each line's mrpUnitPrice × qty) — equals `itemTotal`
@@ -81,6 +103,8 @@ interface RawBill {
   tax?: number;
   discountAmount?: number;
   grandTotal?: number;
+  charges?: RawCharges | null;
+  deliveryIssue?: string | null;
 }
 
 interface RawCartResponse {
@@ -120,6 +144,47 @@ export interface CartRestaurant {
   isPureVeg: boolean;
 }
 
+/** One row of the server's bill, in display order. Money in integer paise. */
+export interface ChargeLine {
+  /** `item_total` · `discount` · `food_gst` · `delivery_fee` · `service_charge` ·
+   *  `platform_fee` · `tip` · `round_off` · `grand_total` */
+  key: string;
+  label: string;
+  /** `null` → not known yet (the delivery fee while the address can't be priced). */
+  amountPaise: number | null;
+  /** e.g. "Free delivery", "3.2 km · incl. ₹4.58 GST", "incl. ₹1.83 GST". */
+  sublabel: string | null;
+}
+
+/** The pricing engine's breakdown — what the bill block renders. */
+export interface Charges {
+  lines: ChargeLine[];
+  /** The amount to pay, paise — the figure checkout must send back as `expectedTotalPaise`. */
+  grandTotalPaise: number;
+  /** The restaurant pays the delivery charge (free delivery for the customer). */
+  freeDelivery: boolean;
+}
+
+/**
+ * Why the delivery fee can't be priced (and the order can't be placed) for the
+ * address on file — mirrors the backend's codes.
+ */
+export type DeliveryIssue = 'ADDRESS_NOT_LOCATED' | 'OUT_OF_DELIVERY_RANGE' | 'RESTAURANT_NOT_LOCATED' | string;
+
+/** Customer-facing words for a {@link DeliveryIssue} — the backend's own copy
+ *  (charges.service.js DELIVERY_ISSUE_MESSAGES); the checkout summary sends it, the
+ *  cart doesn't, so the cart reads it from here. */
+export const DELIVERY_ISSUE_MESSAGES: Record<string, string> = {
+  ADDRESS_NOT_LOCATED: 'We could not place this address on the map — please pick the location on the map again',
+  RESTAURANT_NOT_LOCATED: 'This restaurant cannot take delivery orders right now',
+  OUT_OF_DELIVERY_RANGE: 'This restaurant does not deliver to this address',
+};
+
+export function deliveryIssueMessage(issue: DeliveryIssue | null): string | null {
+  if (!issue) return null;
+  return DELIVERY_ISSUE_MESSAGES[issue] ?? 'Delivery to this address isn’t available';
+}
+
 /** Every money field the "Bill details" block shows, all computed server-side. */
 export interface CartBill {
   itemTotal: number;
@@ -129,7 +194,12 @@ export interface CartBill {
   platformFee: number;
   tax: number;
   discountAmount: number;
+  /** Rupees. While {@link deliveryIssue} is set this leaves delivery out. */
   grandTotal: number;
+  /** The server's line-by-line breakdown; `null` for an empty cart (or an old backend). */
+  charges: Charges | null;
+  /** Set when delivery can't be priced for the address — see {@link DeliveryIssue}. */
+  deliveryIssue: DeliveryIssue | null;
 }
 
 export interface Cart {
@@ -170,6 +240,23 @@ function toLine(raw: RawCartLine): CartLine {
   };
 }
 
+function toCharges(raw: RawCharges | null | undefined): Charges | null {
+  if (!raw || !Array.isArray(raw.lines)) return null;
+  const lines: ChargeLine[] = raw.lines
+    .filter((l): l is RawChargeLine & { key: string } => !!l && typeof l.key === 'string')
+    .map((l) => ({
+      key: l.key,
+      label: l.label ?? l.key,
+      amountPaise: typeof l.amountPaise === 'number' && Number.isFinite(l.amountPaise) ? l.amountPaise : null,
+      sublabel: l.sublabel ?? null,
+    }));
+  return {
+    lines,
+    grandTotalPaise: num(raw.grandTotal),
+    freeDelivery: raw.delivery?.paidBy === 'restaurant' && !raw.delivery?.pending,
+  };
+}
+
 function toBill(raw: RawBill): CartBill {
   const itemTotal = num(raw.itemTotal);
   return {
@@ -181,6 +268,8 @@ function toBill(raw: RawBill): CartBill {
     tax: num(raw.tax),
     discountAmount: num(raw.discountAmount),
     grandTotal: num(raw.grandTotal),
+    charges: toCharges(raw.charges),
+    deliveryIssue: raw.deliveryIssue ?? null,
   };
 }
 

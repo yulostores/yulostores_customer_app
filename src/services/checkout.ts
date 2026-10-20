@@ -4,20 +4,30 @@
  * Two calls, both customer-token-only (see src/services/cart.ts for the 401
  * story):
  *
- *   GET  /api/checkout/summary
- *     → { address, cart, bill, mealSections, tipPresets, vegFleetEligible }
- *     The address is the account's default saved address (or the first one);
+ *   GET  /api/checkout/summary?addressId=<picked>&tip=<rupees>
+ *     → { address, cart, bill, deliveryIssue, deliveryIssueMessage, mealSections,
+ *         tipPresets, vegFleetEligible }
+ *     Priced against `addressId` (the account default when omitted) with `tip`
+ *     included — so `bill.charges` (lines + grand total, paise) is exactly what the
+ *     order will cost: render it, never add the tip or anything else on the client.
+ *     `deliveryIssue` → placement would be refused for this address; say so before
+ *     payment (`deliveryIssueMessage` is the server's own words).
+ *     The address is the one priced (picked, or the default / first);
  *     `cart` + `bill` are the exact same shapes the cart screen renders (reused
  *     via cart.ts's `reshapeCartSnapshot`), so the checkout page shows the same
  *     lines and the same server-computed money, never its own arithmetic.
  *     `mealSections` backs "Complete your meal" — a "Popular" bucket plus the
  *     restaurant's own real menu categories, already excluding what's in cart.
  *
- *   POST /api/orders/checkout
+ *   POST /api/orders/checkout   (Idempotency-Key header)
  *     { addressId?, deliveryInstructions?, cookingRequests?, extraCutlery?,
- *       tip?, vegFleetOptIn?, paymentMethod }
- *     → { orderId, restaurantName, status, vegFleetOptIn, order,
- *         clientSecret?, razorpayOrder? }
+ *       tip?, vegFleetOptIn?, paymentMethod, expectedTotalPaise? }
+ *     → 201 { orderId, restaurantName, status, vegFleetOptIn, order,
+ *             razorpayOrder?, paymentSimulated?, paymentError? }
+ *     → 200 { order: { orderId } } — the same Idempotency-Key was already placed
+ *     `expectedTotalPaise` is the summary's `charges.grandTotal`: if the order would
+ *     now cost anything else the server answers 409 PRICE_CHANGED (`details.charges`)
+ *     and creates nothing.
  *     `paymentMethod` is only ever `'cod'` or `'online'` on the wire — the rich
  *     UPI / card / net-banking choice on the checkout screen is a client-side
  *     label that all collapses to `'online'` here (and becomes a Razorpay
@@ -33,7 +43,13 @@
  * Known error codes from POST /api/orders/checkout (callers branch on `.code`):
  *   400 VALIDATION_ERROR        — empty cart, or no delivery address on file.
  *   400 ORDER_ITEM_UNAVAILABLE  — a cart item went off-menu since it was added.
+ *   400 COD_UNAVAILABLE         — cash on delivery is switched off.
+ *   400 ADDRESS_NOT_LOCATED / OUT_OF_DELIVERY_RANGE / RESTAURANT_NOT_LOCATED
+ *   400 TIP_TOO_HIGH            — tip above the ₹500 cap.
+ *   404 ADDRESS_NOT_FOUND       — the picked address isn't on the account any more.
  *   409 CART_PRICE_CHANGED      — a cart item's price moved; review the cart.
+ *   409 PRICE_CHANGED           — the total differs from `expectedTotalPaise`.
+ *   503 PAYMENT_GATEWAY_UNAVAILABLE — online payment is down; nothing was created.
  * The server's `details` payload (`{ items }`) rides along on `ApiError.details`.
  */
 
@@ -70,6 +86,8 @@ interface RawMealSection {
 
 interface RawSummary {
   address?: SavedAddress | null;
+  deliveryIssue?: string | null;
+  deliveryIssueMessage?: string | null;
   /** The backend's `plainCart` — `{ items, restaurant, restaurantId, ... }`,
    *  the same shape `/api/cart` nests under `cart`. Passed straight to the cart
    *  reshaper. */
@@ -93,13 +111,18 @@ interface RawOrder {
 }
 
 interface RawCheckoutResponse {
-  orderId: string;
+  /** Absent on the 200 "duplicate" answer, which only carries `order.orderId`. */
+  orderId?: string;
   restaurantName?: string | null;
   status?: string;
-  order: RawOrder;
+  order: RawOrder & { orderId?: string };
   /** The Razorpay order id — mirror of `razorpayOrder.id`, or `null`. */
   clientSecret?: string | null;
   razorpayOrder?: GatewayOrder | null;
+  /** Dev/local backend with payment simulation on — no Razorpay order is made. */
+  paymentSimulated?: boolean;
+  /** The order exists but its Razorpay order couldn't be created — use …/payment/retry. */
+  paymentError?: string | null;
 }
 
 // ─── View types ─────────────────────────────────────────────────────────────
@@ -139,9 +162,12 @@ export interface CheckoutSummary {
   lines: CartLine[];
   /** Total units across every cart line. */
   itemCount: number;
-  /** Server-computed bill. The customer-chosen `tip` is added on top for display
-   *  and sent to the server at placement; it is not part of this figure. */
+  /** Server-computed bill for the summary's address and tip — `bill.charges` is what
+   *  the order will cost, tip included. */
   bill: CartBill;
+  /** Placement would be refused for this address — show {@link deliveryIssueMessage}. */
+  deliveryIssue: string | null;
+  deliveryIssueMessage: string | null;
   /** "Complete your meal" tabs, already scoped to the cart's restaurant. */
   mealSections: MealSection[];
   /** Suggested delivery-tip amounts, in rupees — server config. */
@@ -161,8 +187,10 @@ export interface PlaceOrderInput {
   /** Restaurant-fulfilment toggles (flow to the kitchen, not the rider). */
   cookingRequests?: boolean;
   extraCutlery?: boolean;
-  /** Rupees added to the order total. */
+  /** Rupees added to the order total (already in the summary that was shown). */
   tip?: number;
+  /** The summary's `charges.grandTotal` (paise) — 409 PRICE_CHANGED if it moved. */
+  expectedTotalPaise?: number;
   /** Honoured only when the restaurant actually has veg-fleet coverage. */
   vegFleetOptIn?: boolean;
   /**
@@ -182,10 +210,15 @@ export interface PlacedOrder {
   paymentStatus: string;
   grandTotal: number;
   /**
-   * The real gateway order to hand to Razorpay Checkout, or `null` when no
-   * gateway is configured (→ the simulated gateway takes over).
+   * The Razorpay order to hand to Checkout, or `null` (simulation on, a duplicate
+   * tap, or the gateway call failed — see {@link needsPaymentRetry}).
    */
   gatewayOrder: GatewayOrder | null;
+  /** This Idempotency-Key had already placed the order — this is that order. */
+  duplicate: boolean;
+  /** Online, but no Razorpay order came back (duplicate tap or a gateway error):
+   *  get one from POST …/payment/retry before paying. */
+  needsPaymentRetry: boolean;
 }
 
 // ─── Reshape ────────────────────────────────────────────────────────────────
@@ -228,14 +261,26 @@ function toSummary(raw: RawSummary): CheckoutSummary {
     tipPresets: (raw.tipPresets ?? []).filter((n) => typeof n === 'number' && n > 0),
     vegFleetEligible: Boolean(raw.vegFleetEligible),
     hasItems: cart.lines.length > 0,
+    deliveryIssue: raw.deliveryIssue ?? bill.deliveryIssue ?? null,
+    deliveryIssueMessage: raw.deliveryIssueMessage ?? null,
   };
 }
 
 // ─── API ────────────────────────────────────────────────────────────────────
 
-/** The default address, the cart's storefront + lines, and the server bill. */
-export function getCheckoutSummary(): Promise<CheckoutSummary> {
-  return apiGet<RawSummary>('/api/checkout/summary').then(toSummary);
+export interface SummaryQuery {
+  /** Saved address to price against; omitted → the account default. */
+  addressId?: string;
+  /** Rupees; included in the total (and its round-off). */
+  tip?: number;
+}
+
+/** The address, the cart's storefront + lines, and the server bill for that address + tip. */
+export function getCheckoutSummary(query: SummaryQuery = {}): Promise<CheckoutSummary> {
+  return apiGet<RawSummary>('/api/checkout/summary', {
+    addressId: query.addressId,
+    tip: typeof query.tip === 'number' && query.tip > 0 ? query.tip : undefined,
+  }).then(toSummary);
 }
 
 /**
@@ -253,6 +298,7 @@ export function placeOrder(input: PlaceOrderInput): Promise<PlacedOrder> {
     extraCutlery,
     tip,
     vegFleetOptIn,
+    expectedTotalPaise,
   } = input;
 
   const opts: SendOptions = { headers: { 'Idempotency-Key': idempotencyKey } };
@@ -263,16 +309,24 @@ export function placeOrder(input: PlaceOrderInput): Promise<PlacedOrder> {
     ...(extraCutlery ? { extraCutlery: true } : {}),
     ...(typeof tip === 'number' && tip > 0 ? { tip } : {}),
     ...(vegFleetOptIn ? { vegFleetOptIn: true } : {}),
+    ...(typeof expectedTotalPaise === 'number' ? { expectedTotalPaise } : {}),
     paymentMethod,
   };
 
-  return apiPost<RawCheckoutResponse>('/api/orders/checkout', body, opts).then((res) => ({
-    orderId: res.orderId ?? res.order?._id,
-    restaurantName: res.restaurantName ?? null,
-    status: res.status ?? res.order?.status ?? 'placed',
-    paymentMethod: res.order?.paymentMethod ?? (paymentMethod === 'cod' ? 'cash' : 'online'),
-    paymentStatus: res.order?.paymentStatus ?? (paymentMethod === 'cod' ? 'pending_cod' : 'pending'),
-    grandTotal: num(res.order?.grandTotal),
-    gatewayOrder: res.razorpayOrder ?? null,
-  }));
+  return apiPost<RawCheckoutResponse>('/api/orders/checkout', body, opts).then((res) => {
+    const duplicate = !res.orderId && !!res.order?.orderId;
+    const gatewayOrder = res.razorpayOrder ?? null;
+    return {
+      orderId: String(res.orderId ?? res.order?.orderId ?? res.order?._id),
+      restaurantName: res.restaurantName ?? null,
+      status: res.status ?? res.order?.status ?? 'placed',
+      paymentMethod: res.order?.paymentMethod ?? (paymentMethod === 'cod' ? 'cash' : 'online'),
+      paymentStatus: res.order?.paymentStatus ?? (paymentMethod === 'cod' ? 'pending_cod' : 'pending'),
+      grandTotal: num(res.order?.grandTotal),
+      gatewayOrder,
+      duplicate,
+      needsPaymentRetry:
+        paymentMethod === 'online' && !gatewayOrder && (duplicate || !!res.paymentError) && !res.paymentSimulated,
+    };
+  });
 }

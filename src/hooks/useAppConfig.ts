@@ -36,6 +36,15 @@ function loadConfig(force: boolean): Promise<AppConfig> {
   return inflight;
 }
 
+/**
+ * The config, fetched once and shared — for code outside a render that needs a
+ * switch at the moment it acts (checkout reads `paymentSimulationEnabled` when it
+ * pays). Rejects like {@link fetchAppConfig}.
+ */
+export function loadAppConfig(): Promise<AppConfig> {
+  return loadConfig(false);
+}
+
 interface UseAppConfigResult {
   config: AppConfig | null;
   /** First load, nothing cached yet. */

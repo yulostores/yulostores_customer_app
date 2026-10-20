@@ -169,6 +169,11 @@ function OrderCard({
             <Ionicons name="leaf" size={13} color={Colors.foodVegGreen} />
             <Text style={styles.vegTagText}>Delivered via veg-only fleet</Text>
           </View>
+        ) : isActive && order.paymentPending ? (
+          <View style={[styles.statusPill, { backgroundColor: Colors.warning + '1A' }]}>
+            <Ionicons name="card-outline" size={12} color={Colors.warning} />
+            <Text style={[styles.statusText, { color: Colors.warning }]}>Payment pending</Text>
+          </View>
         ) : isActive ? (
           <View style={[styles.statusPill, { backgroundColor: toneColor + '1A' }]}>
             <Ionicons name={meta.icon as any} size={12} color={toneColor} />
@@ -177,7 +182,7 @@ function OrderCard({
         ) : order.status === 'cancelled' ? (
           <Text style={styles.cancelled}>
             {order.cancelledLabel ?? 'Cancelled'}
-            {order.refundPending ? <Text style={styles.refundNote}> · Refund in progress</Text> : null}
+            {order.refundLabel ? <Text style={styles.refundNote}> · {order.refundLabel}</Text> : null}
           </Text>
         ) : null}
 

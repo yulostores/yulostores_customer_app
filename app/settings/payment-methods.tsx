@@ -96,10 +96,14 @@ export default function PaymentMethodsScreen() {
     );
   }
 
-  const { groups, methods } = config.payments;
-  // Only render a group that actually has methods, in the backend's group order.
+  const { groups, methods, codEnabled } = config.payments;
+  // Only render a group that actually has methods, in the backend's group order — and
+  // no "Pay on delivery" while cash on delivery is switched off.
   const populatedGroups = groups
-    .map((group) => ({ group, items: methods.filter((m) => m.group === group.id) }))
+    .map((group) => ({
+      group,
+      items: methods.filter((m) => m.group === group.id && (codEnabled || m.wire !== 'cod')),
+    }))
     .filter((g) => g.items.length > 0);
 
   return (

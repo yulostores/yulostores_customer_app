@@ -29,6 +29,14 @@
  *  └─────────────────────────────────────┘
  *
  * All data is live (REST + Socket.IO). Nothing is hardcoded.
+ *
+ * Money states on this screen:
+ *   • an online order not yet paid → "Payment pending" with Retry payment
+ *     (src/hooks/usePayOrder.ts — the same Razorpay flow as checkout)
+ *   • cancel: before the kitchen starts → full refund; once cooking has started
+ *     ('preparing' / 'ready') → a "No refund will be issued" warning, then the
+ *     cancel is resent with `confirmNoRefund: true`; never once the rider has it
+ *   • cancelled → the refund's status, amount and timeline in the server's words
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -62,11 +70,14 @@ import {
   type AccentTheme,
 } from '../../../src/hooks/useAccentTheme';
 import { useOrderTracking } from '../../../src/hooks/useOrderTracking';
+import { usePayOrder } from '../../../src/hooks/usePayOrder';
 import { ApiError } from '../../../src/services/api';
 import { submitReview } from '../../../src/services/orders';
 import {
   cancellationMessage,
+  CUSTOMER_CANCELLABLE_STATUSES,
   formatRupees,
+  PREPARATION_STARTED_STATUSES,
   shortOrderId,
   stageLabel,
   trackingStatusLabel,
@@ -278,6 +289,150 @@ function VegFleetCard({
   );
 }
 
+// ─── Cancelling ──────────────────────────────────────────────────────────
+
+type CancelFn = (opts?: { confirmNoRefund?: boolean }) => Promise<void>;
+
+/**
+ * The cancel dialogs. Before the kitchen starts: a plain "cancel?" (with "you'll be
+ * refunded" when paid). Once cooking started — or when the server answers
+ * CONFIRMATION_REQUIRED because the kitchen moved on meanwhile — the no-refund
+ * warning, and only then the cancel with `confirmNoRefund: true`.
+ */
+function askToCancel({
+  tracking,
+  onCancel,
+  setBusy,
+}: {
+  tracking: TrackingData;
+  onCancel: CancelFn;
+  setBusy: (busy: boolean) => void;
+}) {
+  const paid = tracking.paymentStatus === 'paid';
+
+  const run = async (confirmNoRefund: boolean) => {
+    setBusy(true);
+    try {
+      await onCancel(confirmNoRefund ? { confirmNoRefund: true } : {});
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'CONFIRMATION_REQUIRED' && !confirmNoRefund) {
+        setBusy(false);
+        warnNoRefund();
+        return;
+      }
+      Alert.alert(
+        'Could not cancel',
+        err instanceof ApiError && err.code === 'ORDER_NOT_CANCELLABLE'
+          ? err.message
+          : 'Please check your connection and try again.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const warnNoRefund = () =>
+    Alert.alert(
+      'No refund will be issued',
+      paid
+        ? `The restaurant has started cooking. If you cancel now, the ${formatRupees(tracking.totalPaid)} you paid will not be refunded.`
+        : 'The restaurant has started cooking. If you cancel now, the restaurant is still paid for the food.',
+      [
+        { text: 'Keep order', style: 'cancel' },
+        { text: 'Cancel without refund', style: 'destructive', onPress: () => run(true) },
+      ],
+    );
+
+  if (PREPARATION_STARTED_STATUSES.has(tracking.status)) {
+    warnNoRefund();
+    return;
+  }
+  Alert.alert(
+    'Cancel this order?',
+    tracking.status === 'placed'
+      ? paid
+        ? 'The restaurant hasn’t accepted it yet. Your payment will be refunded in full.'
+        : 'The restaurant hasn’t accepted it yet, so you can still cancel.'
+      : paid
+        ? 'The kitchen hasn’t started yet. Your payment will be refunded in full.'
+        : 'The kitchen hasn’t started yet, so you can still cancel.',
+    [
+      { text: 'Keep order', style: 'cancel' },
+      { text: 'Cancel order', style: 'destructive', onPress: () => run(false) },
+    ],
+  );
+}
+
+/** Accepted but not yet with the rider: a cancel button, with the right warning. */
+function CancelCard({ tracking, onCancel }: { tracking: TrackingData; onCancel: CancelFn }) {
+  const styles = useThemedStyles(makeStyles);
+  const [cancelling, setCancelling] = useState(false);
+  const cooking = PREPARATION_STARTED_STATUSES.has(tracking.status);
+  return (
+    <View style={styles.card}>
+      <Text style={styles.approvalHint}>
+        {cooking
+          ? 'The kitchen has started on your order. You can still cancel, but no refund will be issued.'
+          : 'Changed your mind? You can cancel until the kitchen starts cooking for a full refund.'}
+      </Text>
+      <Pressable
+        style={({ pressed }) => [styles.cancelOrderBtn, pressed && styles.actionBtnPressed]}
+        onPress={() => !cancelling && askToCancel({ tracking, onCancel, setBusy: setCancelling })}
+        disabled={cancelling}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel order"
+      >
+        {cancelling ? (
+          <ActivityIndicator size="small" color={Colors.danger} />
+        ) : (
+          <Text style={styles.cancelOrderText}>Cancel order</Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── Payment pending ─────────────────────────────────────────────────────
+
+/** An online order that isn't paid yet — pay it from here (never auto-cancelled). */
+function PaymentPendingCard({ tracking, onPaid }: { tracking: TrackingData; onPaid: () => void }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
+  const { paying, message, pay } = usePayOrder(tracking.orderId);
+  return (
+    <View style={[styles.card, styles.approvalCard]}>
+      <View style={styles.approvalHeaderRow}>
+        <View style={styles.approvalIcon}>
+          <Ionicons name="card-outline" size={18} color={Colors.warning} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.approvalTitle}>Payment pending</Text>
+          <Text style={styles.approvalHint}>
+            {message ??
+              `Your order is saved but not paid yet. Pay ${formatRupees(tracking.totalPaid)} to send it to the restaurant.`}
+          </Text>
+        </View>
+      </View>
+      <Pressable
+        style={({ pressed }) => [styles.payNowBtn, { backgroundColor: accent }, pressed && styles.actionBtnPressed]}
+        onPress={async () => {
+          await pay();
+          onPaid();
+        }}
+        disabled={paying}
+        accessibilityRole="button"
+        accessibilityLabel="Retry payment"
+      >
+        {paying ? (
+          <ActivityIndicator size="small" color={Colors.white} />
+        ) : (
+          <Text style={styles.payNowText}>Retry payment</Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 // ─── Waiting-for-the-restaurant card ─────────────────────────────────────
 
 /** Seconds until `iso`, ticking once a second; null when there is no deadline. */
@@ -300,7 +455,7 @@ function ApprovalCard({
   onCancel,
 }: {
   tracking: TrackingData;
-  onCancel: () => Promise<void>;
+  onCancel: CancelFn;
 }) {
   const styles = useThemedStyles(makeStyles);
   const secondsLeft = useSecondsUntil(tracking.approvalExpiresAt);
@@ -309,34 +464,7 @@ function ApprovalCard({
 
   const confirmCancel = () => {
     if (cancelling) return;
-    Alert.alert(
-      'Cancel this order?',
-      paid
-        ? 'The restaurant hasn’t accepted it yet. Your payment will be refunded.'
-        : 'The restaurant hasn’t accepted it yet, so you can still cancel.',
-      [
-        { text: 'Keep order', style: 'cancel' },
-        {
-          text: 'Cancel order',
-          style: 'destructive',
-          onPress: async () => {
-            setCancelling(true);
-            try {
-              await onCancel();
-            } catch (err) {
-              Alert.alert(
-                'Could not cancel',
-                err instanceof ApiError && err.code === 'ORDER_NOT_CANCELLABLE'
-                  ? err.message
-                  : 'Please check your connection and try again.',
-              );
-            } finally {
-              setCancelling(false);
-            }
-          },
-        },
-      ],
-    );
+    askToCancel({ tracking, onCancel, setBusy: setCancelling });
   };
 
   return (
@@ -394,7 +522,10 @@ function refundLine(refundStatus: RefundStatus, amount: number): string | null {
 
 function CancelledCard({ tracking }: { tracking: TrackingData }) {
   const styles = useThemedStyles(makeStyles);
-  const refund = refundLine(tracking.refundStatus, tracking.totalPaid);
+  // The server's own sentence (amount + timeline) when there is one; the older
+  // two-state wording otherwise.
+  const refund = tracking.refund?.timeline ?? refundLine(tracking.refundStatus, tracking.totalPaid);
+  const refundDelayed = tracking.refund?.status === 'failed';
   return (
     <View style={[styles.card, styles.cancelledCard]}>
       <View style={styles.approvalHeaderRow}>
@@ -404,8 +535,12 @@ function CancelledCard({ tracking }: { tracking: TrackingData }) {
         </Text>
       </View>
       {refund && (
-        <View style={styles.refundRow}>
-          <Ionicons name="wallet-outline" size={16} color={Colors.success} />
+        <View style={[styles.refundRow, refundDelayed && { backgroundColor: Colors.warning + '14' }]}>
+          <Ionicons
+            name={refundDelayed ? 'time-outline' : 'wallet-outline'}
+            size={16}
+            color={refundDelayed ? Colors.warning : Colors.success}
+          />
           <Text style={styles.refundText}>{refund}</Text>
         </View>
       )}
@@ -598,6 +733,18 @@ export default function TrackingScreen() {
   const isDelivered = tracking.status === 'delivered';
   const isCancelled = tracking.status === 'cancelled';
   const isAwaitingApproval = tracking.status === 'placed';
+  // Online and not paid (the sheet was closed, the app was killed…): pay it from here.
+  const awaitingPayment =
+    tracking.paymentMethod === 'online' &&
+    !isCancelled &&
+    tracking.paymentStatus != null &&
+    !['paid', 'refunded'].includes(tracking.paymentStatus);
+  // Accepted, kitchen not done handing it over — the customer can still cancel.
+  const canCancelAccepted =
+    !isAwaitingApproval &&
+    !awaitingPayment &&
+    CUSTOMER_CANCELLABLE_STATUSES.has(tracking.status) &&
+    tracking.assignmentStatus !== 'picked_up';
 
   // The backend returns an ETA for every pre-delivery phase now, not only once the rider is
   // carrying the food, so the customer sees a number from the moment they pay — which is what
@@ -699,7 +846,9 @@ export default function TrackingScreen() {
         </View>
 
         {/* ── RESTAURANT DECISION ──────────────────────────────────────────── */}
-        {isAwaitingApproval && <ApprovalCard tracking={tracking} onCancel={cancel} />}
+        {awaitingPayment && <PaymentPendingCard tracking={tracking} onPaid={() => refetch()} />}
+        {isAwaitingApproval && !awaitingPayment && <ApprovalCard tracking={tracking} onCancel={cancel} />}
+        {canCancelAccepted && <CancelCard tracking={tracking} onCancel={cancel} />}
         {isCancelled && <CancelledCard tracking={tracking} />}
 
         {/* ── VEG-FLEET SEARCH ─────────────────────────────────────────────── */}
@@ -1252,6 +1401,14 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: Colors.foodSurface,
   },
   cancelOrderText: { fontSize: 14, fontWeight: '700', color: Colors.danger },
+  payNowBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.md,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.full,
+  },
+  payNowText: { fontSize: 14, fontWeight: '800', color: Colors.white },
   cancelledCard: { borderColor: Colors.danger + '55' },
   refundRow: {
     flexDirection: 'row',

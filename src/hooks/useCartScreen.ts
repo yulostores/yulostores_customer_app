@@ -48,6 +48,8 @@ interface UseCartScreenResult {
   /** A coupon apply is in flight. */
   promoPending: boolean;
   refresh: () => Promise<void>;
+  /** Re-fetch without the skeleton — the tab regaining focus (an order may have emptied it). */
+  refreshQuietly: () => Promise<void>;
   /** Set an absolute quantity for a line; `0` removes it. */
   setLineQty: (lineId: string, qty: number) => Promise<void>;
   removeLine: (lineId: string) => Promise<void>;
@@ -94,7 +96,7 @@ export function useCartScreen(): UseCartScreenResult {
     [syncFromServer],
   );
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
     const requestId = ++requestRef.current;
     const isCurrent = () =>
       mountedRef.current && requestRef.current === requestId;
@@ -109,7 +111,7 @@ export function useCartScreen(): UseCartScreenResult {
       return;
     }
 
-    setIsLoading(true);
+    if (!quiet) setIsLoading(true);
     setError(null);
     setNotSignedIn(false);
 
@@ -250,7 +252,8 @@ export function useCartScreen(): UseCartScreenResult {
     actionError,
     appliedCode,
     promoPending,
-    refresh: load,
+    refresh: () => load(),
+    refreshQuietly: () => load({ quiet: true }),
     setLineQty,
     removeLine,
     applyPromo,

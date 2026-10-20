@@ -12,17 +12,21 @@
  *                              bucket) scoped to the cart's restaurant, already
  *                              excluding what's in the cart; "+" posts straight
  *                              to the cart the same as the restaurant page's ADD
- *   • every money row       ← the server bill (never summed here) — Item Total is
- *                              the pre-markdown total, with "Extra discount for
- *                              you" (a coupon) and "Item Discount" (per-dish
- *                              markdowns) broken out as their own rows
+ *   • every money row       ← the server's `bill.charges.lines`, in order (item
+ *                              total, discount, GST on food, delivery fee — "Free
+ *                              delivery" when the restaurant pays it — platform fee,
+ *                              tip, round off, To pay). Nothing is summed here: the
+ *                              tip re-prices the summary on the server, and "To pay"
+ *                              is `charges.grandTotal`, the exact amount charged.
  *   • the tip presets       ← server config, not a client list
- *   • placing + paying      ← POST /api/orders/checkout, then the resolved
- *                              gateway (simulated today, Razorpay once wired —
- *                              see src/services/payments.ts); the payment-method
- *                              catalogue itself (icons/labels) is the documented
- *                              client twin of the backend's config, same as the
- *                              read-only Settings → "Payment methods" screen
+ *   • placing + paying      ← POST /api/orders/checkout, then Razorpay Checkout (or
+ *                              the dev simulation) — see src/services/payments.ts.
+ *                              A payment that doesn't confirm leaves the order placed
+ *                              with "Retry payment"; it is never cancelled from here.
+ *                              "Pay on delivery" only shows while COD is switched on.
+ *                              The payment-method catalogue (icons/labels) is the
+ *                              documented client twin of the backend's config, same
+ *                              as the read-only Settings → "Payment methods" screen
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -52,7 +56,7 @@ import {
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
 import { useCheckout } from '../../src/hooks/useCheckout';
-import type { CartLine, FoodType } from '../../src/services/cart';
+import type { CartBill, CartLine, ChargeLine, FoodType } from '../../src/services/cart';
 import type { MealItem, MealSection } from '../../src/services/checkout';
 import {
   getMethod,
@@ -65,6 +69,14 @@ import {
 import type { SavedAddress } from '../../src/types/address';
 
 const formatPrice = (n: number) => '₹' + Math.max(0, Math.round(n)).toLocaleString('en-IN');
+
+/** Exact paise → "₹357" / "₹10.17" — bill lines are shown to the paisa, never rounded here. */
+const formatPaise = (paise: number) =>
+  '₹' +
+  (Math.abs(paise) / 100).toLocaleString('en-IN', {
+    minimumFractionDigits: Math.abs(paise) % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
 
 function goBack() {
   if (router.canGoBack()) router.back();
@@ -96,18 +108,23 @@ function SectionCard({ children, style }: { children: ReactNode; style?: object 
 
 function BillRow({
   label,
+  sublabel,
   value,
   strong,
   positive,
 }: {
   label: string;
+  sublabel?: string | null;
   value: string;
   strong?: boolean;
   positive?: boolean;
 }) {
   return (
     <View style={styles.billRow}>
-      <Text style={[styles.billLabel, strong && styles.billLabelStrong]}>{label}</Text>
+      <View style={{ flex: 1, paddingRight: Spacing.sm }}>
+        <Text style={[styles.billLabel, strong && styles.billLabelStrong]}>{label}</Text>
+        {!!sublabel && <Text style={styles.billSublabel}>{sublabel}</Text>}
+      </View>
       <Text
         style={[
           styles.billValue,
@@ -149,7 +166,7 @@ function Chip({
 
 // ─── Address ───────────────────────────────────────────────────────────────
 
-function AddressBlock({ address }: { address: SavedAddress | null }) {
+function AddressBlock({ address, locked }: { address: SavedAddress | null; locked?: boolean }) {
   const styles = useThemedStyles(makeStyles);
   const { accent } = useAccentTheme();
   if (!address) {
@@ -178,7 +195,12 @@ function AddressBlock({ address }: { address: SavedAddress | null }) {
   const located = hasUsablePoint(address);
   return (
     <View style={styles.addressGroup}>
-      <Pressable style={styles.addressCard} onPress={() => router.push('/address')}>
+      <Pressable
+        style={styles.addressCard}
+        onPress={() => router.push('/address')}
+        // The order is placed — its address can't change any more.
+        disabled={locked}
+      >
         <View style={styles.addrIcon}>
           <Ionicons name="location-sharp" size={20} color={accent} />
         </View>
@@ -188,10 +210,10 @@ function AddressBlock({ address }: { address: SavedAddress | null }) {
             {line}
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={Colors.foodTextMuted} />
+        {!locked && <Ionicons name="chevron-forward" size={18} color={Colors.foodTextMuted} />}
       </Pressable>
 
-      {!located && (
+      {!located && !locked && (
         <Pressable
           style={styles.addrUnlocated}
           onPress={() =>
@@ -262,10 +284,13 @@ function InstructionsRow({
 function LineCard({
   line,
   busy,
+  locked,
   onChangeQty,
 }: {
   line: CartLine;
   busy: boolean;
+  /** The order is placed — show the quantity, not a stepper. */
+  locked?: boolean;
   onChangeQty: (qty: number) => void;
 }) {
   const styles = useThemedStyles(makeStyles);
@@ -299,7 +324,7 @@ function LineCard({
             {optionText}
           </Text>
         )}
-        {!!optionText && (
+        {!!optionText && !locked && (
           <Pressable
             onPress={() => router.push(`/item/${line.menuItemId}`)}
             hitSlop={6}
@@ -312,7 +337,9 @@ function LineCard({
       </View>
 
       <View style={styles.lineRight}>
-        {busy ? (
+        {locked ? (
+          <Text style={styles.stepValue}>× {line.qty}</Text>
+        ) : busy ? (
           <View style={styles.stepper}>
             <ActivityIndicator size="small" color={accent} />
           </View>
@@ -509,9 +536,12 @@ function MethodRow({
 function PaymentPicker({
   selectedMethodId,
   onSelect,
+  showCod,
 }: {
   selectedMethodId: PaymentMethodId;
   onSelect: (id: PaymentMethodId) => void;
+  /** Cash on delivery is switched on (and no online order is waiting to be paid). */
+  showCod: boolean;
 }) {
   const styles = useThemedStyles(makeStyles);
   const [openGroups, setOpenGroups] = useState<Set<PaymentGroupId>>(
@@ -526,7 +556,7 @@ function PaymentPicker({
 
   return (
     <ScrollView style={styles.pickerScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-      {PAYMENT_GROUPS.map((group) => {
+      {PAYMENT_GROUPS.filter((g) => showCod || g.id !== 'cod').map((group) => {
         const methods = methodsForGroup(group.id);
         const holdsSelection = methods.some((m) => m.id === selectedMethodId);
         const expanded = openGroups.has(group.id) || holdsSelection;
@@ -551,6 +581,127 @@ function PaymentPicker({
         );
       })}
     </ScrollView>
+  );
+}
+
+// ─── Bill ───────────────────────────────────────────────────────────────────
+
+function lineValue(line: ChargeLine): { value: string; positive: boolean } {
+  if (line.amountPaise == null) return { value: '—', positive: false };
+  // Free delivery: the restaurant pays it — the one line that is genuinely "FREE".
+  if (line.key === 'delivery_fee' && line.amountPaise === 0) return { value: 'FREE', positive: true };
+  if (line.amountPaise < 0) return { value: '− ' + formatPaise(line.amountPaise), positive: line.key === 'discount' };
+  return { value: formatPaise(line.amountPaise), positive: false };
+}
+
+/**
+ * The bill exactly as the server priced it (`bill.charges.lines`), with the tip row
+ * interactive in its place. Changing the tip re-prices on the server — the "To pay"
+ * here is always `charges.grandTotal`.
+ */
+function BillBlock({
+  bill,
+  tip,
+  tipPresets,
+  locked,
+  repricing,
+  onPickTip,
+}: {
+  bill: CartBill;
+  tip: number;
+  tipPresets: number[];
+  locked: boolean;
+  repricing: boolean;
+  onPickTip: (amount: number) => void;
+}) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
+  const [tipPickerOpen, setTipPickerOpen] = useState(false);
+
+  const tipRow = (
+    <View key="tip">
+      <View style={styles.billRow}>
+        <Text style={styles.billLabel}>Delivery partner tip</Text>
+        {locked ? (
+          <Text style={styles.billValue}>{tip > 0 ? formatPrice(tip) : '—'}</Text>
+        ) : (
+          <Pressable onPress={() => setTipPickerOpen((v) => !v)} hitSlop={6}>
+            {tip > 0 ? (
+              <Text style={[styles.billValue, { color: accent, fontWeight: '800' }]}>{formatPrice(tip)}</Text>
+            ) : (
+              <Text style={[styles.addTipLink, { color: accent }]}>Add tip</Text>
+            )}
+          </Pressable>
+        )}
+      </View>
+      {!locked && tipPickerOpen && tipPresets.length > 0 && (
+        <View style={styles.tipRow}>
+          {tipPresets.map((amount) => {
+            const active = tip === amount;
+            return (
+              <Pressable
+                key={amount}
+                style={[styles.tipBtn, active && styles.tipBtnActive]}
+                onPress={() => {
+                  onPickTip(active ? 0 : amount);
+                  setTipPickerOpen(false);
+                }}
+              >
+                <Text style={[styles.tipBtnText, active && styles.tipBtnTextActive]}>{formatPrice(amount)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+
+  const charges = bill.charges;
+  if (!charges) {
+    // An older backend without the line breakdown — its rupee totals, tip excluded.
+    return (
+      <SectionCard style={styles.billCard}>
+        <BillRow label="Item Total" value={formatPrice(bill.itemTotal)} />
+        {bill.deliveryFee > 0 && <BillRow label="Delivery Fee" value={formatPrice(bill.deliveryFee)} />}
+        <BillRow label="GST & Other Charges" value={formatPrice(bill.tax + bill.platformFee)} />
+        <View style={styles.billDivider} />
+        <BillRow label="To Pay" value={formatPrice(bill.grandTotal)} strong />
+      </SectionCard>
+    );
+  }
+
+  const rows: ReactNode[] = [];
+  let tipPlaced = false;
+  for (const line of charges.lines) {
+    if (line.key === 'grand_total') continue;
+    if (line.key === 'tip') {
+      rows.push(tipRow);
+      tipPlaced = true;
+      continue;
+    }
+    // No tip yet: its row goes where the server puts one — just before round off.
+    if (line.key === 'round_off' && !tipPlaced) {
+      rows.push(tipRow);
+      tipPlaced = true;
+    }
+    const { value, positive } = lineValue(line);
+    rows.push(<BillRow key={line.key} label={line.label} sublabel={line.sublabel} value={value} positive={positive} />);
+  }
+  if (!tipPlaced) rows.push(tipRow);
+
+  return (
+    <SectionCard style={[styles.billCard, repricing && styles.billStale]}>
+      {rows}
+      <View style={styles.billDivider} />
+      <View style={styles.billRow}>
+        <Text style={[styles.billLabel, styles.billLabelStrong]}>To Pay</Text>
+        {repricing ? (
+          <ActivityIndicator size="small" color={accent} />
+        ) : (
+          <Text style={[styles.billValue, styles.billValueStrong]}>{formatPaise(charges.grandTotalPaise)}</Text>
+        )}
+      </View>
+    </SectionCard>
   );
 }
 
@@ -605,7 +756,6 @@ export default function CheckoutScreen() {
   const { savedAddresses, activeLocation } = useDeliveryLocation();
 
   const [tip, setTip] = useState(0);
-  const [tipPickerOpen, setTipPickerOpen] = useState(false);
   const [instructions, setInstructions] = useState('');
   const [extraCutlery, setExtraCutlery] = useState(false);
   const [cookingRequests, setCookingRequests] = useState(false);
@@ -623,16 +773,22 @@ export default function CheckoutScreen() {
   const {
     summary,
     isLoading,
+    isRepricing,
     error,
     notSignedIn,
     phase,
     selectedMethodId,
     selectMethod,
+    codEnabled,
     actionError,
+    pendingPayment,
+    orderPlaced,
     placedOrderId,
     placedIsCod,
+    placedTotalPaise,
     refresh,
     pay,
+    retryPayment,
     pendingLineIds,
     lineError,
     setLineQty,
@@ -661,9 +817,14 @@ export default function CheckoutScreen() {
 
   const bill = summary?.bill ?? null;
   const hasItems = !!summary?.hasItems;
-  const grandTotal = (bill?.grandTotal ?? 0) + tip;
+  // The server's total for this address + tip — tip included, never added here.
+  const grandTotalPaise = bill?.charges ? bill.charges.grandTotalPaise : Math.round((bill?.grandTotal ?? 0) * 100);
   const busy = phase === 'placing' || phase === 'paying';
-  const canPay = hasItems && !!displayAddress && !isLoading && !busy;
+  const deliveryIssue = orderPlaced ? null : summary?.deliveryIssue ?? null;
+  const awaitingPayment = phase === 'pending' && !!pendingPayment;
+  const canPay = awaitingPayment
+    ? pendingPayment!.canRetry && !busy
+    : hasItems && !!displayAddress && !isLoading && !busy && !isRepricing && !deliveryIssue;
   const selectedMethod = getMethod(selectedMethodId);
 
   // Leave for the confirmation screen the moment the order is placed (and paid,
@@ -676,11 +837,11 @@ export default function CheckoutScreen() {
       params: {
         orderId: doneOrderId,
         cod: placedIsCod ? '1' : '0',
-        total: String(grandTotal),
+        total: String((placedTotalPaise ?? grandTotalPaise) / 100),
         method: selectedMethod?.label ?? 'Pay on delivery',
       },
     });
-  }, [doneOrderId, placedIsCod, grandTotal, selectedMethod?.label]);
+  }, [doneOrderId, placedIsCod, placedTotalPaise, grandTotalPaise, selectedMethod?.label]);
 
   const changeLineQty = (line: CartLine, next: number) => {
     if (next <= 0) removeLine(line.id);
@@ -728,12 +889,26 @@ export default function CheckoutScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           padding: Spacing.base,
-          paddingBottom: insets.bottom + (methodPickerOpen ? 360 : 190),
+          paddingBottom: insets.bottom + (methodPickerOpen ? 360 : 190) + (awaitingPayment ? 110 : 0),
         }}
       >
-        <AddressBlock address={displayAddress} />
+        <AddressBlock address={displayAddress} locked={orderPlaced} />
 
-        <InstructionsRow value={instructions} onChange={setInstructions} />
+        {!!deliveryIssue && (
+          <Pressable
+            style={styles.issueBanner}
+            onPress={() => router.push('/address')}
+            accessibilityRole="button"
+          >
+            <Ionicons name="warning-outline" size={16} color={Colors.warning} />
+            <Text style={styles.issueBannerText}>
+              {summary.deliveryIssueMessage ?? 'Delivery to this address isn’t available.'}
+            </Text>
+            <Text style={[styles.issueBannerAction, { color: accent }]}>Change</Text>
+          </Pressable>
+        )}
+
+        {!orderPlaced && <InstructionsRow value={instructions} onChange={setInstructions} />}
 
         <View style={{ gap: Spacing.sm, marginTop: Spacing.md }}>
           {summary.lines.map((line) => (
@@ -741,12 +916,13 @@ export default function CheckoutScreen() {
               key={line.id}
               line={line}
               busy={pendingLineIds.has(line.id)}
+              locked={orderPlaced}
               onChangeQty={(qty) => changeLineQty(line, qty)}
             />
           ))}
         </View>
 
-        {!!summary.restaurant && (
+        {!!summary.restaurant && !orderPlaced && (
           <Pressable
             style={styles.addItemsLink}
             onPress={() => router.push(`/restaurant/${summary.restaurant!.id}`)}
@@ -790,11 +966,13 @@ export default function CheckoutScreen() {
           </Pressable>
         )}
 
-        <CompleteYourMeal
-          sections={summary.mealSections}
-          addingMealItemId={addingMealItemId}
-          onAdd={addMealItem}
-        />
+        {!orderPlaced && (
+          <CompleteYourMeal
+            sections={summary.mealSections}
+            addingMealItemId={addingMealItemId}
+            onAdd={addMealItem}
+          />
+        )}
 
         {!!lineError && (
           <View style={styles.errorBanner}>
@@ -804,66 +982,14 @@ export default function CheckoutScreen() {
         )}
 
         <Text style={styles.sectionLabel}>Bill details</Text>
-        <SectionCard style={styles.billCard}>
-          <BillRow label="Item Total" value={formatPrice(bill.mrpTotal)} />
-          {bill.discountAmount > 0 && (
-            <BillRow
-              label="Extra discount for you"
-              value={'− ' + formatPrice(bill.discountAmount)}
-              positive
-            />
-          )}
-          {bill.itemDiscountAmount > 0 && (
-            <BillRow
-              label="Item Discount"
-              value={'− ' + formatPrice(bill.itemDiscountAmount)}
-              positive
-            />
-          )}
-          {bill.deliveryFee > 0 && (
-            <BillRow label="Delivery Fee" value={formatPrice(bill.deliveryFee)} />
-          )}
-
-          <View style={styles.billRow}>
-            <Text style={styles.billLabel}>Delivery Tip</Text>
-            {tip > 0 ? (
-              <Pressable onPress={() => setTipPickerOpen((v) => !v)} hitSlop={6}>
-                <Text style={[styles.billValue, { color: accent, fontWeight: '800' }]}>
-                  {formatPrice(tip)}
-                </Text>
-              </Pressable>
-            ) : (
-              <Pressable onPress={() => setTipPickerOpen((v) => !v)} hitSlop={6}>
-                <Text style={[styles.addTipLink, { color: accent }]}>Add tip</Text>
-              </Pressable>
-            )}
-          </View>
-          {tipPickerOpen && summary.tipPresets.length > 0 && (
-            <View style={styles.tipRow}>
-              {summary.tipPresets.map((amount) => {
-                const active = tip === amount;
-                return (
-                  <Pressable
-                    key={amount}
-                    style={[styles.tipBtn, active && styles.tipBtnActive]}
-                    onPress={() => {
-                      setTip(active ? 0 : amount);
-                      setTipPickerOpen(false);
-                    }}
-                  >
-                    <Text style={[styles.tipBtnText, active && styles.tipBtnTextActive]}>
-                      {formatPrice(amount)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-
-          <BillRow label="GST & Other Charges" value={formatPrice(bill.tax + bill.platformFee)} />
-          <View style={styles.billDivider} />
-          <BillRow label="To Pay" value={formatPrice(grandTotal)} strong />
-        </SectionCard>
+        <BillBlock
+          bill={bill}
+          tip={tip}
+          tipPresets={summary.tipPresets}
+          locked={orderPlaced}
+          repricing={isRepricing}
+          onPickTip={setTip}
+        />
 
         <Pressable
           style={styles.cancellationRow}
@@ -901,6 +1027,12 @@ export default function CheckoutScreen() {
           {!displayAddress && (
             <Text style={styles.footerHint}>Add a delivery address to continue</Text>
           )}
+          {awaitingPayment && (
+            <View style={styles.pendingCard}>
+              <Text style={styles.pendingTitle}>Payment pending — your order is saved</Text>
+              <Text style={styles.pendingText}>{pendingPayment!.message}</Text>
+            </View>
+          )}
           {!!actionError && (
             <View style={[styles.errorBanner, { marginBottom: Spacing.sm }]}>
               <Ionicons name="alert-circle" size={16} color={Colors.authDanger} />
@@ -933,6 +1065,7 @@ export default function CheckoutScreen() {
           {methodPickerOpen && (
             <PaymentPicker
               selectedMethodId={selectedMethodId}
+              showCod={codEnabled && !orderPlaced}
               onSelect={(id) => {
                 selectMethod(id);
                 setMethodPickerOpen(false);
@@ -942,17 +1075,30 @@ export default function CheckoutScreen() {
 
           <Pressable
             style={[styles.cta, !canPay && styles.ctaOff]}
-            onPress={pay}
+            onPress={awaitingPayment ? retryPayment : pay}
             disabled={!canPay}
             accessibilityRole="button"
-            accessibilityLabel={`Pay ${formatPrice(grandTotal)}`}
+            accessibilityLabel={
+              awaitingPayment ? 'Retry payment' : `Pay ${formatPaise(placedTotalPaise ?? grandTotalPaise)}`
+            }
           >
             {busy ? (
               <ActivityIndicator size="small" color={Colors.white} />
+            ) : awaitingPayment ? (
+              <Text style={styles.ctaText}>Retry payment</Text>
             ) : (
-              <Text style={styles.ctaText}>Pay {formatPrice(grandTotal)}</Text>
+              <Text style={styles.ctaText}>Pay {formatPaise(placedTotalPaise ?? grandTotalPaise)}</Text>
             )}
           </Pressable>
+          {awaitingPayment && (
+            <Pressable
+              style={styles.secondaryCta}
+              onPress={() => router.replace(`/order/${pendingPayment!.orderId}/track`)}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.secondaryCtaText, { color: accent }]}>View order</Text>
+            </Pressable>
+          )}
         </View>
       )}
 
@@ -1255,6 +1401,35 @@ const makeStyles = (t: AccentTheme) =>
   billValueStrong: { fontSize: 15, fontWeight: '800' },
   billValuePositive: { color: Colors.foodVegGreen, fontWeight: '700' },
   billDivider: { height: 1, backgroundColor: Colors.foodBorder, marginVertical: Spacing.sm },
+  billSublabel: { fontSize: 11.5, color: Colors.foodTextMuted, marginTop: 1 },
+  billStale: { opacity: 0.6 },
+  issueBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFF4E5',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  issueBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.foodText },
+  issueBannerAction: { fontSize: 13, fontWeight: '800' },
+  pendingCard: {
+    backgroundColor: '#FFF8E6',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    gap: 4,
+  },
+  pendingTitle: { fontSize: 14, fontWeight: '800', color: Colors.foodText },
+  pendingText: { fontSize: 12.5, color: Colors.foodTextSecondary, lineHeight: 17 },
+  secondaryCta: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+    marginTop: Spacing.xs,
+  },
+  secondaryCtaText: { fontSize: 14, fontWeight: '800' },
   addTipLink: { fontSize: 13.5, fontWeight: '800' },
   tipRow: { flexDirection: 'row', gap: Spacing.sm, paddingVertical: Spacing.sm },
   tipBtn: {

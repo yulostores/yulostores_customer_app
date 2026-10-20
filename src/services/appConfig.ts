@@ -103,6 +103,12 @@ export interface AppConfig {
   payments: {
     groups: PaymentCatalogueGroup[];
     methods: PaymentCatalogueMethod[];
+    /** Cash on delivery is switched on (Finance Settings). Off → hide "Pay on delivery";
+     *  the server refuses it anyway (400 COD_UNAVAILABLE). */
+    codEnabled: boolean;
+    /** Dev/local backend only: online payments settle through the simulate endpoint
+     *  instead of Razorpay. Never true against production. */
+    paymentSimulationEnabled: boolean;
   };
   about: AboutInfo;
   legal: LegalDocSummary[];
@@ -181,7 +187,12 @@ interface RawTabBar {
 interface RawConfig {
   languages?: RawLanguage[];
   defaultLanguage?: string;
-  payments?: { groups?: RawPaymentGroup[]; methods?: RawPaymentMethod[] };
+  payments?: {
+    groups?: RawPaymentGroup[];
+    methods?: RawPaymentMethod[];
+    codEnabled?: boolean;
+    paymentSimulationEnabled?: boolean;
+  };
   about?: RawAbout;
   legal?: RawLegalSummary[];
   tabBar?: RawTabBar;
@@ -342,7 +353,13 @@ function reshapeConfig(c: RawConfig | undefined): AppConfig {
   return {
     languages,
     defaultLanguage: str(c?.defaultLanguage, 'en'),
-    payments: { groups, methods },
+    payments: {
+      groups,
+      methods,
+      // Missing → off: COD is off by default and simulation must never be assumed.
+      codEnabled: c?.payments?.codEnabled === true,
+      paymentSimulationEnabled: c?.payments?.paymentSimulationEnabled === true,
+    },
     about: reshapeAbout(c?.about),
     legal,
     tabBar: reshapeTabBar(c?.tabBar),

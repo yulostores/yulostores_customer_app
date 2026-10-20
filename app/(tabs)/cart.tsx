@@ -14,9 +14,9 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -40,9 +40,36 @@ import {
 import { useCanGoBack } from '../../src/hooks/useCanGoBack';
 import { useCartScreen } from '../../src/hooks/useCartScreen';
 import { logger } from '../../src/lib/logger';
-import { clearCart, type CartBill, type CartLine, type FoodType } from '../../src/services/cart';
+import {
+  clearCart,
+  deliveryIssueMessage,
+  type CartBill,
+  type CartLine,
+  type ChargeLine,
+  type FoodType,
+} from '../../src/services/cart';
 
 const formatPrice = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
+
+/** Exact paise → "₹357" / "₹10.17" — the server's lines, to the paisa. */
+const formatPaise = (paise: number) =>
+  '₹' +
+  (Math.abs(paise) / 100).toLocaleString('en-IN', {
+    minimumFractionDigits: Math.abs(paise) % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+
+/**
+ * One server bill line → its value. The delivery fee is only "FREE" when the restaurant
+ * pays it; while it can't be priced (`amountPaise: null` — no map point, out of range) it
+ * reads "At checkout", never FREE.
+ */
+function chargeValue(line: ChargeLine): { value: string; positive: boolean } {
+  if (line.amountPaise == null) return { value: 'At checkout', positive: false };
+  if (line.key === 'delivery_fee' && line.amountPaise === 0) return { value: 'FREE', positive: true };
+  if (line.amountPaise < 0) return { value: '− ' + formatPaise(line.amountPaise), positive: line.key === 'discount' };
+  return { value: formatPaise(line.amountPaise), positive: false };
+}
 
 /** Back out of the tab — falls back to Home when there's nothing to pop. */
 function goBack() {
@@ -154,18 +181,23 @@ function LineRow({
 
 function BillRow({
   label,
+  sublabel,
   value,
   strong,
   positive,
 }: {
   label: string;
+  sublabel?: string | null;
   value: string;
   strong?: boolean;
   positive?: boolean;
 }) {
   return (
     <View style={styles.billRow}>
-      <Text style={[styles.billLabel, strong && styles.billLabelStrong]}>{label}</Text>
+      <View style={{ flex: 1, paddingRight: Spacing.sm }}>
+        <Text style={[styles.billLabel, strong && styles.billLabelStrong]}>{label}</Text>
+        {!!sublabel && <Text style={styles.billSublabel}>{sublabel}</Text>}
+      </View>
       <Text
         style={[
           styles.billValue,
@@ -283,24 +315,43 @@ function BillDetails({ bill, stale }: { bill: CartBill; stale: boolean }) {
         {stale && <ActivityIndicator size="small" color={Colors.foodTextMuted} />}
       </View>
 
-      <BillRow label="Item total" value={formatPrice(bill.itemTotal)} />
-      <BillRow
-        label="Delivery fee"
-        value={bill.deliveryFee === 0 ? 'FREE' : formatPrice(bill.deliveryFee)}
-        positive={bill.deliveryFee === 0}
-      />
-      <BillRow label="Platform fee" value={formatPrice(bill.platformFee)} />
-      <BillRow label="GST & charges" value={formatPrice(bill.tax)} />
-      {bill.discountAmount > 0 && (
-        <BillRow
-          label="Item discount"
-          value={'− ' + formatPrice(bill.discountAmount)}
-          positive
-        />
+      {bill.charges ? (
+        bill.charges.lines
+          .filter((line) => line.key !== 'grand_total')
+          .map((line) => {
+            const { value, positive } = chargeValue(line);
+            return (
+              <BillRow key={line.key} label={line.label} sublabel={line.sublabel} value={value} positive={positive} />
+            );
+          })
+      ) : (
+        <>
+          <BillRow label="Item total" value={formatPrice(bill.itemTotal)} />
+          <BillRow label="Delivery fee" value={formatPrice(bill.deliveryFee)} />
+          <BillRow label="Platform fee" value={formatPrice(bill.platformFee)} />
+          <BillRow label="GST & charges" value={formatPrice(bill.tax)} />
+        </>
       )}
 
       <View style={styles.billDivider} />
-      <BillRow label="To pay" value={formatPrice(bill.grandTotal)} strong />
+      {bill.deliveryIssue ? (
+        // The total would leave delivery out — don't present it as the amount to pay.
+        <BillRow label="To pay" value="At checkout" strong />
+      ) : (
+        <BillRow
+          label="To pay"
+          value={bill.charges ? formatPaise(bill.charges.grandTotalPaise) : formatPrice(bill.grandTotal)}
+          strong
+        />
+      )}
+      {!!bill.deliveryIssue && (
+        <View style={styles.billIssue}>
+          <Ionicons name="warning-outline" size={14} color={Colors.warning} />
+          <Text style={styles.billIssueText}>
+            {deliveryIssueMessage(bill.deliveryIssue)}. The delivery fee and total are shown at checkout.
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -366,10 +417,24 @@ export default function CartScreen() {
     appliedCode,
     promoPending,
     refresh,
+    refreshQuietly,
     setLineQty,
     applyPromo,
     dismissActionError,
   } = useCartScreen();
+
+  // The tab stays mounted, so coming back to it (after checkout emptied the cart, or
+  // after adding from a restaurant) re-reads the server cart — quietly, no skeleton.
+  // The first focus is the mount, which the hook already loads.
+  const focusedOnceRef = useRef(false);
+  const refreshQuietlyRef = useRef(refreshQuietly);
+  refreshQuietlyRef.current = refreshQuietly;
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedOnceRef.current) refreshQuietlyRef.current();
+      focusedOnceRef.current = true;
+    }, []),
+  );
 
   const cart = snapshot?.cart ?? null;
   const bill = snapshot?.bill ?? null;
@@ -549,11 +614,19 @@ export default function CartScreen() {
             onPress={handleCheckout}
             disabled={checkoutDisabled}
             accessibilityRole="button"
-            accessibilityLabel={`Proceed to checkout, ${formatPrice(bill.grandTotal)}`}
+            accessibilityLabel={
+              bill.deliveryIssue ? 'Proceed to checkout' : `Proceed to checkout, ${formatPrice(bill.grandTotal)}`
+            }
           >
             <Text style={styles.ctaText}>Proceed to checkout</Text>
-            <Text style={styles.ctaDot}>·</Text>
-            <Text style={styles.ctaText}>{formatPrice(bill.grandTotal)}</Text>
+            {!bill.deliveryIssue && (
+              <>
+                <Text style={styles.ctaDot}>·</Text>
+                <Text style={styles.ctaText}>
+                  {bill.charges ? formatPaise(bill.charges.grandTotalPaise) : formatPrice(bill.grandTotal)}
+                </Text>
+              </>
+            )}
             <Ionicons name="arrow-forward" size={18} color={Colors.white} style={styles.ctaIcon} />
           </Pressable>
         </View>
@@ -685,6 +758,9 @@ const makeStyles = (t: AccentTheme) =>
   // Bill
   billCard: { paddingVertical: Spacing.base },
   billStale: { opacity: 0.6 },
+  billSublabel: { fontSize: 11.5, color: Colors.foodTextMuted, marginTop: 1 },
+  billIssue: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: Spacing.sm },
+  billIssueText: { flex: 1, fontSize: 12, color: Colors.foodTextSecondary, lineHeight: 16 },
   billHeader: {
     flexDirection: 'row',
     alignItems: 'center',

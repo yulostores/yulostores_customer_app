@@ -7,8 +7,12 @@
  *        timeline, restaurant, deliveryPartner, deliveryAddress, orderItems, paymentMethod,
  *        paymentStatus, totalPaid }
  *
- *   POST /api/orders/:id/cancel   — the customer withdrawing an order the restaurant
- *                                    hasn't accepted yet (409 ORDER_NOT_CANCELLABLE after)
+ *   POST /api/orders/:id/cancel  { confirmNoRefund? }
+ *     The customer withdrawing an order, up to "ready" (409 ORDER_NOT_CANCELLABLE once
+ *     the rider has it). Before the kitchen starts: cancelled, and an online payment is
+ *     refunded in full. Once cooking started ('preparing' / 'ready'): 400
+ *     CONFIRMATION_REQUIRED unless `confirmNoRefund: true` — then cancelled with NO
+ *     refund (the restaurant is paid for the food).
  *
  * This is a customer-only endpoint (requires `customer` role token).
  * All money values are plain rupee numbers (not paise).
@@ -19,6 +23,7 @@
  */
 
 import { apiGet, apiPost } from './api';
+import { toCustomerRefund, type CustomerRefund } from './payments';
 
 // ─── Timeline ───────────────────────────────────────────────────────────────
 
@@ -156,6 +161,8 @@ export interface TrackingData {
   /** Set only when `status === 'cancelled'`. */
   cancellation: OrderCancellation | null;
   refundStatus: RefundStatus;
+  /** The refund in plain words (status, amount, timeline) — null when none applies. */
+  refund: CustomerRefund | null;
   /** Delivery-assignment sub-status — finer-grained than order.status. */
   assignmentStatus: OrderAssignmentStatus;
   /**
@@ -193,6 +200,7 @@ interface RawTrackingResponse {
   acceptedAt?: string | null;
   cancellation?: OrderCancellation | null;
   refundStatus?: string | null;
+  refund?: unknown;
   assignmentStatus: OrderAssignmentStatus;
   etaMinutes: number | null;
   etaSource: EtaSource | null;
@@ -217,7 +225,7 @@ export async function getOrderTracking(orderId: string): Promise<TrackingData> {
   const raw = await apiGet<RawTrackingResponse>(`/api/orders/${orderId}/tracking`);
   const refundStatus: RefundStatus =
     raw.refundStatus === 'pending' || raw.refundStatus === 'refunded' ? raw.refundStatus : 'none';
-  const { approvalSecondsLeft, ...rest } = raw;
+  const { approvalSecondsLeft, refund, ...rest } = raw;
   const approvalExpiresAt =
     typeof approvalSecondsLeft === 'number' && Number.isFinite(approvalSecondsLeft)
       ? new Date(Date.now() + Math.max(0, approvalSecondsLeft) * 1000).toISOString()
@@ -229,16 +237,24 @@ export async function getOrderTracking(orderId: string): Promise<TrackingData> {
     acceptedAt: raw.acceptedAt ?? null,
     cancellation: raw.cancellation ?? null,
     refundStatus,
+    refund: toCustomerRefund(refund),
   };
 }
 
+/** Statuses a customer may cancel from — past these the food is on its way. */
+export const CUSTOMER_CANCELLABLE_STATUSES = new Set(['placed', 'confirmed', 'preparing', 'ready']);
+/** The kitchen has started: cancelling now means no refund. */
+export const PREPARATION_STARTED_STATUSES = new Set(['preparing', 'ready']);
+
 /**
- * `POST /api/orders/:id/cancel` — only while the order is still waiting for the
- * restaurant. Throws `ApiError` `ORDER_NOT_CANCELLABLE` (409) once it has been accepted
- * (or already cancelled), including when the restaurant answered at the same moment.
+ * `POST /api/orders/:id/cancel`. Throws `ApiError`:
+ *   400 CONFIRMATION_REQUIRED — cooking has started; resend with `confirmNoRefund: true`
+ *       after the customer accepts that there is no refund (this can happen even when the
+ *       screen still showed "confirmed" — the kitchen moved on meanwhile)
+ *   409 ORDER_NOT_CANCELLABLE — already out for delivery / delivered / cancelled
  */
-export async function cancelOrder(orderId: string): Promise<void> {
-  await apiPost(`/api/orders/${orderId}/cancel`);
+export async function cancelOrder(orderId: string, { confirmNoRefund = false } = {}): Promise<void> {
+  await apiPost(`/api/orders/${orderId}/cancel`, confirmNoRefund ? { confirmNoRefund: true } : {});
 }
 
 // ─── Veg-only fleet assignment ────────────────────────────────────────────

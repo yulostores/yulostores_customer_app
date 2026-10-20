@@ -54,7 +54,8 @@ interface UseOrderTrackingResult {
   useAnyPartner: () => Promise<void>;
   /** Withdraws the order while the restaurant hasn't accepted it. Throws `ApiError`
    *  `ORDER_NOT_CANCELLABLE` once it has; the screen is refreshed either way. */
-  cancel: () => Promise<void>;
+  /** `confirmNoRefund` once the customer accepted that cooking has started (no refund). */
+  cancel: (opts?: { confirmNoRefund?: boolean }) => Promise<void>;
 }
 
 export function useOrderTracking(orderId: string): UseOrderTrackingResult {
@@ -346,12 +347,14 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     }
   }, [orderId]);
 
-  const cancel = useCallback(async () => {
+  const cancel = useCallback(async (opts: { confirmNoRefund?: boolean } = {}) => {
     try {
-      await cancelOrder(orderId);
+      await cancelOrder(orderId, opts);
     } catch (err) {
-      // Too late to cancel is an expected outcome (the restaurant answered first), not a fault.
-      if (!(err instanceof ApiError && err.code === 'ORDER_NOT_CANCELLABLE')) {
+      // Too late to cancel, or "cooking started — confirm no refund", are expected outcomes.
+      if (
+        !(err instanceof ApiError && (err.code === 'ORDER_NOT_CANCELLABLE' || err.code === 'CONFIRMATION_REQUIRED'))
+      ) {
         reportError('useOrderTracking', 'customer cancel failed', err, { orderId });
       }
       throw err;

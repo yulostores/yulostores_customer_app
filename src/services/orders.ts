@@ -84,6 +84,8 @@ interface RawOrder {
   cancelledBy?: string | null;
   cancellationReason?: string | null;
   refundStatus?: string | null;
+  /** The refund in plain words (backend customerRefundView), or null. */
+  refund?: { status?: string; amount?: number; timeline?: string | null } | null;
   deliveryAddress?: {
     label?: string | null;
     street?: string;
@@ -122,6 +124,10 @@ export interface OrderSummary {
   cancelledLabel: string | null;
   /** Cancelled after payment, and the money hasn't gone back yet. */
   refundPending: boolean;
+  /** Short refund state for the card — "Refund in progress", "₹357 refunded", … — or null. */
+  refundLabel: string | null;
+  /** Placed for online payment and not paid yet — the card says so (pay from tracking). */
+  paymentPending: boolean;
   createdAt: string | null;
 }
 
@@ -175,6 +181,22 @@ function cancelledLabelOf(raw: RawOrder): string {
   }
 }
 
+function refundLabelOf(raw: RawOrder): string | null {
+  const r = raw.refund;
+  const amount = typeof r?.amount === 'number' ? ` ₹${r.amount.toLocaleString('en-IN')}` : '';
+  switch (r?.status) {
+    case 'processed':
+      return `Refunded${amount}`;
+    case 'processing':
+    case 'pending':
+      return 'Refund in progress';
+    case 'failed':
+      return 'Refund delayed — we’re on it';
+    default:
+      return raw.refundStatus === 'pending' ? 'Refund in progress' : null;
+  }
+}
+
 function toSummary(raw: RawOrder): OrderSummary {
   const items = raw.items ?? [];
   const status = raw.status ?? 'placed';
@@ -196,6 +218,11 @@ function toSummary(raw: RawOrder): OrderSummary {
     canReorder: type === 'delivery' && TERMINAL_STATUSES.has(status),
     cancelledLabel: status === 'cancelled' ? cancelledLabelOf(raw) : null,
     refundPending: status === 'cancelled' && raw.refundStatus === 'pending',
+    refundLabel: status === 'cancelled' ? refundLabelOf(raw) : null,
+    paymentPending:
+      raw.paymentMethod === 'online' &&
+      status !== 'cancelled' &&
+      !['paid', 'refunded'].includes(raw.paymentStatus ?? 'pending'),
     createdAt: raw.createdAt ?? null,
   };
 }
