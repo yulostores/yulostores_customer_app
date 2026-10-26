@@ -23,10 +23,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
 import { logger } from '../lib/logger';
+import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = 'yulo.cart.v1';
 
@@ -97,7 +99,8 @@ export function CartProvider({ children }: PropsWithChildren) {
         if (!alive || !raw) return;
         const parsed = JSON.parse(raw) as Cart;
         if (parsed && Array.isArray(parsed.lines) && parsed.lines.length > 0) {
-          setCart(parsed);
+          // A server sync that landed while this read was in flight is newer — keep it.
+          setCart((prev) => prev ?? parsed);
         }
       })
       .catch((err) => {
@@ -110,6 +113,18 @@ export function CartProvider({ children }: PropsWithChildren) {
       alive = false;
     };
   }, []);
+
+  // A different account (sign-out, then someone else signs in) must not inherit the previous
+  // customer's cart badge. Tracked only once the saved session has been restored, so restoring
+  // it at launch isn't mistaken for a change of account.
+  const { user, isReady: authReady } = useAuth();
+  const userId = user?._id ?? null;
+  const lastUserIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!authReady) return;
+    if (lastUserIdRef.current !== undefined && lastUserIdRef.current !== userId) setCart(null);
+    lastUserIdRef.current = userId;
+  }, [authReady, userId]);
 
   // Mirror every change to disk, but only once the initial read is done so the
   // hydrate doesn't immediately write back what it just loaded.

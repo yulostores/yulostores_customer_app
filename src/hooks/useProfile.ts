@@ -32,6 +32,12 @@ interface UseProfileResult {
   error: string | null;
   /** Bypass / expired session — there is no server account to read. */
   notSignedIn: boolean;
+  /**
+   * True once `profile` reflects a server response (not just the session seed,
+   * which can carry a stale name). Forms that write the profile back should seed
+   * from it only once this is set.
+   */
+  isFresh: boolean;
   refresh: () => Promise<void>;
 }
 
@@ -62,6 +68,7 @@ export function useProfile(): UseProfileResult {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notSignedIn, setNotSignedIn] = useState(!hasServerToken);
+  const [isFresh, setIsFresh] = useState(false);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -99,6 +106,7 @@ export function useProfile(): UseProfileResult {
       const fresh = await fetchMyProfile();
       if (!isCurrent()) return;
       setProfile(fresh);
+      setIsFresh(true);
       loadedOnceRef.current = true;
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -132,6 +140,7 @@ export function useProfile(): UseProfileResult {
     isRefreshing,
     error,
     notSignedIn,
+    isFresh,
     refresh: load,
   };
 }

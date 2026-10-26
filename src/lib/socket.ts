@@ -23,20 +23,17 @@ import { logger } from './logger';
 
 let _socket: Socket | null = null;
 
-/** Returns the shared socket, creating it if necessary. */
+/**
+ * Returns the shared socket, creating it if necessary. An existing instance is always reused —
+ * connected, connecting or mid auto-reconnect. Replacing one that was merely "not connected yet"
+ * stripped the listeners every open screen had attached to it, and their events silently stopped.
+ */
 export function getSocket(): Socket {
-  if (_socket && _socket.connected) return _socket;
+  if (_socket) return _socket;
 
-  // Destroy any stale/disconnected instance before creating a new one.
-  if (_socket) {
-    _socket.removeAllListeners();
-    _socket.disconnect();
-    _socket = null;
-  }
-
-  const token = getAccessToken();
   _socket = io(API_BASE_URL, {
-    auth: { token: token ?? '' },
+    // A function, so every handshake (including socket.io's own reconnects) reads the current token.
+    auth: (cb) => cb({ token: getAccessToken() ?? '' }),
     transports: ['websocket'],
     reconnectionAttempts: 10,
     reconnectionDelay: 1500,
@@ -59,16 +56,14 @@ export function getSocket(): Socket {
 }
 
 /**
- * Tears down the current socket and creates a fresh one with the latest token.
- * Call this after a token refresh if real-time events stop arriving.
+ * Re-handshakes the shared socket with the latest token — after a token refresh. Keeps the same
+ * instance and its listeners: screens re-join their rooms from their own 'connect' handlers.
  */
 export function reconnectSocket(): Socket {
-  if (_socket) {
-    _socket.removeAllListeners();
-    _socket.disconnect();
-    _socket = null;
-  }
-  return getSocket();
+  const socket = getSocket();
+  socket.disconnect();
+  socket.connect();
+  return socket;
 }
 
 /**

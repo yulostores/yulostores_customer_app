@@ -116,13 +116,24 @@ const WEEKDAY = [
 /**
  * `operatingHours` stores each bound as an HHMM integer (900 → 09:00,
  * 2200 → 22:00). No entry for today, or one flagged closed, means closed.
+ * A close time earlier than the open time runs past midnight (1800 → 0200): such a
+ * restaurant is open from its open time today, and until its close time the next morning
+ * under the previous day's entry. Comparing the two bounds directly read every late-night
+ * kitchen as "Currently closed" all night.
  */
 export function isOpenNow(hours: RawRestaurant['operatingHours']): boolean {
   if (!hours?.length) return false;
   const now = new Date();
-  const today = hours.find((h) => h.day === WEEKDAY[now.getDay()]);
-  if (!today?.isOpen) return false;
   const hhmm = now.getHours() * 100 + now.getMinutes();
+  const today = hours.find((h) => h.day === WEEKDAY[now.getDay()]);
+  const yesterday = hours.find((h) => h.day === WEEKDAY[(now.getDay() + 6) % 7]);
+
+  // Still inside last night's window that ran past midnight.
+  if (yesterday?.isOpen && yesterday.closeTime < yesterday.openTime && hhmm <= yesterday.closeTime) {
+    return true;
+  }
+  if (!today?.isOpen) return false;
+  if (today.closeTime < today.openTime) return hhmm >= today.openTime;
   return hhmm >= today.openTime && hhmm <= today.closeTime;
 }
 

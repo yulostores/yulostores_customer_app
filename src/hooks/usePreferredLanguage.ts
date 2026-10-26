@@ -10,7 +10,9 @@
  * The change is optimistic — the selection moves immediately and reverts if the
  * write fails. Which codes may actually be picked (an `available` language)
  * comes from useAppConfig; the backend rejects anything else with a 400, which
- * the revert covers.
+ * the revert covers. Rapid taps each send a PATCH; only the latest request's
+ * response may touch the selection (a seq ref), so a slow older reply can't
+ * overwrite the newer pick.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -52,6 +54,11 @@ export function usePreferredLanguage(): UsePreferredLanguageResult {
   // Latest code, read synchronously when a save needs to know what to revert to.
   const codeRef = useRef(code);
   codeRef.current = code;
+  // Last value the server confirmed — what a failed latest write reverts to
+  // (the `previous` optimistic value may itself never have been saved).
+  const confirmedRef = useRef(code);
+  // Bumped per write; a response whose seq isn't the latest is ignored.
+  const saveSeqRef = useRef(0);
 
   useEffect(() => {
     if (!hasServerToken) {
@@ -64,7 +71,9 @@ export function usePreferredLanguage(): UsePreferredLanguageResult {
     fetchPreferences()
       .then((prefs) => {
         if (!alive) return;
-        setCodeState(prefs.preferredLanguage);
+        confirmedRef.current = prefs.preferredLanguage;
+        // A pick made while this read was in flight wins over the stale value.
+        if (saveSeqRef.current === 0) setCodeState(prefs.preferredLanguage);
         setAvailable(true);
       })
       .catch((err) => {
@@ -90,14 +99,19 @@ export function usePreferredLanguage(): UsePreferredLanguageResult {
     const previous = codeRef.current;
     if (previous === next) return;
 
+    const seq = ++saveSeqRef.current;
+    const isLatest = () => mountedRef.current && saveSeqRef.current === seq;
+
     setCodeState(next); // optimistic
     setIsSaving(true);
     updatePreferredLanguage(next)
       .then((prefs) => {
-        if (mountedRef.current) setCodeState(prefs.preferredLanguage);
+        if (!isLatest()) return;
+        confirmedRef.current = prefs.preferredLanguage;
+        setCodeState(prefs.preferredLanguage);
       })
       .catch((err) => {
-        if (mountedRef.current) setCodeState(previous); // revert
+        if (isLatest()) setCodeState(confirmedRef.current); // revert
         if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
           logger.warn('language', `Could not save preferred language — ${err.status} ${err.code}`, {
             status: err.status,
@@ -108,7 +122,7 @@ export function usePreferredLanguage(): UsePreferredLanguageResult {
         }
       })
       .finally(() => {
-        if (mountedRef.current) setIsSaving(false);
+        if (isLatest()) setIsSaving(false);
       });
   }, []);
 

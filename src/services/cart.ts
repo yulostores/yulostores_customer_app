@@ -135,6 +135,9 @@ export interface CartLine {
   /** The dish's current photo, or `null` if it has none / was deleted. */
   image: string | null;
   options: CartLineOption[];
+  /** The customization exactly as the server stored it — re-adding with this lands on this same
+   *  line (the server merges identical selections), which is how a stale price is refreshed. */
+  selectedOptions: CartOptionSelection[];
 }
 
 export interface CartRestaurant {
@@ -237,6 +240,9 @@ function toLine(raw: RawCartLine): CartLine {
     foodType: raw.foodType ?? null,
     image: raw.image ?? null,
     options,
+    selectedOptions: (raw.selectedOptions ?? []).map((o) =>
+      o.qty != null ? { optionId: String(o.optionId), qty: o.qty } : { optionId: String(o.optionId) },
+    ),
   };
 }
 

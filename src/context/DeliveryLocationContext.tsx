@@ -35,6 +35,10 @@ import { useAuth } from './AuthContext';
 import type { ActiveLocation, AddressPayload, SavedAddress } from '../types/address';
 
 const STORAGE_KEY = 'yulo.activeLocation.v1';
+// The account (`session.user._id`) the cached active location was chosen under. Kept beside
+// it, not inside it, so caches written before this key existed still parse. Without it the
+// last customer's "Deliver to" — and its address id — carried over to whoever signed in next.
+const OWNER_KEY = 'yulo.activeLocation.owner.v1';
 
 // ─── Derivations ───────────────────────────────────────────────────────────
 
@@ -112,18 +116,30 @@ const Ctx = createContext<DeliveryLocationValue | null>(null);
 export function DeliveryLocationProvider({ children }: PropsWithChildren) {
   const { isAuthenticated, session } = useAuth();
   const hasServerToken = isAuthenticated && !session?.bypassed && !!session?.accessToken;
+  const userId = session?.user?._id ?? null;
 
   const [activeLocation, setActive] = useState<ActiveLocation | null>(null);
   const [savedAddresses, setSaved] = useState<SavedAddress[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [loadingSaved, setLoadingSaved] = useState(false);
 
+  // Mirrors of state the async paths below read after an `await`, where the closure's copy
+  // may already be stale.
+  const activeRef = useRef<ActiveLocation | null>(null);
+  activeRef.current = activeLocation;
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
+  /** Account the active location belongs to; `null` = chosen while signed out / legacy cache. */
+  const ownerRef = useRef<string | null>(null);
+
   // Hydrate the cached active location once on mount.
   useEffect(() => {
     let alive = true;
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (alive && raw) setActive(JSON.parse(raw) as ActiveLocation);
+    AsyncStorage.multiGet([STORAGE_KEY, OWNER_KEY])
+      .then(([[, raw], [, owner]]) => {
+        if (!alive) return;
+        ownerRef.current = owner || null;
+        if (raw) setActive(JSON.parse(raw) as ActiveLocation);
       })
       .catch((err) => {
         // Corrupt cache or storage unavailable — start with no active location.
@@ -139,9 +155,19 @@ export function DeliveryLocationProvider({ children }: PropsWithChildren) {
 
   const persist = useCallback((loc: ActiveLocation | null) => {
     setActive(loc);
+    activeRef.current = loc;
+    const owner = loc ? userIdRef.current : null;
+    ownerRef.current = owner;
     const write = loc
-      ? AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(loc))
-      : AsyncStorage.removeItem(STORAGE_KEY);
+      ? owner
+        ? AsyncStorage.multiSet([
+            [STORAGE_KEY, JSON.stringify(loc)],
+            [OWNER_KEY, owner],
+          ])
+        : AsyncStorage.multiSet([[STORAGE_KEY, JSON.stringify(loc)]]).then(() =>
+            AsyncStorage.removeItem(OWNER_KEY),
+          )
+      : AsyncStorage.multiRemove([STORAGE_KEY, OWNER_KEY]);
     write.catch((err) => {
       // In-memory state is still correct; it just won't survive a restart.
       logger.warn('location', 'Could not persist active location', {
@@ -160,14 +186,36 @@ export function DeliveryLocationProvider({ children }: PropsWithChildren) {
     [persist],
   );
 
+  /**
+   * Re-derive the active location from a fresh saved list, by id. Without this the "Deliver
+   * to" bar kept showing an address that had just been deleted, and a re-pinned address kept
+   * its stale `unlocated: true`. A deleted active address falls back to the default one (or
+   * to nothing, so the picker is shown). An ad-hoc pin with no id is left alone.
+   */
+  const reconcileActive = useCallback(
+    (list: SavedAddress[]) => {
+      const cur = activeRef.current;
+      if (!cur?.id) return;
+      const match = list.find((a) => a._id === cur.id) ?? list.find((a) => a.isDefault) ?? null;
+      const next = match ? activeFromSaved(match) : null;
+      if (JSON.stringify(next) !== JSON.stringify(cur)) persist(next);
+    },
+    [persist],
+  );
+
   const refreshSaved = useCallback(async () => {
     if (!hasServerToken) {
       setSaved([]);
       return;
     }
+    const forUser = userId;
     setLoadingSaved(true);
     try {
-      setSaved(await fetchSavedAddresses());
+      const list = await fetchSavedAddresses();
+      // The account changed while this was in flight — its list belongs to someone else.
+      if (userIdRef.current !== forUser) return;
+      setSaved(list);
+      reconcileActive(list);
     } catch (err) {
       // 401 / offline — leave whatever we had. A 401 on a bypass session is
       // expected; anything else is worth a developer's attention.
@@ -179,15 +227,28 @@ export function DeliveryLocationProvider({ children }: PropsWithChildren) {
     } finally {
       setLoadingSaved(false);
     }
-  }, [hasServerToken]);
+  }, [hasServerToken, userId, reconcileActive]);
 
-  // Pull the saved list whenever we gain a real server session.
+  // Pull the saved list whenever the signed-in ACCOUNT changes — not just when a token
+  // appears. A guest→existing-account merge swaps the user _id while a token is present
+  // throughout, and keying on the token alone kept showing the retired guest's addresses.
+  // Waits for hydration so the cached active location is in place before it's reconciled.
   const refreshRef = useRef(refreshSaved);
   refreshRef.current = refreshSaved;
   useEffect(() => {
+    if (!hydrated) return;
+    // A different account than the one the active location was chosen under: drop it (and
+    // its cache). Not on a plain relaunch — the same user hydrates to the same owner — and
+    // not on sign-out (userId null), so browsing signed-out keeps the last location until
+    // someone ELSE signs in. A location chosen while signed out (no owner) is adopted.
+    if (userId && ownerRef.current && ownerRef.current !== userId) {
+      persist(null);
+    } else if (userId && !ownerRef.current && activeRef.current) {
+      persist(activeRef.current); // adopt: re-writes it with this account as owner
+    }
+    setSaved([]);
     if (hasServerToken) refreshRef.current();
-    else setSaved([]);
-  }, [hasServerToken]);
+  }, [hasServerToken, userId, hydrated, persist]);
 
   const saveAddress = useCallback<DeliveryLocationValue['saveAddress']>(
     async (payload) => {

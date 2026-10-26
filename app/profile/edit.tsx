@@ -1,5 +1,8 @@
 /**
- * app/profile/edit.tsx — edit the customer's name, phone, and avatar.
+ * app/profile/edit.tsx — edit the customer's name and avatar. The phone is shown
+ * read-only: it is the OTP login identity, and changing it here would skip OTP
+ * verification entirely (the next login by the real number would then create a
+ * fresh, empty account).
  *
  * One write: `PATCH /api/users/me` (src/services/profile.ts → updateProfile).
  * A newly-picked photo rides along as a multipart `avatar` file in the same
@@ -11,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -48,21 +51,27 @@ function goBack() {
 export default function EditProfileScreen() {
   const styles = useThemedStyles(makeStyles);
   const { accent } = useAccentTheme();
-  const { profile, isLoading, refresh } = useProfile();
+  const { profile, isLoading, isFresh, error: loadError, notSignedIn, refresh } = useProfile();
 
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
   const [avatar, setAvatar] = useState<AvatarFile | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Seed the form once, the first time the profile is available (its id stays
-  // stable for the signed-in customer, so this never clobbers what's typed).
+  // Seed the form once, from the server's copy — the session seed useProfile
+  // paints first can carry a stale name (rename A→B, reopen → it still says A,
+  // and Save would write A back). If the fetch fails (or there's no server
+  // account to read), fall back to whatever is showing so the form is usable. The ref keeps later refreshes from
+  // clobbering what's typed.
+  const seededRef = useRef(false);
+  const [seeded, setSeeded] = useState(false);
   useEffect(() => {
-    if (!profile) return;
+    if (seededRef.current || !profile) return;
+    if (!isFresh && !loadError && !notSignedIn) return;
+    seededRef.current = true;
     setName(profile.name);
-    setPhone(profile.phone ?? '');
-  }, [profile?.id]);
+    setSeeded(true);
+  }, [profile, isFresh, loadError, notSignedIn]);
 
   const pickAvatar = async () => {
     try {
@@ -91,14 +100,16 @@ export default function EditProfileScreen() {
     }
   };
 
-  const canSave = name.trim().length >= 2 && !saving;
+  const canSave = name.trim().length >= 2 && !saving && seeded;
 
   const onSave = async () => {
     if (!canSave) return;
     setSaving(true);
     setError(null);
     try {
-      await updateProfile({ name: name.trim(), phone: phone.trim() || undefined }, avatar ?? undefined);
+      await updateProfile({ name: name.trim() }, avatar ?? undefined);
+      // Never throws (useProfile handles its own errors); the Profile tab also
+      // refetches when it regains focus.
       await refresh();
       router.back();
     } catch (err) {
@@ -174,21 +185,19 @@ export default function EditProfileScreen() {
             placeholder="Your name"
             placeholderTextColor={Colors.foodTextMuted}
             autoCapitalize="words"
-            returnKeyType="next"
-          />
-
-          <Text style={[styles.fieldLabel, { marginTop: Spacing.lg }]}>Phone</Text>
-          <TextInput
-            style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="Phone number"
-            placeholderTextColor={Colors.foodTextMuted}
-            keyboardType="phone-pad"
             returnKeyType="done"
           />
 
-          {isLoading && !profile ? (
+          <Text style={[styles.fieldLabel, { marginTop: Spacing.lg }]}>Phone</Text>
+          {/* Read-only: the phone is the verified login identity. */}
+          <View style={[styles.input, styles.inputReadOnly]}>
+            <Text style={styles.readOnlyText} numberOfLines={1}>
+              {profile?.phone ?? '—'}
+            </Text>
+            <Ionicons name="lock-closed" size={16} color={Colors.foodTextMuted} />
+          </View>
+
+          {(isLoading || !seeded) && !loadError && !notSignedIn ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={Colors.foodTextMuted} />
               <Text style={styles.loadingText}>Loading your profile…</Text>
@@ -265,6 +274,13 @@ const makeStyles = (t: AccentTheme) =>
     color: Colors.foodText,
     backgroundColor: Colors.foodSurface,
   },
+  inputReadOnly: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderColor: Colors.foodBorder,
+  },
+  readOnlyText: { flex: 1, fontSize: 14.5, color: Colors.foodTextSecondary },
 
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.lg },
   loadingText: { fontSize: 13, color: Colors.foodTextMuted },

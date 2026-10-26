@@ -209,11 +209,13 @@ export default function SearchScreen() {
 
   // Search is scoped to the customer's delivery location, like Home: only restaurants that
   // deliver there are returned, so a result is always something they can order from. With no
-  // saved location yet the backend falls back to an unscoped search.
+  // saved location yet the backend falls back to an unscoped search. An `unlocated` address
+  // carries a placeholder coordinate (not a real one), so it's treated as no location — same
+  // as useHomeData — rather than scoping results to the placeholder city.
   const { activeLocation } = useDeliveryLocation();
-  const lat = activeLocation?.coordinates.latitude;
-  const lng = activeLocation?.coordinates.longitude;
-  const hasLocation = lat != null && lng != null;
+  const located = activeLocation != null && !activeLocation.unlocated;
+  const lat = located ? activeLocation.coordinates.latitude : undefined;
+  const lng = located ? activeLocation.coordinates.longitude : undefined;
 
   // A cuisine chip (Home, or Browse by cuisine) links here with `?query=`.
   const { query: initialQuery } = useLocalSearchParams<{ query?: string }>();
@@ -223,6 +225,19 @@ export default function SearchScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  // Pagination for the current result set. `searchRef` pins the params the
+  // first page ran with so "load more" fetches the same search's next page.
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
+  const searchRef = useRef<{ q: string; lat?: number; lng?: number; vegOnly?: boolean } | null>(
+    null,
+  );
+  // Request-sequence guard (as in useTypeahead): every new search or clear bumps
+  // it, so a slower, older response can't overwrite newer results or land after
+  // the customer has cleared the search.
+  const searchSeqRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
 
   const {
@@ -246,10 +261,15 @@ export default function SearchScreen() {
       const term = raw.trim();
       if (!term) return;
 
+      const seq = ++searchSeqRef.current;
       setQuery(term);
       setHasSearched(true);
       setIsSearching(true);
       setSearchError(null);
+      setPage(1);
+      setHasMore(false);
+      setIsLoadingMore(false);
+      loadingMoreRef.current = false;
 
       // Best-effort history write; pull the Recent list once it lands so the term
       // the customer just ran shows up without a full-screen reload.
@@ -266,14 +286,15 @@ export default function SearchScreen() {
         // `vegOnly` mirrors the app-wide "Pure veg restaurants only" scope so the
         // results are filtered server-side, never in the client. `lat`/`lng` scope the
         // results to restaurants that deliver to the customer (see above).
-        const { restaurants } = await fetchRestaurants({
-          q: term,
-          lat,
-          lng,
-          vegOnly: vegOnly || undefined,
-        });
+        const params = { q: term, lat, lng, vegOnly: vegOnly || undefined };
+        searchRef.current = params;
+        const { restaurants, pagination } = await fetchRestaurants(params);
+        if (searchSeqRef.current !== seq) return;
         setResults(restaurants);
+        setPage(pagination.page);
+        setHasMore(pagination.pages > pagination.page);
       } catch (err) {
+        if (searchSeqRef.current !== seq) return;
         // Per the app-wide split: an expected 4xx is a warn, a 5xx / unreachable
         // is a reported error. api.ts has already logged the transport failure;
         // this adds the screen's context (the query).
@@ -293,11 +314,53 @@ export default function SearchScreen() {
             : "Couldn't run that search. Check your connection and try again.",
         );
       } finally {
-        setIsSearching(false);
+        if (searchSeqRef.current === seq) setIsSearching(false);
       }
     },
     [refreshRecent, vegOnly, lat, lng],
   );
+
+  // Next page of the current search (FlatList onEndReached). The ref guard stops
+  // the duplicate end-reached events a fast fling fires; rows are de-duped by id
+  // in case the server's ordering shifted between pages.
+  const loadMore = useCallback(async () => {
+    const params = searchRef.current;
+    if (!params || !hasMore || isSearching || loadingMoreRef.current) return;
+    const seq = searchSeqRef.current;
+    const nextPage = page + 1;
+    loadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    try {
+      const { restaurants, pagination } = await fetchRestaurants({ ...params, page: nextPage });
+      if (searchSeqRef.current !== seq) return;
+      setResults((prev) => {
+        const seen = new Set(prev.map((r) => r._id));
+        return [...prev, ...restaurants.filter((r) => !seen.has(r._id))];
+      });
+      setPage(pagination.page);
+      setHasMore(pagination.pages > pagination.page);
+    } catch (err) {
+      if (searchSeqRef.current !== seq) return;
+      // Keep what's already showing; the next end-reached retries this page.
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+        logger.warn('search', `Search page ${nextPage} failed — ${err.status} ${err.code}`, {
+          query: params.q,
+          status: err.status,
+          code: err.code,
+        });
+      } else {
+        reportError('search', 'Restaurant search page failed', err, {
+          query: params.q,
+          page: nextPage,
+        });
+      }
+    } finally {
+      if (searchSeqRef.current === seq) {
+        loadingMoreRef.current = false;
+        setIsLoadingMore(false);
+      }
+    }
+  }, [hasMore, isSearching, page]);
 
   // Run an incoming `?query=` exactly once per distinct value — a fresh tap on
   // a cuisine chip re-triggers this even while already on the Search tab.
@@ -323,6 +386,14 @@ export default function SearchScreen() {
   );
 
   const clearSearch = useCallback(() => {
+    // Invalidate any search still in flight so it can't land after the clear.
+    searchSeqRef.current++;
+    searchRef.current = null;
+    loadingMoreRef.current = false;
+    setIsSearching(false);
+    setIsLoadingMore(false);
+    setHasMore(false);
+    setPage(1);
     setQuery('');
     setResults([]);
     setHasSearched(false);
@@ -385,7 +456,7 @@ export default function SearchScreen() {
           icon="search-outline"
           title="No restaurants found"
           message={
-            hasLocation
+            located
               ? `No restaurant delivering to your address matched "${query.trim()}". Try a different term or change your delivery location.`
               : `Nothing matched "${query.trim()}". Try a different term.`
           }
@@ -399,6 +470,15 @@ export default function SearchScreen() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={styles.loadMoreFooter}>
+              <ActivityIndicator size="small" color={t.accent} />
+            </View>
+          ) : null
+        }
         renderItem={({ item }) => (
           <Pressable
             style={styles.card}
@@ -781,6 +861,7 @@ const makeStyles = (t: AccentTheme) =>
   },
 
   // ── Shared status / skeleton ──
+  loadMoreFooter: { paddingVertical: Spacing.lg, alignItems: 'center' },
   centerBox: {
     flex: 1,
     alignItems: 'center',

@@ -47,6 +47,8 @@ interface RawFeedMenuItem {
   ingredients?: string[];
   image?: string;
   isAvailable?: boolean;
+  /** Set by home.controller.js only for a request with a customer token. */
+  isFavorited?: boolean;
 }
 
 interface RawQuickFilterChip {
@@ -113,6 +115,8 @@ function toMenuItem(m: RawFeedMenuItem): MenuItem {
     ingredients: m.ingredients,
     image: m.image,
     isAvailable: m.isAvailable ?? true,
+    // Left undefined for an anonymous request — the heart then starts empty.
+    isFavorited: m.isFavorited,
   };
 }
 

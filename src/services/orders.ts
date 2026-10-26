@@ -48,6 +48,8 @@ const STATUS_META: Record<string, StatusMeta> = {
   ready: { label: 'Ready', icon: 'bag-check-outline', tone: 'accent' },
   out_for_delivery: { label: 'On the way', icon: 'bicycle-outline', tone: 'accent' },
   delivered: { label: 'Delivered', icon: 'checkmark-done-outline', tone: 'positive' },
+  // A dine-in (table QR) round carried to the table.
+  served: { label: 'Served', icon: 'restaurant-outline', tone: 'positive' },
   cancelled: { label: 'Cancelled', icon: 'close-circle-outline', tone: 'danger' },
 };
 

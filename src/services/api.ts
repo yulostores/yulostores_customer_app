@@ -79,7 +79,7 @@ function toApiError(err: unknown): ApiError {
 
 /** A single in-flight refresh, shared by every 401 that lands while it runs — a
  *  screenful of parallel requests triggers exactly one `/auth/refresh`. */
-let refreshInFlight: Promise<boolean> | null = null;
+let refreshInFlight: Promise<RefreshResult> | null = null;
 
 /**
  * Exchange the stored refresh token for a fresh access token. Resolves `true`
@@ -87,7 +87,9 @@ let refreshInFlight: Promise<boolean> | null = null;
  * `false` on any failure or when there is no refresh token to spend (a bypass /
  * offline session).
  */
-function refreshAccessToken(): Promise<boolean> {
+type RefreshResult = 'rotated' | 'rejected' | 'transient';
+
+function refreshAccessToken(): Promise<RefreshResult> {
   if (!refreshInFlight) {
     refreshInFlight = doRefresh().finally(() => {
       refreshInFlight = null;
@@ -96,9 +98,17 @@ function refreshAccessToken(): Promise<boolean> {
   return refreshInFlight;
 }
 
-async function doRefresh(): Promise<boolean> {
+/**
+ * Rotates the access token. Three outcomes, because only one of them means the session is over:
+ * 'rotated' (new token stored), 'rejected' (the server refused the refresh token — sign out),
+ * and 'transient' (timeout, no connection, 5xx, 429 — keep the session and let this request fail).
+ * Signing out on every failed refresh logged customers out whenever they reopened the app on a
+ * weak connection.
+ */
+async function doRefresh(): Promise<RefreshResult> {
   const session = getSession();
-  if (!session?.refreshToken) return false;
+  if (!session?.refreshToken) return 'rejected';
+  const refreshToken = session.refreshToken;
 
   try {
     // Bare fetch, not apiSend: this call must not re-enter the 401 path, and it
@@ -107,7 +117,7 @@ async function doRefresh(): Promise<boolean> {
     const res = await fetchWithTimeout(apiUrl('/api/auth/refresh?portal=customer'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ refreshToken: session.refreshToken }),
+      body: JSON.stringify({ refreshToken }),
       timeoutMs: AUTH_TIMEOUT_MS,
     });
 
@@ -118,31 +128,49 @@ async function doRefresh(): Promise<boolean> {
       /* non-JSON body — treated as a failed refresh below */
     }
 
+    // Signed out or switched account while this was in flight: the answer belongs to a session
+    // that no longer exists — never write its token into the current one.
+    if (getSession()?.refreshToken !== refreshToken) return 'transient';
+
     if (!res.ok || json?.status !== 'success' || !json?.data?.accessToken) {
       logger.warn('api', 'Session refresh rejected', { status: res.status, code: json?.code });
-      return false;
+      return res.status === 401 || res.status === 403 ? 'rejected' : 'transient';
     }
 
     setAccessToken(json.data.accessToken);
     // Real-time events authenticate with the token captured at handshake time —
     // re-handshake an in-use socket with the rotated one (no-op if none is open).
     reconnectSocketIfActive();
-    return true;
+    return 'rotated';
   } catch (err) {
     logger.warn('api', 'Session refresh failed', {
       reason: err instanceof Error ? err.message : String(err),
     });
-    return false;
+    return 'transient';
+  }
+}
+
+// The 401 codes that mean "this access token is no good" — expired, revoked or missing. Any other
+// 401 is about the request, not the session: GUEST_ACCOUNT_REQUIRED (a guest opening Orders or
+// Help) used to go through refresh-and-replay, get 401 again, and sign the guest out — losing
+// their cart, favourites and addresses.
+const SESSION_401_CODES = new Set(['TOKEN_EXPIRED', 'INVALID_TOKEN', 'UNAUTHORIZED']);
+
+async function isSessionFailure(res: Response): Promise<boolean> {
+  try {
+    const body = (await res.clone().json()) as { code?: string } | null;
+    return !body?.code || SESSION_401_CODES.has(body.code);
+  } catch {
+    return true; // no readable code — treat as the token being the problem, as before
   }
 }
 
 /**
  * Issue an authenticated request and, on a 401 for a real (non-bypass) session,
  * rotate the access token once via {@link refreshAccessToken} and replay it —
- * `buildHeaders` is re-invoked so the replay carries the new token. A 401 that
- * survives the refresh (or a session with no refresh token) means the session
- * is unrecoverable: it is cleared so the router falls back to the sign-in stack,
- * and the still-401 response is returned for the normal envelope handling.
+ * `buildHeaders` is re-invoked so the replay carries the new token. The session is
+ * cleared only when the server refuses the refresh token (or the replay still says the
+ * token is bad); a network failure while refreshing keeps it.
  */
 async function fetchAuthed(
   method: string,
@@ -155,17 +183,22 @@ async function fetchAuthed(
 
   let res = await send();
   if (res.status !== 401) return res;
+  if (!(await isSessionFailure(res))) return res;
 
   // Bypass / offline sessions carry no refresh token — a 401 there is expected
   // (see logApiFailure); leave it for the caller and never force a sign-out.
-  if (!getSession()?.refreshToken) return res;
+  const session = getSession();
+  if (!session?.refreshToken) return res;
 
-  if (await refreshAccessToken()) {
+  const outcome = await refreshAccessToken();
+  if (outcome === 'transient') return res;
+  if (outcome === 'rotated') {
     res = await send();
-    if (res.status !== 401) return res;
+    if (res.status !== 401 || !(await isSessionFailure(res))) return res;
   }
 
-  setSession(null);
+  // Only if it is still the session this request started with — not one signed into meanwhile.
+  if (getSession()?.refreshToken === session.refreshToken) setSession(null);
   return res;
 }
 

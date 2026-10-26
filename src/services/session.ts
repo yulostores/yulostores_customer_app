@@ -17,6 +17,7 @@
  */
 
 import * as SecureStore from 'expo-secure-store';
+import { AUTH_OTP_BYPASS } from '../constants/config';
 import { logger } from '../lib/logger';
 import type { AuthUser } from './auth';
 
@@ -134,6 +135,14 @@ export async function hydrateSession(): Promise<Session | null> {
     const meta = JSON.parse(metaRaw) as { user?: unknown; bypassed?: unknown };
     if (!isAuthUser(meta.user)) {
       throw new Error('stored session meta is missing a valid user');
+    }
+
+    // A session minted by a trial build's OTP bypass has no tokens: every request 401s and,
+    // with no refresh token, nothing ever signs it out — the customer sat on a "demo session"
+    // that could do nothing. Outside a bypass build it is dropped and they sign in again.
+    if (!AUTH_OTP_BYPASS && (meta.bypassed === true || !refreshToken)) {
+      persist(null);
+      return null;
     }
 
     current = {

@@ -483,6 +483,7 @@ export default function CartScreen() {
               logger.warn('cart', 'Failed to empty cart', {
                 reason: err instanceof Error ? err.message : String(err),
               });
+              Alert.alert('Couldn’t empty your cart', 'Check your connection and try again.');
             }
           }
         }

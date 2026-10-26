@@ -185,6 +185,8 @@ export interface TrackingData {
   paymentMethod: string | null;
   paymentStatus: string | null;
   totalPaid: number;
+  /** Already rated — the "Rate your order" card is skipped. */
+  isReviewed: boolean;
 }
 
 // ─── Raw API shape ────────────────────────────────────────────────────────────
@@ -213,6 +215,7 @@ interface RawTrackingResponse {
   paymentMethod: string | null;
   paymentStatus: string | null;
   totalPaid: number;
+  isReviewed?: boolean;
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
@@ -238,7 +241,19 @@ export async function getOrderTracking(orderId: string): Promise<TrackingData> {
     cancellation: raw.cancellation ?? null,
     refundStatus,
     refund: toCustomerRefund(refund),
+    // Older orders can carry `coordinates: []` (a geocode that failed); the map needs a real
+    // [lng, lat] pair or nothing — an empty one broke the camera and the drop-off marker.
+    deliveryAddress: raw.deliveryAddress
+      ? { ...raw.deliveryAddress, coordinates: validLngLat(raw.deliveryAddress.coordinates) }
+      : null,
+    isReviewed: raw.isReviewed === true,
   };
+}
+
+function validLngLat(c: unknown): [number, number] | null {
+  return Array.isArray(c) && c.length === 2 && c.every((n) => typeof n === 'number' && Number.isFinite(n))
+    ? [c[0], c[1]]
+    : null;
 }
 
 /** Statuses a customer may cancel from — past these the food is on its way. */
@@ -367,7 +382,7 @@ export function stageLabel(stage: TrackingStage): string {
     case 'preparing':
       return 'Preparing';
     case 'ready':
-      return 'Picked up';
+      return 'Ready for pickup';
     case 'out_for_delivery':
       return 'On the way';
     case 'delivered':

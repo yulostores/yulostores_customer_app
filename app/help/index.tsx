@@ -11,8 +11,9 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useCallback, useRef } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -87,7 +88,21 @@ function HelpRow({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function HelpAndSupportScreen() {
-  const { openCount, total, notSignedIn } = useSupportTickets();
+  const { openCount, total, notSignedIn, refresh } = useSupportTickets();
+
+  // Re-read on every return here (e.g. back from filing a ticket on /help/new)
+  // so the open-request count isn't stale — skipping the very first focus, since
+  // useSupportTickets already loads once on mount. `refresh` is a fresh closure
+  // each render, so it's read through a ref to keep this effect focus-only.
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  const focusedOnceRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedOnceRef.current) refreshRef.current();
+      else focusedOnceRef.current = true;
+    }, []),
+  );
 
   const openTopic = (topic: SupportTopic) =>
     router.push({ pathname: '/help/new', params: { category: topic.category } });

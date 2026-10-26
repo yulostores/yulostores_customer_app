@@ -130,6 +130,9 @@ function OrderCard({
   const heading = order.restaurantName ?? order.title;
   const showItemLine = !!order.restaurantName && !!order.title;
 
+  // Only delivery orders can be tracked — the server answers a dine-in (table QR) order with
+  // 400 "Only delivery orders can be tracked", so those cards don't open the screen.
+  const trackable = order.type === 'delivery';
   const openTracking = useCallback(() => {
     // The tracking screen renders the delivered / cancelled terminal states too.
     router.push(`/order/${order.id}/track`);
@@ -138,7 +141,8 @@ function OrderCard({
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={openTracking}
+      onPress={trackable ? openTracking : undefined}
+      disabled={!trackable}
       accessibilityRole="button"
       accessibilityLabel={`${heading} — ${meta.label}`}
     >
@@ -187,7 +191,7 @@ function OrderCard({
         ) : null}
 
         <View style={styles.actionRow}>
-          {isActive ? (
+          {isActive && trackable ? (
             <View style={styles.trackBtn}>
               <Text style={styles.trackBtnText}>Track order</Text>
               <Ionicons name="chevron-forward" size={13} color={accent} />

@@ -120,6 +120,7 @@ interface UseCheckoutResult {
   /** Paise — what the placed order charged (for the confirmation screen). */
   placedTotalPaise: number | null;
   refresh: () => Promise<void>;
+  reloadQuietly: () => void;
   /** Place + pay; after a placed-but-unpaid order, pays that order again. */
   pay: () => Promise<void>;
   /** Pay the already-placed order again. */
@@ -139,6 +140,13 @@ interface UseCheckoutResult {
 
 function messageFor(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
+}
+
+// The `details.items` of a CART_PRICE_CHANGED / ORDER_ITEM_UNAVAILABLE refusal.
+function changedItems(details: unknown): { menuItemId: string; name: string }[] {
+  const items = (details as { items?: { menuItemId?: unknown; name?: unknown }[] } | null)?.items;
+  if (!Array.isArray(items)) return [];
+  return items.map((i) => ({ menuItemId: String(i.menuItemId ?? ''), name: typeof i.name === 'string' ? i.name : '' }));
 }
 
 const rupees = (paise: number) => '₹' + (paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 });
@@ -193,6 +201,8 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
   const requestRef = useRef(0);
   // The placed online order, held so every later tap pays it rather than placing again.
   const placedRef = useRef<PlacedOrder | null>(null);
+  // True while a Pay tap is being handled.
+  const payingRef = useRef(false);
   // The Idempotency-Key and the order details it was minted for.
   const attemptRef = useRef<{ key: string; fingerprint: string } | null>(null);
 
@@ -393,6 +403,34 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     [mergeCartSnapshot],
   );
 
+  // The server freezes a line's price when it's added and refuses to place the order once the
+  // dish's price has changed (409 CART_PRICE_CHANGED) — and nothing else re-prices the line, so
+  // every Pay failed the same way. Re-adding a line with its own stored customization lands on
+  // that same line at today's price (one extra unit), and the quantity is then set back. Returns
+  // whether every affected line was refreshed.
+  const refreshChangedPrices = useCallback(
+    async (menuItemIds: Set<string>): Promise<boolean> => {
+      const stale = (summary?.lines ?? []).filter((l) => menuItemIds.has(l.menuItemId));
+      let snap: CartSnapshot | null = null;
+      let allOk = true;
+      for (const line of stale) {
+        try {
+          await addItemToCart({ menuItemId: line.menuItemId, qty: 1, selectedOptions: line.selectedOptions });
+          snap = await updateCartLine(line.id, line.qty);
+        } catch (err) {
+          allOk = false;
+          logger.warn('checkout', 'Could not refresh a changed price', {
+            code: err instanceof ApiError ? err.code : 'unknown',
+          });
+        }
+      }
+      if (snap && mountedRef.current) mergeCartSnapshot(snap);
+      else if (mountedRef.current) load({ quiet: true });
+      return allOk && stale.length > 0;
+    },
+    [summary, mergeCartSnapshot, load],
+  );
+
   const finishPaid = useCallback((order: PlacedOrder, totalPaise: number | null) => {
     setPendingPayment(null);
     setPlacedOrderId(order.orderId);
@@ -499,26 +537,8 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     await payPlaced(order, order.gatewayOrder, placedTotalPaise);
   }, [payPlaced, placedTotalPaise]);
 
-  const pay = useCallback(async () => {
-    // An online order already exists (the cart is empty now) — pay it, never place another.
-    if (placedRef.current) {
-      await retryPayment();
-      return;
-    }
-    if (!summary || !summary.hasItems) {
-      setActionError('Your cart is empty.');
-      return;
-    }
-    if (!summary.address) {
-      setActionError('Add a delivery address to continue.');
-      return;
-    }
-    if (summary.deliveryIssue) {
-      setActionError(summary.deliveryIssueMessage ?? 'Delivery to this address isn’t available.');
-      return;
-    }
-    if (isRepricing) return;
-
+  const placeAndPay = useCallback(async () => {
+    if (!summary?.address) return;
     const method = getMethod(selectedMethodId);
     if (method.wire === 'cod' && !codEnabled) {
       setActionError('Pay on delivery isn’t available right now. Please pay online.');
@@ -557,6 +577,9 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
         expectedTotalPaise,
         idempotencyKey: attemptRef.current.key,
       });
+      // The server emptied the cart — the tab badge / Home CartBar follow. Before the mounted
+      // check: leaving the screen mid-placement must still clear the badge.
+      clearCartCache();
       if (!mountedRef.current) return;
     } catch (err) {
       if (!mountedRef.current) return;
@@ -573,13 +596,28 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
         );
         setPhase('ready');
         load({ quiet: true });
-      } else if (
-        err instanceof ApiError &&
-        (err.code === 'CART_PRICE_CHANGED' || err.code === 'ORDER_ITEM_UNAVAILABLE')
-      ) {
-        logger.warn('checkout', `Checkout blocked — ${err.code}`, { code: err.code });
-        setActionError(messageFor(err, 'Your cart changed. Go back and review it.'));
-        setPhase('failed');
+      } else if (err instanceof ApiError && err.code === 'CART_PRICE_CHANGED') {
+        logger.warn('checkout', 'Checkout blocked — item prices changed', { code: err.code });
+        const items = changedItems(err.details);
+        setPhase('ready');
+        const refreshed = await refreshChangedPrices(new Set(items.map((i) => i.menuItemId)));
+        if (!mountedRef.current) return;
+        const names = items.map((i) => i.name).filter(Boolean).join(', ');
+        setActionError(
+          refreshed
+            ? `The price of ${names || 'an item'} has changed. Your bill is updated — check it, then tap Pay again.`
+            : 'Some prices have changed. Remove the changed items and add them again to continue.',
+        );
+      } else if (err instanceof ApiError && err.code === 'ORDER_ITEM_UNAVAILABLE') {
+        logger.warn('checkout', 'Checkout blocked — item unavailable', { code: err.code });
+        const names = changedItems(err.details).map((i) => i.name).filter(Boolean).join(', ');
+        // 'ready', not 'failed': the customer can remove the line right here and carry on.
+        setPhase('ready');
+        setActionError(
+          names
+            ? `${names} ${names.includes(',') ? 'are' : 'is'} no longer available. Remove ${names.includes(',') ? 'them' : 'it'} to continue.`
+            : 'An item in your cart is no longer available. Remove it to continue.',
+        );
       } else if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
         logger.warn('checkout', `Checkout rejected — ${err.status} ${err.code}`, {
           status: err.status,
@@ -599,8 +637,6 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
       return;
     }
 
-    // The server emptied the cart — the tab badge / Home CartBar follow.
-    clearCartCache();
     attemptRef.current = null;
     const totalPaise = expectedTotalPaise ?? Math.round(order.grandTotal * 100);
 
@@ -632,6 +668,51 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     clearCartCache,
     payPlaced,
     retryPayment,
+    refreshChangedPrices,
+  ]);
+
+  const pay = useCallback(async () => {
+    // A second tap in the same frame, before the button re-renders as busy.
+    if (payingRef.current) return;
+    // An online order already exists (the cart is empty now) — pay it, never place another.
+    if (placedRef.current) {
+      payingRef.current = true;
+      try {
+        await retryPayment();
+      } finally {
+        payingRef.current = false;
+      }
+      return;
+    }
+    if (!summary || !summary.hasItems) {
+      setActionError('Your cart is empty.');
+      return;
+    }
+    if (!summary.address) {
+      setActionError('Add a delivery address to continue.');
+      return;
+    }
+    if (summary.deliveryIssue) {
+      setActionError(summary.deliveryIssueMessage ?? 'Delivery to this address isn’t available.');
+      return;
+    }
+    if (isRepricing) return;
+    // A quantity change or "Complete your meal" add still in flight would land after the order
+    // was placed (on an emptied cart) — wait for it, so what is paid is what is shown.
+    if (pendingLineIds.size > 0 || addingMealItemId) return;
+    payingRef.current = true;
+    try {
+      await placeAndPay();
+    } finally {
+      payingRef.current = false;
+    }
+  }, [
+    summary,
+    isRepricing,
+    pendingLineIds,
+    addingMealItemId,
+    retryPayment,
+    placeAndPay,
   ]);
 
   return {
@@ -651,6 +732,11 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     placedIsCod,
     placedTotalPaise,
     refresh: () => load(),
+    // A quiet re-read for coming back to this screen (after adding items elsewhere, editing a
+    // line) — never once an order exists, the server cart is empty from then on.
+    reloadQuietly: () => {
+      if (!placedRef.current) load({ quiet: true });
+    },
     pay,
     retryPayment,
     pendingLineIds,

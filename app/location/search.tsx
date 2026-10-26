@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -27,6 +27,10 @@ const DEBOUNCE_MS = 350;
 
 export default function LocationSearchScreen() {
   const { accent } = useAccentTheme();
+  // `editId` / `from` arrive when the map sent the customer here mid re-pin (e.g. from
+  // checkout). They must ride back to the map untouched, or confirm would create a duplicate
+  // address and return to /address instead of where the customer came from.
+  const { editId, from } = useLocalSearchParams<{ editId?: string; from?: string }>();
   const { activeLocation } = useDeliveryLocation();
   const near: LatLng = activeLocation?.coordinates ?? DEFAULT_REGION;
 
@@ -75,9 +79,15 @@ export default function LocationSearchScreen() {
     Keyboard.dismiss();
     router.push({
       pathname: '/location/map',
-      params: { lat: String(coords.latitude), lng: String(coords.longitude), source },
+      params: {
+        lat: String(coords.latitude),
+        lng: String(coords.longitude),
+        source,
+        ...(editId ? { editId } : {}),
+        ...(from ? { from } : {}),
+      },
     });
-  }, []);
+  }, [editId, from]);
 
   const useCurrentLocation = async () => {
     if (locating) return;

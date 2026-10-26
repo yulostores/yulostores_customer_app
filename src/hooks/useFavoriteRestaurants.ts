@@ -7,7 +7,12 @@
  * can't land on fresh state, the app-wide severity split (`ApiError` 4xx → warn,
  * 5xx / unreachable → reportError), and a 401 surfaced as `notSignedIn` rather
  * than an error. `remove()` drops a restaurant optimistically and rolls back on
- * failure.
+ * failure — just that one row, back at its index.
+ *
+ * The endpoint pages by skip/limit, so every un-favorite shifts the rows after
+ * it one place earlier on the server: page N+1 would now start past rows that
+ * were never shown. `loadMore` therefore re-reads from the page those shifted
+ * rows now sit on and de-dupes by id, so nothing is skipped.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -34,6 +39,9 @@ interface UseFavoriteRestaurantsResult {
   /** Un-favorite a restaurant — removes it from the list right away. */
   remove: (restaurantId: string) => void;
 }
+
+/** Server page size for this endpoint (favorite.service.js → PAGE_SIZE). */
+const FAVORITES_PAGE_SIZE = 20;
 
 function messageFor(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
@@ -64,6 +72,12 @@ export function useFavoriteRestaurants(): UseFavoriteRestaurantsResult {
 
   const requestRef = useRef(0);
   const loadedOnceRef = useRef(false);
+  // Un-favorites (in flight or done) since page 1 last loaded — how far the
+  // server's skip offset has shifted under the pages already on screen.
+  const removedSinceLoadRef = useRef(0);
+  // Ids whose DELETE is still in flight; a page fetched meanwhile may still
+  // carry them, so they're filtered out rather than resurrected.
+  const pendingRemovalRef = useRef(new Set<string>());
 
   const fetchPage = useCallback(
     async (targetPage: number) => {
@@ -93,11 +107,26 @@ export function useFavoriteRestaurants(): UseFavoriteRestaurantsResult {
       }
 
       try {
-        const res = await listFavoriteRestaurants(targetPage);
-        if (!isCurrent()) return;
-        setRestaurants((prev) =>
-          append ? [...prev, ...res.restaurants] : res.restaurants,
+        // When appending after removals, start from the page the shifted rows
+        // now sit on (over-fetching is harmless — the merge de-dupes by id).
+        const shift = append ? removedSinceLoadRef.current : 0;
+        const firstPage = Math.max(1, targetPage - Math.ceil(shift / FAVORITES_PAGE_SIZE));
+        const responses = await Promise.all(
+          Array.from({ length: targetPage - firstPage + 1 }, (_, i) =>
+            listFavoriteRestaurants(firstPage + i),
+          ),
         );
+        if (!isCurrent()) return;
+        const res = responses[responses.length - 1];
+        const fetched = responses
+          .flatMap((r) => r.restaurants)
+          .filter((r) => !pendingRemovalRef.current.has(r._id));
+        if (!append) removedSinceLoadRef.current = pendingRemovalRef.current.size;
+        setRestaurants((prev) => {
+          if (!append) return fetched;
+          const seen = new Set(prev.map((r) => r._id));
+          return [...prev, ...fetched.filter((r) => !seen.has(r._id))];
+        });
         setTotal(res.pagination.total);
         setPages(res.pagination.pages);
         setPage(targetPage);
@@ -142,28 +171,47 @@ export function useFavoriteRestaurants(): UseFavoriteRestaurantsResult {
   }, [isLoading, isPaging, hasMore, page, fetchPage]);
 
   const remove = useCallback((restaurantId: string) => {
-    let snapshot: Restaurant[] = [];
+    let removedRow: Restaurant | null = null;
+    let removedIndex = -1;
     setRestaurants((prev) => {
-      snapshot = prev;
+      const index = prev.findIndex((r) => r._id === restaurantId);
+      if (index === -1) return prev;
+      removedRow = prev[index];
+      removedIndex = index;
       return prev.filter((r) => r._id !== restaurantId);
     });
     setTotal((t) => Math.max(0, t - 1));
+    pendingRemovalRef.current.add(restaurantId);
+    removedSinceLoadRef.current += 1;
 
-    removeFavoriteRestaurant(restaurantId).catch((err) => {
-      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
-        logger.warn('favorites', `Could not un-favorite — ${err.status} ${err.code}`, {
-          restaurantId,
-          code: err.code,
-        });
-      } else {
-        reportError('favorites', 'Failed to un-favorite restaurant', err, { restaurantId });
-      }
-      // Put it back where it was.
-      if (mountedRef.current) {
-        setRestaurants(snapshot);
-        setTotal((t) => t + 1);
-      }
-    });
+    removeFavoriteRestaurant(restaurantId)
+      .then(() => {
+        pendingRemovalRef.current.delete(restaurantId);
+      })
+      .catch((err) => {
+        pendingRemovalRef.current.delete(restaurantId);
+        removedSinceLoadRef.current = Math.max(0, removedSinceLoadRef.current - 1);
+        if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+          logger.warn('favorites', `Could not un-favorite — ${err.status} ${err.code}`, {
+            restaurantId,
+            code: err.code,
+          });
+        } else {
+          reportError('favorites', 'Failed to un-favorite restaurant', err, { restaurantId });
+        }
+        // Put just this row back where it was — restoring a whole snapshot would
+        // resurrect other rows removed in the meantime.
+        const row = removedRow as Restaurant | null;
+        if (mountedRef.current && row) {
+          setRestaurants((prev) => {
+            if (prev.some((r) => r._id === row._id)) return prev;
+            const next = [...prev];
+            next.splice(Math.min(removedIndex, next.length), 0, row);
+            return next;
+          });
+          setTotal((t) => t + 1);
+        }
+      });
   }, []);
 
   return {

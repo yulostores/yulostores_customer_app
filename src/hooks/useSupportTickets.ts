@@ -37,9 +37,11 @@ function messageFor(err: unknown, fallback: string): string {
 }
 
 export function useSupportTickets(): UseSupportTicketsResult {
-  const { isAuthenticated, session } = useAuth();
+  const { isAuthenticated, isGuest, session } = useAuth();
+  // A guest is signed in but isn't a customer account — the server answers these routes with
+  // 401 GUEST_ACCOUNT_REQUIRED, so a guest gets the sign-in prompt without a request.
   const hasServerToken =
-    isAuthenticated && !session?.bypassed && !!session?.accessToken;
+    isAuthenticated && !isGuest && !session?.bypassed && !!session?.accessToken;
 
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [total, setTotal] = useState(0);

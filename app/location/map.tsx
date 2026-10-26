@@ -123,6 +123,18 @@ export default function LocationMapScreen() {
     });
   };
 
+  // Carry the re-pin context through search and back (search forwards both to the map it
+  // opens), so a re-pin started from checkout still updates that address and returns there.
+  const openSearch = () => {
+    router.push({
+      pathname: '/location/search',
+      params: {
+        ...(params.editId ? { editId: params.editId } : {}),
+        ...(params.from ? { from: params.from } : {}),
+      },
+    });
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
@@ -147,7 +159,7 @@ export default function LocationMapScreen() {
         <Pressable style={styles.circleBtn} onPress={() => router.back()} hitSlop={8}>
           <Ionicons name="arrow-back" size={22} color={Colors.foodText} />
         </Pressable>
-        <Pressable style={styles.searchPill} onPress={() => router.push('/location/search')}>
+        <Pressable style={styles.searchPill} onPress={openSearch}>
           <Ionicons name="search" size={16} color={Colors.foodTextMuted} />
           <Text style={styles.searchPillText} numberOfLines={1}>
             {resolving ? 'Locating…' : place?.title ?? 'Search for a different area'}
@@ -209,7 +221,9 @@ export default function LocationMapScreen() {
           <ActionButton
             label="Confirm location & proceed"
             onPress={confirm}
-            disabled={moving}
+            // Also while the pin's address is still resolving: confirming then would save the
+            // new coordinates under the PREVIOUS place's address.
+            disabled={moving || resolving}
             style={styles.confirm}
           />
         </SafeAreaView>

@@ -39,9 +39,11 @@ function messageFor(err: unknown, fallback: string): string {
 }
 
 export function useOrders(): UseOrdersResult {
-  const { isAuthenticated, session } = useAuth();
+  const { isAuthenticated, isGuest, session } = useAuth();
+  // A guest is signed in but isn't a customer account — the server answers these routes with
+  // 401 GUEST_ACCOUNT_REQUIRED, so a guest gets the sign-in prompt without a request.
   const hasServerToken =
-    isAuthenticated && !session?.bypassed && !!session?.accessToken;
+    isAuthenticated && !isGuest && !session?.bypassed && !!session?.accessToken;
 
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -134,9 +136,11 @@ export function useOrders(): UseOrdersResult {
   const hasMore = orders.length < total;
 
   const loadMore = useCallback(() => {
-    if (isLoading || isPaging || !hasMore) return;
+    // Not during a refresh either: page 2 would supersede it (requestRef) and be appended to
+    // the stale list, leaving old statuses on screen.
+    if (isLoading || isRefreshing || isPaging || !hasMore) return;
     fetchPage(page + 1);
-  }, [isLoading, isPaging, hasMore, page, fetchPage]);
+  }, [isLoading, isRefreshing, isPaging, hasMore, page, fetchPage]);
 
   const refresh = useCallback(() => fetchPage(1), [fetchPage]);
 

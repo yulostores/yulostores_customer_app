@@ -39,7 +39,13 @@ import {
 } from '../../src/lib/itemPricing';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
-import { addItemToCart, clearCart } from '../../src/services/cart';
+import {
+  addItemToCart,
+  clearCart,
+  removeCartLine,
+  updateCartLine,
+  type CartOptionSelection,
+} from '../../src/services/cart';
 import { formatBadge } from '../../src/services/items';
 import { confirmCartConflict } from '../../src/lib/cartConflict';
 import { useCart } from '../../src/context/CartContext';
@@ -274,9 +280,51 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 
 // ─── Screen ─────────────────────────────────────────────────────────────
 
+// The cart line's stored customization as this screen's selection state.
+function selectionsFromLine(groups: ItemOptionGroup[], options: CartOptionSelection[]): Selections {
+  const qtyById = new Map(options.map((o) => [String(o.optionId), o.qty ?? 1]));
+  const next: Selections = {};
+  for (const group of groups) {
+    const picked: Record<string, number> = {};
+    for (const o of group.options) {
+      const q = qtyById.get(String(o._id));
+      if (q != null) picked[o._id] = q;
+    }
+    next[group._id] = picked;
+  }
+  return next;
+}
+
+// Order-independent identity of a customization — the same key the server merges lines on.
+function selectionKey(options: CartOptionSelection[]): string {
+  return options
+    .map((o) => `${o.optionId}:${o.qty ?? 1}`)
+    .sort()
+    .join('|');
+}
+
 export default function ItemDetailScreen() {
   const styles = useThemedStyles(makeStyles);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `editLineId` (+ that line's `editQty` and `editOptions`, JSON) when opened from a cart line's
+  // "Edit": the screen opens on that customization and saving replaces the line. Without this,
+  // Edit added a second line next to the old one and the customer paid for both.
+  const { id, editLineId, editQty, editOptions } = useLocalSearchParams<{
+    id: string;
+    editLineId?: string;
+    editQty?: string;
+    editOptions?: string;
+  }>();
+  const editing = useMemo(() => {
+    if (!editLineId) return null;
+    let options: CartOptionSelection[] = [];
+    try {
+      const parsed = JSON.parse(editOptions ?? '[]');
+      if (Array.isArray(parsed)) options = parsed;
+    } catch {
+      /* unreadable — open on the defaults */
+    }
+    return { lineId: editLineId, qty: Math.max(1, Number(editQty) || 1), options };
+  }, [editLineId, editQty, editOptions]);
   const insets = useSafeAreaInsets();
   const { item, isLoading, error, refresh } = useItemDetail(id);
   const localCart = useCart();
@@ -306,8 +354,8 @@ export default function ItemDetailScreen() {
   // Reset everything that's specific to one dish when a fresh item lands
   // (first load, a retry after an error, or the route id changing).
   useEffect(() => {
-    setOverrides(null);
-    setQty(1);
+    setOverrides(editing && item ? selectionsFromLine(item.optionGroups, editing.options) : null);
+    setQty(editing?.qty ?? 1);
     setAddError(null);
   }, [item]);
 
@@ -328,11 +376,19 @@ export default function ItemDetailScreen() {
     setAddError(null);
     try {
       if (freshCart) await clearCart();
-      await addItemToCart({
-        menuItemId: item._id,
-        qty,
-        selectedOptions: toSelectedOptions(item.optionGroups, selections),
-      });
+      const selectedOptions = toSelectedOptions(item.optionGroups, selections);
+      await addItemToCart({ menuItemId: item._id, qty, selectedOptions });
+      if (editing) {
+        // The same customization merged into the edited line (qty added on top) — set its
+        // quantity; a different one is now its own line, so the old one goes.
+        if (selectionKey(selectedOptions) === selectionKey(editing.options)) {
+          await updateCartLine(editing.lineId, qty);
+        } else {
+          await removeCartLine(editing.lineId);
+        }
+        router.back();
+        return;
+      }
       // Backend cart is the system of record; also mirror into the device-local
       // CartContext so the tab badge / cart screen reflect the add right away.
       // The local store keys lines by item id only, so it can't distinguish two
@@ -491,7 +547,7 @@ export default function ItemDetailScreen() {
                   <ActivityIndicator color={Colors.white} />
                 ) : (
                   <>
-                    <Text style={styles.ctaText}>Add to cart</Text>
+                    <Text style={styles.ctaText}>{editing ? 'Update item' : 'Add to cart'}</Text>
                     <Text style={styles.ctaPrice}>{formatPrice(total)}</Text>
                     <Ionicons name="arrow-forward" size={18} color={Colors.white} />
                   </>

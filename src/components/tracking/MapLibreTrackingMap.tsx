@@ -110,7 +110,9 @@ export default function MapLibreTrackingMap({
     riderPoint
       .timing({
         toValue: { type: 'Point', coordinates: [partnerLocation.lng, partnerLocation.lat] },
-        duration: MARKER_EASE_MS,
+        // The first fix is placed, not eased: the point starts at the fallback centre, so
+        // animating to it slid the rider across the country from New Delhi.
+        duration: previousFix.current ? MARKER_EASE_MS : 0,
         easing: Easing.linear,
       })
       .start();

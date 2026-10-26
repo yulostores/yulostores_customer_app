@@ -30,9 +30,9 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -43,6 +43,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useVegMode } from '../../src/context/VegModeContext';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
@@ -326,7 +327,17 @@ function LineCard({
         )}
         {!!optionText && !locked && (
           <Pressable
-            onPress={() => router.push(`/item/${line.menuItemId}`)}
+            onPress={() =>
+              router.push({
+                pathname: '/item/[id]',
+                params: {
+                  id: line.menuItemId,
+                  editLineId: line.id,
+                  editQty: String(line.qty),
+                  editOptions: JSON.stringify(line.selectedOptions),
+                },
+              })
+            }
             hitSlop={6}
             style={styles.lineEditBtn}
           >
@@ -787,6 +798,7 @@ export default function CheckoutScreen() {
     placedIsCod,
     placedTotalPaise,
     refresh,
+    reloadQuietly,
     pay,
     retryPayment,
     pendingLineIds,
@@ -826,6 +838,41 @@ export default function CheckoutScreen() {
     ? pendingPayment!.canRetry && !busy
     : hasItems && !!displayAddress && !isLoading && !busy && !isRepricing && !deliveryIssue;
   const selectedMethod = getMethod(selectedMethodId);
+
+  // Veg Mode hides non-veg dishes everywhere else in the app; "Complete your meal" must not
+  // offer them one tap away from the cart.
+  const { enabled: vegModeOn } = useVegMode();
+  const mealSections = useMemo(() => {
+    const sections = summary?.mealSections ?? [];
+    if (!vegModeOn) return sections;
+    return sections
+      .map((sec) => ({ ...sec, items: sec.items.filter((i) => i.foodType === 'veg') }))
+      .filter((sec) => sec.items.length > 0);
+  }, [summary?.mealSections, vegModeOn]);
+
+  // Re-read the cart and bill on coming back here — after "Add Items" on the restaurant page or
+  // editing a line on the item screen. It loaded only once before, so the lines and total on
+  // screen were stale and Pay then failed on the changed total.
+  const focusedOnceRef = useRef(false);
+  const reloadRef = useRef(reloadQuietly);
+  reloadRef.current = reloadQuietly;
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedOnceRef.current) reloadRef.current();
+      else focusedOnceRef.current = true;
+    }, []),
+  );
+
+  // No leaving mid-placement or mid-payment (Android back, swipe): the screen unmounting there
+  // stopped Razorpay from ever opening, leaving an unpaid order behind.
+  const navigation = useNavigation();
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: !busy });
+    if (!busy) return;
+    return navigation.addListener('beforeRemove', (e) => {
+      e.preventDefault();
+    });
+  }, [navigation, busy]);
 
   // Leave for the confirmation screen the moment the order is placed (and paid,
   // for an online method).
@@ -968,7 +1015,7 @@ export default function CheckoutScreen() {
 
         {!orderPlaced && (
           <CompleteYourMeal
-            sections={summary.mealSections}
+            sections={mealSections}
             addingMealItemId={addingMealItemId}
             onAdd={addMealItem}
           />

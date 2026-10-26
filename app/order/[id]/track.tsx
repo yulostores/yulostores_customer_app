@@ -364,16 +364,26 @@ function askToCancel({
 }
 
 /** Accepted but not yet with the rider: a cancel button, with the right warning. */
-function CancelCard({ tracking, onCancel }: { tracking: TrackingData; onCancel: CancelFn }) {
+function CancelCard({
+  tracking,
+  onCancel,
+  unpaid = false,
+}: {
+  tracking: TrackingData;
+  onCancel: CancelFn;
+  unpaid?: boolean;
+}) {
   const styles = useThemedStyles(makeStyles);
   const [cancelling, setCancelling] = useState(false);
   const cooking = PREPARATION_STARTED_STATUSES.has(tracking.status);
   return (
     <View style={styles.card}>
       <Text style={styles.approvalHint}>
-        {cooking
-          ? 'The kitchen has started on your order. You can still cancel, but no refund will be issued.'
-          : 'Changed your mind? You can cancel until the kitchen starts cooking for a full refund.'}
+        {unpaid
+          ? 'Not paying for this order? You can cancel it. If a payment goes through anyway, it is refunded automatically.'
+          : cooking
+            ? 'The kitchen has started on your order. You can still cancel, but no refund will be issued.'
+            : 'Changed your mind? You can cancel until the kitchen starts cooking for a full refund.'}
       </Text>
       <Pressable
         style={({ pressed }) => [styles.cancelOrderBtn, pressed && styles.actionBtnPressed]}
@@ -674,20 +684,6 @@ export default function TrackingScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  const handleCall = useCallback(() => {
-    const phone = tracking?.deliveryPartner?.maskedPhone;
-    if (!phone) {
-      Alert.alert('Partner unavailable', 'The partner contact is not available yet.');
-      return;
-    }
-    // maskedPhone is display-only; strip the mask characters to dial.
-    // In production this would be a proxy number from Exotel/Knowlarity.
-    const dialable = phone.replace(/X/g, '0');
-    Linking.openURL(`tel:${dialable}`).catch(() =>
-      Alert.alert('Could not open phone app')
-    );
-  }, [tracking]);
-
   const handleChat = useCallback(() => {
     if (!tracking) return;
     router.push({
@@ -847,6 +843,11 @@ export default function TrackingScreen() {
 
         {/* ── RESTAURANT DECISION ──────────────────────────────────────────── */}
         {awaitingPayment && <PaymentPendingCard tracking={tracking} onPaid={() => refetch()} />}
+        {/* Not paying after all: without this an unpaid order could only wait out the
+            restaurant's approval timeout. */}
+        {awaitingPayment && CUSTOMER_CANCELLABLE_STATUSES.has(tracking.status) && (
+          <CancelCard tracking={tracking} onCancel={cancel} unpaid />
+        )}
         {isAwaitingApproval && !awaitingPayment && <ApprovalCard tracking={tracking} onCancel={cancel} />}
         {canCancelAccepted && <CancelCard tracking={tracking} onCancel={cancel} />}
         {isCancelled && <CancelledCard tracking={tracking} />}
@@ -857,7 +858,7 @@ export default function TrackingScreen() {
         )}
 
         {/* ── RATE YOUR ORDER ──────────────────────────────────────────────── */}
-        {isDelivered && <ReviewCard orderId={tracking.orderId} />}
+        {isDelivered && !tracking.isReviewed && <ReviewCard orderId={tracking.orderId} />}
 
         {/* ── DELIVERY TIMELINE ─────────────────────────────────────────────── */}
         <View style={styles.card}>
@@ -971,13 +972,9 @@ export default function TrackingScreen() {
             {/* Action buttons */}
             {!isDelivered && !isCancelled && (
               <View style={styles.partnerActions}>
-                <Pressable
-                  style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
-                  onPress={handleCall}
-                >
-                  <Ionicons name="call-outline" size={16} color={Colors.foodText} />
-                  <Text style={styles.actionBtnText}>Call</Text>
-                </Pressable>
+                {/* No Call button: the server only has the partner's masked number, and dialling
+                    it with the X's swapped for 0s rang a stranger. Add it back with a real
+                    call-masking (proxy) number. */}
                 <Pressable
                   style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
                   onPress={handleChat}

@@ -17,6 +17,7 @@ import { Colors } from '../src/constants/Colors';
 import { DEFAULT_DIAL_CODE, PHONE_NUMBER_LENGTH } from '../src/constants/config';
 import { BorderRadius, Spacing } from '../src/constants/Theme';
 import { useAuth } from '../src/context/AuthContext';
+import { useOnboarding } from '../src/context/OnboardingContext';
 import { logger, reportError } from '../src/lib/logger';
 import { AuthError, requestOtp } from '../src/services/auth';
 
@@ -27,6 +28,7 @@ export default function SignInScreen() {
   // wherever the tab stack happened to be.
   const params = useLocalSearchParams<{ intent?: string }>();
   const { isGuest, signInAsGuest } = useAuth();
+  const { showOnboarding } = useOnboarding();
 
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -100,15 +102,22 @@ export default function SignInScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.body}>
-          <Pressable
-            style={styles.back}
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/onboarding'))}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.authText} />
-          </Pressable>
+          {/* Only when there is somewhere to go: after logging out there is no history and the
+              intro is already done (its route is guarded off), so the arrow did nothing. The
+              spacer keeps the layout from shifting. */}
+          {router.canGoBack() || showOnboarding ? (
+            <Pressable
+              style={styles.back}
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/onboarding'))}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Ionicons name="arrow-back" size={24} color={Colors.authText} />
+            </Pressable>
+          ) : (
+            <View style={styles.back} />
+          )}
 
           <Text style={styles.wordmark}>YULO STORES</Text>
 

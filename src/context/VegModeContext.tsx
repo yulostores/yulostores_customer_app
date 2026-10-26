@@ -60,6 +60,12 @@ const Ctx = createContext<VegModeValue | null>(null);
 export function VegModeProvider({ children }: PropsWithChildren) {
   const { isAuthenticated, session } = useAuth();
   const hasServerToken = isAuthenticated && !session?.bypassed && !!session?.accessToken;
+  // Re-read on a change of account too: a guest signing into an existing account keeps a server
+  // session throughout, but the preference to show is now that account's.
+  const userId = session?.user._id ?? null;
+  // Bumped by every change the customer makes, so a server read that started before it can't
+  // land afterwards and flip their switch back.
+  const localEditRef = useRef(0);
 
   const [enabled, setEnabledState] = useState(false);
   const [scope, setScopeState] = useState<VegScope>('all_restaurants');
@@ -99,9 +105,10 @@ export function VegModeProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!hasServerToken) return;
     let alive = true;
+    const editAtStart = localEditRef.current;
     fetchPreferences()
       .then((prefs) => {
-        if (!alive) return;
+        if (!alive || localEditRef.current !== editAtStart) return;
         setEnabledState(prefs.vegModeEnabled);
         setScopeState(prefs.vegModeScope);
         persist({ enabled: prefs.vegModeEnabled, scope: prefs.vegModeScope });
@@ -120,18 +127,27 @@ export function VegModeProvider({ children }: PropsWithChildren) {
     return () => {
       alive = false;
     };
-  }, [hasServerToken, persist]);
+  }, [hasServerToken, userId, persist]);
 
   // Best-effort push to the server; never blocks the switch itself.
   const syncRef = useRef(hasServerToken);
   syncRef.current = hasServerToken;
+  const pushChainRef = useRef<Promise<void>>(Promise.resolve());
   const pushToServer = useCallback((next: StoredVegMode) => {
+    localEditRef.current += 1;
     if (!syncRef.current) return;
-    updateVegPreference(next.enabled, next.scope).catch((err) => {
-      logger.warn('vegMode', 'Could not sync veg preference to server', {
-        reason: err instanceof ApiError ? err.code : 'unknown',
-      });
-    });
+    // One at a time, in order: turning veg mode on and then picking a scope sends two updates,
+    // and if the first arrived last the server kept the old scope.
+    pushChainRef.current = pushChainRef.current.then(() =>
+      updateVegPreference(next.enabled, next.scope).then(
+        () => undefined,
+        (err) => {
+          logger.warn('vegMode', 'Could not sync veg preference to server', {
+            reason: err instanceof ApiError ? err.code : 'unknown',
+          });
+        },
+      ),
+    );
   }, []);
 
   const setEnabled = useCallback(

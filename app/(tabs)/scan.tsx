@@ -39,8 +39,31 @@ type ScanTarget =
   | { kind: 'unknown' };
 
 const INTERNAL_HOSTS = ['yulostores.in', 'www.yulostores.in'];
-// First path segment we're willing to navigate to from a scan.
-const ROUTABLE_PREFIXES = ['restaurant', 'item', 'cuisines', 'order'];
+
+/**
+ * Map a scanned link path onto a screen that actually exists under app/, or null.
+ * Only these are reachable from a scan:
+ *   restaurant/<id> → app/restaurant/[id].tsx
+ *   item/<id>       → app/item/[id].tsx
+ *   cuisines        → app/cuisines/index.tsx
+ *   order/<id>      → app/order/[id]/track.tsx (there is no bare order/[id] screen)
+ */
+function routeFor(path: string): string | null {
+  const segs = path.split('/').filter(Boolean);
+  const first = segs[0]?.toLowerCase();
+  const id = segs[1] ? encodeURIComponent(segs[1]) : null;
+  switch (first) {
+    case 'restaurant':
+    case 'item':
+      return id ? `/${first}/${id}` : null;
+    case 'cuisines':
+      return '/cuisines';
+    case 'order':
+      return id ? `/order/${id}/track` : null;
+    default:
+      return null;
+  }
+}
 
 function resolveScan(raw: string): ScanTarget {
   const value = raw.trim();
@@ -54,18 +77,20 @@ function resolveScan(raw: string): ScanTarget {
   }
 
   const path = (parsed.path ?? '').replace(/^\/+/, '');
-  const firstSeg = path.split('/')[0]?.toLowerCase();
-  const routable = !!firstSeg && ROUTABLE_PREFIXES.includes(firstSeg);
   const host = parsed.hostname?.toLowerCase();
 
-  // Our own scheme — app.json → "scheme": "yulostores".
-  if (parsed.scheme === 'yulostores' && routable) {
-    return { kind: 'internal', path: `/${path}` };
+  // Our own scheme — app.json → "scheme": "yulostores". `yulostores://restaurant/abc`
+  // parses as hostname 'restaurant' + path 'abc', so the hostname is the first
+  // path segment here (a triple-slash `yulostores:///restaurant/abc` has none).
+  if (parsed.scheme === 'yulostores') {
+    const route = routeFor(parsed.hostname ? `${parsed.hostname}/${path}` : path);
+    return route ? { kind: 'internal', path: route } : { kind: 'unknown' };
   }
 
   if (parsed.scheme === 'http' || parsed.scheme === 'https') {
-    if (host && INTERNAL_HOSTS.includes(host) && routable) {
-      return { kind: 'internal', path: `/${path}` };
+    if (host && INTERNAL_HOSTS.includes(host)) {
+      const route = routeFor(path);
+      if (route) return { kind: 'internal', path: route };
     }
     return { kind: 'external', url: value };
   }
@@ -123,13 +148,30 @@ export default function ScanScreen() {
   }, [isScanning, isResolving]);
   useEffect(() => () => setCameraOpen(false), []);
 
+  // Refused with "don't ask again" (canAskAgain false): the OS won't show the
+  // prompt any more, so the only way back is the app's page in system Settings.
+  const permanentlyDenied = !!permission && !permission.granted && !permission.canAskAgain;
+
+  const openSettings = () => {
+    Linking.openSettings().catch((err) => reportError('scan', 'Could not open Settings', err));
+  };
+
   // The intro page's button — reached when permission was refused, or after the
   // camera was closed by hand.
   const handleOpenCamera = async () => {
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) {
-        Alert.alert('Permission needed', 'Camera permission is required to scan QR codes.');
+        Alert.alert(
+          'Permission needed',
+          'Camera permission is required to scan QR codes.',
+          result.canAskAgain
+            ? [{ text: 'OK' }]
+            : [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Open Settings', onPress: openSettings },
+              ],
+        );
         return;
       }
     }
@@ -232,10 +274,22 @@ export default function ScanScreen() {
             open the store or menu it points to.
           </Text>
 
-          <Pressable style={styles.scanBtn} onPress={handleOpenCamera}>
-            <Ionicons name="camera-outline" size={22} color={Colors.white} />
-            <Text style={styles.scanBtnText}>Open Camera</Text>
-          </Pressable>
+          {permanentlyDenied ? (
+            <Pressable style={styles.scanBtn} onPress={openSettings}>
+              <Ionicons name="settings-outline" size={22} color={Colors.white} />
+              <Text style={styles.scanBtnText}>Open Settings</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.scanBtn} onPress={handleOpenCamera}>
+              <Ionicons name="camera-outline" size={22} color={Colors.white} />
+              <Text style={styles.scanBtnText}>Open Camera</Text>
+            </Pressable>
+          )}
+          {permanentlyDenied ? (
+            <Text style={styles.scanSubtext}>
+              Camera access is turned off for Yulo Stores. Allow it in Settings to scan.
+            </Text>
+          ) : null}
         </View>
 
         {/* Info cards — the last thing on the page, so they carry the clearance

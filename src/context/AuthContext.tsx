@@ -14,6 +14,8 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
+import { destroySocket } from '../lib/socket';
+import { apiSend } from '../services/api';
 import { requestGuestSession, type VerifyResult } from '../services/auth';
 import {
   getSession,
@@ -39,7 +41,7 @@ interface AuthContextValue {
   signIn: (result: VerifyResult) => void;
   /** Starts an anonymous guest session. Throws on failure — same as a failed OTP. */
   signInAsGuest: () => Promise<void>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -87,7 +89,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
   }, []);
 
-  const signOut = useCallback(() => setSession(null), []);
+  // Ends the session on the server too (the access token is revoked and the refresh cookie
+  // cleared) — best-effort and capped, so a dead connection never blocks signing out. Clearing
+  // only the local copy left the token usable and the socket connected in the previous
+  // customer's order rooms.
+  const signOut = useCallback(async () => {
+    const current = getSession();
+    if (current?.accessToken && !current.bypassed) {
+      await Promise.race([
+        apiSend('POST', '/api/auth/logout').catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, 4000)),
+      ]);
+    }
+    destroySocket();
+    setSession(null);
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({

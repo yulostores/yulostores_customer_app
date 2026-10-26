@@ -180,7 +180,9 @@ export default function SupportTicketScreen() {
     );
   }
 
-  if (error || !ticket) {
+  // Full-screen error only when there's nothing to show yet. A failed
+  // pull-to-refresh keeps the loaded conversation and shows an inline banner.
+  if (!ticket) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {header('Request')}
@@ -223,6 +225,20 @@ export default function SupportTicketScreen() {
           </Pressable>
         ) : null}
       </View>
+
+      {error ? (
+        <Pressable
+          style={styles.refreshErrorStrip}
+          onPress={refresh}
+          accessibilityRole="button"
+          accessibilityLabel="Couldn’t refresh this request. Tap to retry."
+        >
+          <Ionicons name="cloud-offline-outline" size={14} color={Colors.danger} />
+          <Text style={styles.sendErrorText} numberOfLines={1}>
+            Couldn’t refresh — tap to retry
+          </Text>
+        </Pressable>
+      ) : null}
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -397,6 +413,14 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: '#FDECEC',
   },
   sendErrorText: { fontSize: 12.5, color: Colors.danger, fontWeight: '600' },
+  refreshErrorStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.sm,
+    backgroundColor: '#FDECEC',
+  },
 
   composer: {
     flexDirection: 'row',

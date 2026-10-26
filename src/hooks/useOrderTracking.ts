@@ -125,11 +125,11 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
   // ─── Socket events ─────────────────────────────────────────────────────────
   useEffect(() => {
     const socket = getSocket();
-    const token = getAccessToken();
-
-    // Join the order room — required for the server to route events to this client.
+    // Join the order room — required for the server to route events to this client. Reads the
+    // token on every join: one captured when the screen opened has expired 15 minutes later, and
+    // the server drops a socket that joins with an expired token.
     const joinRoom = () => {
-      socket.emit('join_order', { orderId, token: token ?? '' });
+      socket.emit('join_order', { orderId, token: getAccessToken() ?? '' });
       logger.debug('useOrderTracking', 'join_order emitted', { orderId });
     };
 
@@ -324,6 +324,17 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
       }
     };
   }, [orderId, fetchTracking]);
+
+  // Nothing moves once an order is delivered or cancelled — stop the 30s poll (each tick also
+  // asked the server to route a finished delivery). Pull-to-refresh and returning to the app
+  // still re-read it.
+  const status = tracking?.status;
+  useEffect(() => {
+    if ((status === 'delivered' || status === 'cancelled') && pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, [status]);
 
   const refetch = useCallback(async () => {
     await fetchTracking();
