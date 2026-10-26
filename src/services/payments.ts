@@ -64,7 +64,7 @@ export interface PaymentMethod {
   tint: string;
   /** The only thing POST /api/orders/checkout accepts. */
   wire: 'cod' | 'online';
-  /** Razorpay Checkout `method` hint — used once the real gateway is wired. */
+  /** Which Razorpay Checkout block opens first for this pick (see displayFirst). */
   gatewayMethod?: 'upi' | 'card' | 'netbanking';
 }
 
@@ -215,6 +215,23 @@ function loadRazorpay(): RazorpayCheckoutApi | null {
 }
 
 /**
+ * Razorpay Standard Checkout's `config.display`: a block with the picked method first, every
+ * other method still offered below it (`show_default_blocks`). Picking "Google Pay" or
+ * "PhonePe" lands on UPI, where Razorpay lists the UPI apps installed on the phone; tapping one
+ * hands over to that app. (Test-mode keys have no UPI apps — Razorpay shows a mock page there.)
+ */
+function displayFirst(gatewayMethod: 'upi' | 'card' | 'netbanking') {
+  const names = { upi: 'Pay using UPI', card: 'Pay using card', netbanking: 'Pay using net banking' };
+  return {
+    display: {
+      blocks: { picked: { name: names[gatewayMethod], instruments: [{ method: gatewayMethod }] } },
+      sequence: ['block.picked'],
+      preferences: { show_default_blocks: true },
+    },
+  };
+}
+
+/**
  * The real gateway: opens Razorpay Checkout for the backend's Razorpay order, then
  * confirms via POST /api/orders/:id/payment/verify — the backend re-checks the
  * signature, amount and order against Razorpay's own record before counting it.
@@ -241,7 +258,10 @@ export const razorpayGateway: PaymentGateway = {
         currency: gatewayOrder.currency,
         name: 'Yulo Stores',
         description: `Order ${orderId.slice(-6).toUpperCase()}`,
-        ...(method?.gatewayMethod ? { method: method.gatewayMethod } : {}),
+        // Opens on what the customer picked. Not a top-level `method` — that isn't a Standard
+        // Checkout option (only `prefill.method` is, and only with contact AND email prefilled,
+        // which we don't have), and passing it sent the sheet down an undocumented path.
+        ...(method?.gatewayMethod ? { config: displayFirst(method.gatewayMethod) } : {}),
         prefill: {
           ...(contact?.name ? { name: contact.name } : {}),
           ...(contact?.phone ? { contact: contact.phone } : {}),
