@@ -21,8 +21,8 @@ import TabBar from '../../src/components/TabBar';
  *
  * The bar never slides away or auto-hides, with one exception: it steps aside
  * while the QR scanner's camera is open (`src/lib/cameraOpen.ts`). The phone's
- * own navigation bar is the one that fades out after a few idle seconds; that
- * lives in `useSystemNavBarAutoHide` at the app root.
+ * own navigation bar is never hidden either: the app draws edge-to-edge behind
+ * it, and this bar sits above it by the bottom safe-area inset.
  */
 export default function TabLayout() {
   return (

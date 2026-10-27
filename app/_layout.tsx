@@ -18,7 +18,6 @@ import {
   useOnboarding,
 } from '../src/context/OnboardingContext';
 import { VegModeProvider } from '../src/context/VegModeContext';
-import { useSystemNavBarAutoHide } from '../src/hooks/useSystemNavBarAutoHide';
 import { initCrashReporter } from '../src/lib/crashReporter';
 import { installGlobalErrorLogging, reportError } from '../src/lib/logger';
 
@@ -86,10 +85,6 @@ function RootNavigator() {
 function AppShell() {
   const { ready, showOnboarding } = useOnboarding();
   const { isReady: authReady } = useAuth();
-
-  // Let the phone's own navigation bar fade out after a few idle seconds. The
-  // app's bottom tab bar is unaffected — it never hides.
-  useSystemNavBarAutoHide();
 
   // Preload the icon font once, up front. @expo/vector-icons otherwise calls
   // Font.loadAsync() from every icon's componentDidMount with no catch, so a
