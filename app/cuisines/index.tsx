@@ -65,7 +65,7 @@ export default function CuisinesScreen() {
   const { cuisines, loading, error, refresh } = useCuisines();
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
 
       <View style={styles.header}>

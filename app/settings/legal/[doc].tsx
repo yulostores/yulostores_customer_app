@@ -58,7 +58,7 @@ export default function LegalDocumentScreen() {
 
   if (isLoading && !document) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -70,7 +70,7 @@ export default function LegalDocumentScreen() {
 
   if (notFound) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -84,7 +84,7 @@ export default function LegalDocumentScreen() {
 
   if (!document) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -102,7 +102,7 @@ export default function LegalDocumentScreen() {
   const updated = formatUpdated(document.updatedAt);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
       {header}
 

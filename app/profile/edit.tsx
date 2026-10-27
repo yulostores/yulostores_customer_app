@@ -27,7 +27,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActionButton from '../../src/components/location/ActionButton';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
@@ -49,6 +49,7 @@ function goBack() {
 }
 
 export default function EditProfileScreen() {
+  const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
   const { accent } = useAccentTheme();
   const { profile, isLoading, isFresh, error: loadError, notSignedIn, refresh } = useProfile();
@@ -205,7 +206,7 @@ export default function EditProfileScreen() {
           ) : null}
         </ScrollView>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.base }]}>
           <ActionButton label="Save changes" onPress={onSave} loading={saving} disabled={!canSave} />
         </View>
       </KeyboardAvoidingView>
@@ -288,7 +289,8 @@ const makeStyles = (t: AccentTheme) =>
   footer: {
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.md,
-    paddingBottom: Platform.OS === 'ios' ? Spacing.xl : Spacing.base,
+    // Plus the bottom safe-area inset, applied inline — the screen draws edge to edge.
+    paddingBottom: Spacing.base,
     borderTopWidth: 1,
     borderTopColor: Colors.foodBorder,
     backgroundColor: Colors.foodSurface,

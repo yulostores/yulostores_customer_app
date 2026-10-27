@@ -69,7 +69,7 @@ export default function PaymentMethodsScreen() {
 
   if (isLoading && !config) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -81,7 +81,7 @@ export default function PaymentMethodsScreen() {
 
   if (!config) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -107,7 +107,7 @@ export default function PaymentMethodsScreen() {
     .filter((g) => g.items.length > 0);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
       {header}
 

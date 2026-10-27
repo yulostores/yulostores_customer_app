@@ -116,7 +116,7 @@ export default function HelpAndSupportScreen() {
         : undefined;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
       <View style={styles.header}>
         <Pressable onPress={goBack} hitSlop={10} style={styles.backBtn}>

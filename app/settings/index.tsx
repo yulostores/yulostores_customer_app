@@ -94,7 +94,7 @@ export default function SettingsScreen() {
 
   if (isLoading && !config) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -106,7 +106,7 @@ export default function SettingsScreen() {
 
   if (!config) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -171,7 +171,7 @@ export default function SettingsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
       {header}
       <ScrollView

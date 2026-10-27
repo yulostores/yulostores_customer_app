@@ -167,7 +167,7 @@ export default function SupportRequestsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -179,7 +179,7 @@ export default function SupportRequestsScreen() {
 
   if (notSignedIn) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <CenteredNotice
@@ -195,7 +195,7 @@ export default function SupportRequestsScreen() {
 
   if (error && tickets.length === 0) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <CenteredNotice
@@ -210,7 +210,7 @@ export default function SupportRequestsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
       {header}
       <FlatList

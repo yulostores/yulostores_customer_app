@@ -38,7 +38,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActionButton from '../../src/components/location/ActionButton';
 import LabelChips from '../../src/components/location/LabelChips';
 import { Colors } from '../../src/constants/Colors';
@@ -206,6 +206,7 @@ const sectionStyles = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function LocationConfirmScreen() {
+  const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
   const fieldStyles = useThemedStyles(makeFieldStyles);
   const { accent } = useAccentTheme();
@@ -583,7 +584,7 @@ export default function LocationConfirmScreen() {
         </ScrollView>
 
         {/* ── Footer CTA ── */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.base }]}>
           <ActionButton
             label={isEdit ? 'Save changes' : 'Save address'}
             onPress={onSave}
@@ -744,7 +745,8 @@ const makeStyles = (t: AccentTheme) =>
   footer: {
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.md,
-    paddingBottom: Platform.OS === 'ios' ? Spacing.xl : Spacing.base,
+    // Plus the bottom safe-area inset, applied inline — the screen draws edge to edge.
+    paddingBottom: Spacing.base,
     borderTopWidth: 1,
     borderTopColor: Colors.foodBorder,
     backgroundColor: Colors.foodSurface,

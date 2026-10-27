@@ -30,7 +30,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
@@ -181,11 +181,16 @@ function Row({ row, onPress, right }: { row: MenuRow; onPress?: () => void; righ
 /** Shown once, right after the customer turns the veg-fleet switch on — a
  *  bottom sheet confirming what the preference actually does. */
 function VegFleetConfirmSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  // A bottom sheet in an edge-to-edge window: keep "Got it" above the phone's navigation bar.
+  const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.sheetBackdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.xl }]}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View style={styles.sheetHandle} />
           <View style={styles.sheetIconCircle}>
             <Ionicons name="leaf" size={26} color={Colors.foodVegGreen} />
@@ -256,7 +261,7 @@ export default function ProfileScreen() {
   // First load with nothing to show yet.
   if (isLoading && !profile) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -267,7 +272,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
       {header}
 

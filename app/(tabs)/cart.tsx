@@ -530,7 +530,7 @@ export default function CartScreen() {
     body = (
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + insets.bottom }]}
       >
         {!!cart.restaurant && (
           <Pressable
@@ -609,7 +609,7 @@ export default function CartScreen() {
       {body}
 
       {hasItems && bill && (
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
           <Pressable
             style={[
               styles.cta,
@@ -803,10 +803,9 @@ const makeStyles = (t: AccentTheme) =>
   actionErrorText: { flex: 1, fontSize: 12.5, fontWeight: '600', color: Colors.authDanger },
 
   // Footer CTA
-  // The cart is a tab screen, so its content box already stops at the top of
-  // the tab bar — which is what carries the device's bottom safe-area inset
-  // (see app/(tabs)/_layout.tsx). Padding for that inset again here would leave
-  // a dead strip under the checkout button.
+  // The floating tab bar is hidden on the cart (it only shows on its own
+  // destinations — see src/components/TabBar.tsx), and the app draws edge to
+  // edge, so the bottom safe-area inset is added inline where this is rendered.
   footer: {
     position: 'absolute',
     left: 0,

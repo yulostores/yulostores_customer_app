@@ -971,10 +971,15 @@ function CategorySheet({
   onPick: (id: string) => void;
   onClose: () => void;
 }) {
+  // A bottom sheet in an edge-to-edge window: the last category stays above the navigation bar.
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.sheetBackdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.xl }]}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>Menu</Text>
           <FlatList

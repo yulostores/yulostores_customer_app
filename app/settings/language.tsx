@@ -107,7 +107,7 @@ export default function LanguageScreen() {
 
   if ((isLoading && !config) || language.isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -119,7 +119,7 @@ export default function LanguageScreen() {
 
   if (!config) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <StatusBar style="dark" />
         {header}
         <View style={styles.centered}>
@@ -139,7 +139,7 @@ export default function LanguageScreen() {
   const effectiveCode = language.available ? language.code : config.defaultLanguage;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
       {header}
 

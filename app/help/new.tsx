@@ -24,7 +24,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
@@ -93,6 +93,7 @@ function OrderOption({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function NewSupportRequestScreen() {
+  const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
   const { category, orderId: initialOrderId } = useLocalSearchParams<{
     category?: string;
@@ -243,7 +244,7 @@ export default function NewSupportRequestScreen() {
           ) : null}
         </ScrollView>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.base }]}>
           <Pressable
             style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
             onPress={submit}

@@ -11,7 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActionButton from '../../src/components/location/ActionButton';
 import AddressRow from '../../src/components/location/AddressRow';
 import { Colors } from '../../src/constants/Colors';
@@ -33,6 +33,7 @@ const MAP_H = Math.round(SCREEN_H * 0.42);
 const LABEL_ICON = { home: 'home', work: 'briefcase', other: 'bookmark' } as const;
 
 export default function LocationEntryScreen() {
+  const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
   const { accent } = useAccentTheme();
   const { savedAddresses, chooseSaved } = useDeliveryLocation();
@@ -112,7 +113,7 @@ export default function LocationEntryScreen() {
       <View style={styles.sheet}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.sheetContent}
+          contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + Spacing['3xl'] }]}
         >
           <Text style={styles.title}>Where should we{'\n'}deliver to?</Text>
           <Text style={styles.subtitle}>

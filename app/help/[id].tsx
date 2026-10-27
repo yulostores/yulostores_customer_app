@@ -24,7 +24,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Shadows, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
@@ -109,6 +109,7 @@ function CenteredNotice({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function SupportTicketScreen() {
+  const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
   const { accent } = useAccentTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -250,7 +251,8 @@ export default function SupportTicketScreen() {
           data={thread}
           keyExtractor={(_, i) => String(i)}
           renderItem={({ item }) => <Bubble message={item} />}
-          contentContainerStyle={styles.thread}
+          // Closed: no composer below, so the thread itself clears the navigation bar.
+          contentContainerStyle={[styles.thread, closed && { paddingBottom: insets.bottom + Spacing.base }]}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={scrollToEnd}
           refreshControl={
@@ -282,7 +284,7 @@ export default function SupportTicketScreen() {
         ) : null}
 
         {!closed ? (
-          <View style={styles.composer}>
+          <View style={[styles.composer, { paddingBottom: insets.bottom + Spacing.base }]}>
             <TextInput
               style={styles.composerInput}
               value={draft}

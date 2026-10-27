@@ -14,7 +14,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import CartBar from '../../src/components/CartBar';
 import { FoodTypeMark } from '../../src/components/FoodTypeMark';
 import { RemoteImage } from '../../src/components/RemoteImage';
@@ -201,6 +201,7 @@ function DiscoverySkeleton() {
 // ─── Screen ────────────────────────────────────────────────────────────────
 
 export default function SearchScreen() {
+  const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
   const t = useAccentTheme();
   const { enabled: vegEnabled, scope: vegScope } = useVegMode();
@@ -614,7 +615,7 @@ export default function SearchScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar style="dark" />
       <View style={styles.container}>
         {/* Header — back + search field */}
@@ -664,7 +665,8 @@ export default function SearchScreen() {
 
         {hasSearched ? renderResults() : isTyping ? renderTypeahead() : renderDiscovery()}
 
-        <View style={styles.cartBarSlot} pointerEvents="box-none">
+        {/* Absolutely placed, so the safe-area padding doesn't move it — lift it by the inset. */}
+        <View style={[styles.cartBarSlot, { bottom: insets.bottom + Spacing.md }]} pointerEvents="box-none">
           <CartBar />
         </View>
       </View>
