@@ -71,6 +71,7 @@ import {
 } from '../../../src/hooks/useAccentTheme';
 import { useOrderTracking } from '../../../src/hooks/useOrderTracking';
 import { usePayOrder } from '../../../src/hooks/usePayOrder';
+import { confirmAction, confirmCopy } from '../../../src/lib/confirm';
 import { ApiError } from '../../../src/services/api';
 import { submitReview } from '../../../src/services/orders';
 import {
@@ -426,6 +427,8 @@ function PaymentPendingCard({ tracking, onPaid }: { tracking: TrackingData; onPa
       <Pressable
         style={({ pressed }) => [styles.payNowBtn, { backgroundColor: accent }, pressed && styles.actionBtnPressed]}
         onPress={async () => {
+          if (paying) return;
+          if (!(await confirmAction(confirmCopy.retryPayment(formatRupees(tracking.totalPaid))))) return;
           await pay();
           onPaid();
         }}

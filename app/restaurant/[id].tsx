@@ -49,6 +49,7 @@ import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useCart } from '../../src/context/CartContext';
 import { confirmCartConflict } from '../../src/lib/cartConflict';
+import { confirmAction, confirmCopy } from '../../src/lib/confirm';
 import { useVegMode } from '../../src/context/VegModeContext';
 import {
   ORANGE_ACCENT,
@@ -236,6 +237,9 @@ function AddControl({
       else router.push('/cart');
       return;
     }
+    // Down to 0 removes the dish from the cart — ask first; other steps are one tap.
+    if (next <= 0 && !(await confirmAction(confirmCopy.removeCartLine(item.name)))) return;
+    if (!lineIdRef.current) return;
     setBusy(true);
     try {
       mirror(await updateCartLine(lineIdRef.current, next));

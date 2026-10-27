@@ -39,6 +39,7 @@ import {
 } from '../../src/hooks/useAccentTheme';
 import { useCanGoBack } from '../../src/hooks/useCanGoBack';
 import { useCartScreen } from '../../src/hooks/useCartScreen';
+import { changeQtyWithConfirm, confirmAction } from '../../src/lib/confirm';
 import { logger } from '../../src/lib/logger';
 import {
   clearCart,
@@ -550,7 +551,10 @@ export default function CartScreen() {
               <LineRow
                 line={line}
                 busy={pendingLineIds.has(line.id)}
-                onChangeQty={(qty) => setLineQty(line.id, qty)}
+                onChangeQty={(qty) =>
+                  // Down to 0 removes the line — ask first; every other step is one tap.
+                  changeQtyWithConfirm(confirmAction, line.name, qty, (q) => setLineQty(line.id, q))
+                }
               />
             </View>
           ))}

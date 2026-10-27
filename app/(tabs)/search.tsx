@@ -30,6 +30,7 @@ import {
 } from '../../src/hooks/useAccentTheme';
 import { useSearchDiscovery } from '../../src/hooks/useSearchDiscovery';
 import { useTypeahead } from '../../src/hooks/useTypeahead';
+import { confirmAction, confirmCopy, confirmThen } from '../../src/lib/confirm';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
 import { fetchRestaurants } from '../../src/services/restaurants';
@@ -582,7 +583,11 @@ export default function SearchScreen() {
                 key={item.id}
                 item={item}
                 onPress={() => runSearch(item.query)}
-                onRemove={() => removeRecent(item.id)}
+                onRemove={() =>
+                  confirmThen(confirmAction, confirmCopy.removeRecentSearch(item.query), () =>
+                    removeRecent(item.id),
+                  )
+                }
               />
             ))}
           </>

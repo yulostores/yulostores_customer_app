@@ -50,6 +50,7 @@ import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
 import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
 import { hasUsablePoint } from '../../src/lib/address';
+import { changeQtyWithConfirm, confirmAction, confirmCopy } from '../../src/lib/confirm';
 import {
   ORANGE_ACCENT,
   useAccentTheme,
@@ -890,9 +891,35 @@ export default function CheckoutScreen() {
     });
   }, [doneOrderId, placedIsCod, placedTotalPaise, grandTotalPaise, selectedMethod?.label]);
 
-  const changeLineQty = (line: CartLine, next: number) => {
-    if (next <= 0) removeLine(line.id);
-    else setLineQty(line.id, next);
+  const changeLineQty = (line: CartLine, next: number) =>
+    // Down to 0 (the trash icon) removes the line — ask first; other steps are one tap.
+    changeQtyWithConfirm(confirmAction, line.name, next, (q) =>
+      q <= 0 ? removeLine(line.id) : setLineQty(line.id, q),
+    );
+
+  // Money moves only after an explicit confirm naming the amount and the method. The ref
+  // keeps a second tap from stacking a second dialog while the first one is open.
+  const confirmingPayRef = useRef(false);
+  const confirmThenPay = async (run: () => Promise<unknown>) => {
+    if (confirmingPayRef.current || busy) return;
+    confirmingPayRef.current = true;
+    try {
+      const amount = formatPaise(placedTotalPaise ?? grandTotalPaise);
+      const ok = await confirmAction(
+        awaitingPayment
+          ? confirmCopy.retryPayment(amount)
+          : confirmCopy.payOrder({
+              amount,
+              methodLabel: selectedMethod?.label ?? 'your selected method',
+              cod: selectedMethod?.wire === 'cod',
+              restaurantName: summary?.restaurantName,
+            }),
+      );
+      if (!ok) return;
+    } finally {
+      confirmingPayRef.current = false;
+    }
+    await run();
   };
 
   // ── Body ──
@@ -1122,7 +1149,7 @@ export default function CheckoutScreen() {
 
           <Pressable
             style={[styles.cta, !canPay && styles.ctaOff]}
-            onPress={awaitingPayment ? retryPayment : pay}
+            onPress={() => confirmThenPay(awaitingPayment ? retryPayment : pay)}
             disabled={!canPay}
             accessibilityRole="button"
             accessibilityLabel={
