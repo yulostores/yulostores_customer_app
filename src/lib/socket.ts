@@ -20,8 +20,10 @@ import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL } from '../constants/Api';
 import { getAccessToken } from '../services/session';
 import { logger } from './logger';
+import { createSocketKeeper, type SocketKeeper } from './userChannelCore';
 
 let _socket: Socket | null = null;
+let _keeper: SocketKeeper | null = null;
 
 /**
  * Returns the shared socket, creating it if necessary. An existing instance is always reused —
@@ -75,8 +77,38 @@ export function reconnectSocketIfActive(): void {
   if (_socket) reconnectSocket();
 }
 
+// The personal-offers channel lets the socket go while the app is in the background — but only
+// when no screen holds it (the tracking screen does, for as long as it is mounted). See
+// createSocketKeeper in userChannelCore.ts.
+function keeper(): SocketKeeper {
+  if (!_keeper) {
+    _keeper = createSocketKeeper({
+      disconnect: () => _socket?.disconnect(),
+      connect: () => _socket?.connect(),
+    });
+  }
+  return _keeper;
+}
+
+/** A screen that needs the socket connected even in the background. Returns its release. */
+export function holdSocket(who: string): () => void {
+  getSocket();
+  return keeper().hold(who);
+}
+
+/** App went to the background: disconnect, unless a screen holds the socket. */
+export function releaseSocketForBackground(): void {
+  if (_socket) keeper().background();
+}
+
+/** App came back: reconnect if the background disconnected it. */
+export function resumeSocketAfterBackground(): void {
+  keeper().foreground();
+}
+
 /** Disconnects and clears the singleton (e.g. on sign-out). */
 export function destroySocket(): void {
+  _keeper = null;
   if (_socket) {
     _socket.removeAllListeners();
     _socket.disconnect();

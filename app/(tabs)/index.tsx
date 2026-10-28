@@ -43,6 +43,7 @@ import type {
   RecommendedItem,
   Restaurant,
 } from '../../src/types/restaurant';
+import OffersBanner from '../../src/components/offers/OffersBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -1096,6 +1097,9 @@ export default function HomeScreen() {
               <Text style={styles.vegBannerText}>{vegBannerText}</Text>
             </View>
           )}
+
+          {/* ── Personal offers (live activity) — only while one is open ── */}
+          <OffersBanner />
 
           {/* ── Promo banner ── */}
           <PromoBanner banner={banner} />

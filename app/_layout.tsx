@@ -13,6 +13,9 @@ import { Colors } from '../src/constants/Colors';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { CartProvider } from '../src/context/CartContext';
 import { DeliveryLocationProvider } from '../src/context/DeliveryLocationContext';
+import { OffersProvider } from '../src/context/OffersContext';
+import ActivityNoticeSheet from '../src/components/offers/ActivityNoticeSheet';
+import OfferToast from '../src/components/offers/OfferToast';
 import {
   OnboardingProvider,
   useOnboarding,
@@ -137,8 +140,13 @@ function AppShell() {
       <VegModeProvider>
         <DeliveryLocationProvider>
           <CartProvider>
-            <DemoSessionBanner />
-            <RootNavigator />
+            {/* Personal offers + the activity-sharing notice (live customer activity). */}
+            <OffersProvider>
+              <DemoSessionBanner />
+              <RootNavigator />
+              {splashDone ? <OfferToast /> : null}
+              {splashDone ? <ActivityNoticeSheet /> : null}
+            </OffersProvider>
           </CartProvider>
         </DeliveryLocationProvider>
       </VegModeProvider>

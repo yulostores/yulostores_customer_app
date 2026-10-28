@@ -49,6 +49,10 @@ export interface UserPreferences {
   /** UI language code, e.g. "en". Defaults to "en" when the account has none. */
   preferredLanguage: string;
   notifications: NotificationPreferences;
+  /** Restaurants may see this customer's browsing (live activity). On unless turned off. */
+  shareActivity: boolean;
+  /** When the one-time activity notice was answered; null = not yet. */
+  activityNoticeAt: string | null;
 }
 
 interface RawNotificationCategory {
@@ -67,6 +71,8 @@ interface RawPreferences {
   vegFleetPreferenceEnabled?: boolean;
   preferredLanguage?: string;
   notifications?: RawNotifications | null;
+  shareActivity?: boolean;
+  activityNoticeAt?: string | null;
 }
 
 interface PreferencesResponse {
@@ -97,6 +103,9 @@ function reshape(p: RawPreferences | undefined): UserPreferences {
     vegFleetPreferenceEnabled: p?.vegFleetPreferenceEnabled ?? false,
     preferredLanguage: p?.preferredLanguage?.trim() || 'en',
     notifications: reshapeNotifications(p?.notifications),
+    // Missing = on (the backend's default); the notice is unanswered until it has a time.
+    shareActivity: p?.shareActivity !== false,
+    activityNoticeAt: typeof p?.activityNoticeAt === 'string' ? p.activityNoticeAt : null,
   };
 }
 
@@ -168,5 +177,18 @@ export async function updateNotificationPreferences(patch: {
   const data = await apiPatch<PreferencesResponse>('/api/users/me/preferences', {
     notifications: patch,
   });
+  return reshape(data.preferences);
+}
+
+/**
+ * Activity sharing (live customer activity): `shareActivity` on/off and/or the one-time
+ * notice's answer (`activityNoticeAcknowledged: true`, recorded once server-side). Turning
+ * sharing off also ends and hides this customer's sessions on restaurants' dashboards.
+ */
+export async function updateActivityPreferences(patch: {
+  shareActivity?: boolean;
+  activityNoticeAcknowledged?: true;
+}): Promise<UserPreferences> {
+  const data = await apiPatch<PreferencesResponse>('/api/users/me/preferences', patch);
   return reshape(data.preferences);
 }

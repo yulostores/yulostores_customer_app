@@ -105,6 +105,8 @@ interface RawBill {
   grandTotal?: number;
   charges?: RawCharges | null;
   deliveryIssue?: string | null;
+  offerIssue?: string | null;
+  shortfallPaise?: number | null;
 }
 
 interface RawCartResponse {
@@ -203,6 +205,10 @@ export interface CartBill {
   charges: Charges | null;
   /** Set when delivery can't be priced for the address — see {@link DeliveryIssue}. */
   deliveryIssue: DeliveryIssue | null;
+  /** An applied personal offer that stopped applying, and why (an offer error code). */
+  offerIssue: string | null;
+  /** With `offerIssue: 'DISCOUNT_MIN_VALUE'`: how much more the food must come to. */
+  shortfallPaise: number | null;
 }
 
 export interface Cart {
@@ -213,6 +219,8 @@ export interface Cart {
   itemCount: number;
   /** True only when the cart has at least one line and every line is `foodType: 'veg'`. */
   isAllVeg: boolean;
+  /** The promo code or personal offer on the cart (re-validated server-side on every read). */
+  appliedDiscountId: string | null;
 }
 
 export interface CartSnapshot {
@@ -276,6 +284,8 @@ function toBill(raw: RawBill): CartBill {
     grandTotal: num(raw.grandTotal),
     charges: toCharges(raw.charges),
     deliveryIssue: raw.deliveryIssue ?? null,
+    offerIssue: raw.offerIssue ?? null,
+    shortfallPaise: typeof raw.shortfallPaise === 'number' ? raw.shortfallPaise : null,
   };
 }
 
@@ -297,6 +307,7 @@ function toSnapshot(raw: RawCartResponse): CartSnapshot {
       lines,
       itemCount: lines.reduce((n, l) => n + l.qty, 0),
       isAllVeg: lines.length > 0 && lines.every((l) => l.foodType === 'veg'),
+      appliedDiscountId: raw.cart?.appliedDiscountId ? String(raw.cart.appliedDiscountId) : null,
     },
     bill: toBill(raw.bill ?? {}),
   };

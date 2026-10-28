@@ -38,6 +38,10 @@ import { useAuth } from '../context/AuthContext';
 import { useCart as useCartCache } from '../context/CartContext';
 import { logger, reportError } from '../lib/logger';
 import { ApiError } from '../services/api';
+import { useOffers } from '../context/OffersContext';
+import { isOfferErrorCode, offerErrorMessage } from '../lib/offerErrors';
+import { removeOffer as removeOfferRequest } from '../services/offers';
+import { useOfferActions } from './useOfferActions';
 import {
   addItemToCart,
   removeCartLine,
@@ -136,6 +140,8 @@ interface UseCheckoutResult {
   addingMealItemId: string | null;
   /** Add one "Complete your meal" pick straight to the cart. */
   addMealItem: (menuItemId: string) => Promise<void>;
+  /** Personal offer Apply / Remove (live activity); while pending, Pay is held (isRepricing). */
+  offer: ReturnType<typeof useOfferActions>;
 }
 
 function messageFor(err: unknown, fallback: string): string {
@@ -197,6 +203,10 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
       mountedRef.current = false;
     };
   }, []);
+
+  const offers = useOffers();
+  const offersRef = useRef(offers);
+  offersRef.current = offers;
 
   const requestRef = useRef(0);
   // The placed online order, held so every later tap pays it rather than placing again.
@@ -608,6 +618,16 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
             ? `The price of ${names || 'an item'} has changed. Your bill is updated — check it, then tap Pay again.`
             : 'Some prices have changed. Remove the changed items and add them again to continue.',
         );
+      } else if (err instanceof ApiError && isOfferErrorCode(err.code)) {
+        // The personal offer on the cart can't be used (used elsewhere, expired, below its
+        // minimum…). Nothing was created or charged — online payment only starts after an order
+        // exists. Take the offer off, show the new total, and let the customer pay again.
+        logger.warn('checkout', 'Checkout blocked — the offer can’t be used', { code: err.code });
+        setPhase('ready');
+        setActionError(`${offerErrorMessage(err.code)} It’s been removed — check the new total, then tap Pay again.`);
+        await removeOfferRequest().catch(() => undefined);
+        void offersRef.current.refresh();
+        load({ quiet: true });
       } else if (err instanceof ApiError && err.code === 'ORDER_ITEM_UNAVAILABLE') {
         logger.warn('checkout', 'Checkout blocked — item unavailable', { code: err.code });
         const names = changedItems(err.details).map((i) => i.name).filter(Boolean).join(', ');
@@ -638,6 +658,8 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     }
 
     attemptRef.current = null;
+    // A redeemed personal offer leaves the open offers (the socket says so too).
+    void offersRef.current.refresh();
     const totalPaise = expectedTotalPaise ?? Math.round(order.grandTotal * 100);
 
     // ── 2. COD is done at placement ──
@@ -671,6 +693,13 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     refreshChangedPrices,
   ]);
 
+  // Apply / remove re-reads the summary (priced for this address and tip) before Pay is allowed.
+  const offer = useOfferActions(
+    useCallback(async () => {
+      if (!placedRef.current) await load({ quiet: true });
+    }, [load]),
+  );
+
   const pay = useCallback(async () => {
     // A second tap in the same frame, before the button re-renders as busy.
     if (payingRef.current) return;
@@ -696,7 +725,7 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
       setActionError(summary.deliveryIssueMessage ?? 'Delivery to this address isn’t available.');
       return;
     }
-    if (isRepricing) return;
+    if (isRepricing || offer.pending) return;
     // A quantity change or "Complete your meal" add still in flight would land after the order
     // was placed (on an emptied cart) — wait for it, so what is paid is what is shown.
     if (pendingLineIds.size > 0 || addingMealItemId) return;
@@ -709,6 +738,7 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
   }, [
     summary,
     isRepricing,
+    offer.pending,
     pendingLineIds,
     addingMealItemId,
     retryPayment,
@@ -718,7 +748,7 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
   return {
     summary,
     isLoading,
-    isRepricing,
+    isRepricing: isRepricing || offer.pending,
     error,
     notSignedIn,
     phase,
@@ -745,5 +775,6 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     removeLine,
     addingMealItemId,
     addMealItem,
+    offer,
   };
 }

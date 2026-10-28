@@ -165,6 +165,10 @@ export interface CheckoutSummary {
   /** Server-computed bill for the summary's address and tip — `bill.charges` is what
    *  the order will cost, tip included. */
   bill: CartBill;
+  /** The cart's restaurant id (for its personal offer). */
+  restaurantId: string | null;
+  /** The promo code or personal offer on the cart. */
+  appliedDiscountId: string | null;
   /** Placement would be refused for this address — show {@link deliveryIssueMessage}. */
   deliveryIssue: string | null;
   deliveryIssueMessage: string | null;
@@ -257,6 +261,8 @@ function toSummary(raw: RawSummary): CheckoutSummary {
     lines: cart.lines,
     itemCount: cart.itemCount,
     bill,
+    restaurantId: cart.restaurantId,
+    appliedDiscountId: cart.appliedDiscountId,
     mealSections: (raw.mealSections ?? []).map(toMealSection),
     tipPresets: (raw.tipPresets ?? []).filter((n) => typeof n === 'number' && n > 0),
     vegFleetEligible: Boolean(raw.vegFleetEligible),

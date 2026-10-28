@@ -45,7 +45,9 @@
     "build:production": "eas build --profile production --platform android",
     "ota:preview": "eas update --channel preview --environment preview --message",
     "ota:production": "eas update --channel production --environment production --message",
-    "test:confirm": "rm -rf node_modules/.cache/confirm-test && tsc --ignoreConfig --outDir node_modules/.cache/confirm-test --rootDir src --module commonjs --target es2020 --strict --skipLibCheck --types node src/lib/confirmCore.ts src/lib/__tests__/confirmCore.test.ts && node --test node_modules/.cache/confirm-test/lib/__tests__/"
+    "test:confirm": "rm -rf node_modules/.cache/confirm-test && tsc --ignoreConfig --outDir node_modules/.cache/confirm-test --rootDir src --module commonjs --target es2020 --strict --skipLibCheck --types node src/lib/confirmCore.ts src/lib/__tests__/confirmCore.test.ts && node --test node_modules/.cache/confirm-test/lib/__tests__/",
+    "test:offers": "rm -rf node_modules/.cache/offers-test && tsc --ignoreConfig --outDir node_modules/.cache/offers-test --rootDir src --module commonjs --target es2020 --strict --skipLibCheck --types node src/lib/offersReducer.ts src/lib/offerText.ts src/lib/offerErrors.ts src/lib/userChannelCore.ts src/lib/offerShape.ts src/lib/__tests__/offers.test.ts && node --test node_modules/.cache/offers-test/lib/__tests__/",
+    "test": "npm run test:confirm && npm run test:offers"
   },
   "private": true
 }

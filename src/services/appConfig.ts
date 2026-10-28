@@ -119,6 +119,12 @@ export interface AppConfig {
    * `navigation.ts` stands in, so the bar always has something to draw.
    */
   tabBar: TabBarConfig;
+  /**
+   * Live customer activity & personal offers are switched on (the backend sends
+   * `liveActivity: { enabled: true }` only then — API.md → Live Activity & Personal Offers).
+   * Off: no activity notice, no Settings toggle, no offers channel.
+   */
+  liveActivityEnabled: boolean;
 }
 
 // ─── Wire shapes (all fields optional — reshape fills the gaps) ──────────────
@@ -196,6 +202,7 @@ interface RawConfig {
   about?: RawAbout;
   legal?: RawLegalSummary[];
   tabBar?: RawTabBar;
+  liveActivity?: { enabled?: boolean };
 }
 
 interface RawLegalDocument extends RawLegalSummary {
@@ -363,6 +370,8 @@ function reshapeConfig(c: RawConfig | undefined): AppConfig {
     about: reshapeAbout(c?.about),
     legal,
     tabBar: reshapeTabBar(c?.tabBar),
+    // Missing key → off (an older backend, or the feature switched off).
+    liveActivityEnabled: c?.liveActivity?.enabled === true,
   };
 }
 

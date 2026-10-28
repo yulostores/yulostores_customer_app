@@ -14,11 +14,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
+import { useState, type ReactNode as Node } from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
@@ -33,6 +35,7 @@ import {
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
 import { usePreferredLanguage } from '../../src/hooks/usePreferredLanguage';
+import { useOffers } from '../../src/context/OffersContext';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -74,6 +77,41 @@ function Row({ row }: { row: SettingsRow }) {
         <Ionicons name="chevron-forward" size={18} color={Colors.foodTextMuted} />
       </View>
     </Pressable>
+  );
+}
+
+// "Share activity with restaurants" (live customer activity) — only while the feature is on, for
+// a signed-in customer. Optimistic: the switch moves at once and moves back if the save fails.
+function ShareActivityRow(): Node {
+  const { available, shareActivity, setShareActivity } = useOffers();
+  const { accent } = useAccentTheme();
+  const [error, setError] = useState<string | null>(null);
+  if (!available || shareActivity === null) return null;
+  return (
+    <View style={styles.shareRow}>
+      <View style={styles.shareTop}>
+        <Ionicons name="eye-outline" size={22} color={Colors.foodText} />
+        <Text style={styles.rowLabel}>Share activity with restaurants</Text>
+        <Switch
+          value={shareActivity}
+          onValueChange={async (on) => {
+            setError(null);
+            setError(await setShareActivity(on));
+          }}
+          trackColor={{ true: accent, false: Colors.foodBorder }}
+          accessibilityLabel="Share activity with restaurants"
+        />
+      </View>
+      <Text style={styles.shareHint}>
+        Restaurants you visit see what you browse and add to your cart, with your first name only, so they can send you
+        personal offers. Turning this off also stops personal offers.
+      </Text>
+      {error ? (
+        <Text style={styles.shareError} accessibilityLiveRegion="polite">
+          {error}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -164,6 +202,7 @@ export default function SettingsScreen() {
 
   const content: ReactNode = (
     <View style={styles.list}>
+      <ShareActivityRow />
       {rows.map((row) => (
         <Row key={row.key} row={row} />
       ))}
@@ -272,6 +311,19 @@ const makeStyles = (t: AccentTheme) =>
   rowLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.foodText },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   rowMeta: { fontSize: 13, color: Colors.foodTextMuted },
+  shareRow: {
+    backgroundColor: Colors.foodSurface,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.base,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+    ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.foodBorder,
+  },
+  shareTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.base },
+  shareHint: { fontSize: 12.5, lineHeight: 18, color: Colors.foodTextSecondary },
+  shareError: { fontSize: 12.5, color: '#B91C1C', fontWeight: '600' },
   });
 
 const styles = makeStyles(ORANGE_ACCENT);

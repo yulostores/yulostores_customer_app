@@ -76,6 +76,7 @@ import { formatBadge } from '../../src/services/items';
 import { fetchMenuSearch, type RestaurantReview } from '../../src/services/restaurants';
 import { logger, reportError } from '../../src/lib/logger';
 import type { MenuItem, Restaurant } from '../../src/types/restaurant';
+import OfferCard from '../../src/components/offers/OfferCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HERO_HEIGHT = 240;
@@ -1200,6 +1201,8 @@ export default function RestaurantDetailScreen() {
               onSearch={() => setSearchOpen(true)}
             />
             <InfoCard restaurant={restaurant} />
+            {/* The customer's personal offer from this restaurant, if one is open. */}
+            <OfferCard restaurantId={restaurant._id} />
             <ReviewsSection restaurant={restaurant} />
             <DietTabs
               value={effectiveDiet}

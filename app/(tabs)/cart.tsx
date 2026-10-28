@@ -49,6 +49,7 @@ import {
   type ChargeLine,
   type FoodType,
 } from '../../src/services/cart';
+import CartOfferRow from '../../src/components/offers/CartOfferRow';
 
 const formatPrice = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
 
@@ -422,6 +423,7 @@ export default function CartScreen() {
     setLineQty,
     applyPromo,
     dismissActionError,
+    offer,
   } = useCartScreen();
 
   // The tab stays mounted, so coming back to it (after checkout emptied the cart, or
@@ -564,6 +566,19 @@ export default function CartScreen() {
           <Ionicons name="add" size={16} color={accent} />
           <Text style={[styles.addMoreText, { color: accent }]}>Add more items</Text>
         </Pressable>
+
+        {/* The customer's personal offer from this restaurant (live activity), if one is open. */}
+        <CartOfferRow
+          restaurantId={cart.restaurantId}
+          appliedDiscountId={cart.appliedDiscountId}
+          discountAmount={bill.discountAmount}
+          offerIssue={bill.offerIssue}
+          shortfallPaise={bill.shortfallPaise}
+          pending={offer.pending}
+          error={offer.error}
+          onApply={offer.apply}
+          onRemove={offer.remove}
+        />
 
         <CouponRow
           appliedCode={appliedCode}

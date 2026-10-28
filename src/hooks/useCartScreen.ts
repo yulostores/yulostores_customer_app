@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart as useCartCache } from '../context/CartContext';
 import { logger, reportError } from '../lib/logger';
 import { ApiError } from '../services/api';
+import { useOfferActions } from './useOfferActions';
 import {
   applyPromo as applyPromoRequest,
   getCart,
@@ -56,6 +57,8 @@ interface UseCartScreenResult {
   /** Apply a coupon code; resolves `true` on success, `false` on a rejected code. */
   applyPromo: (code: string) => Promise<boolean>;
   dismissActionError: () => void;
+  /** Personal offer Apply / Remove (live activity); `pending` holds the bill as stale. */
+  offer: ReturnType<typeof useOfferActions>;
 }
 
 function messageFor(err: unknown, fallback: string): string {
@@ -242,12 +245,14 @@ export function useCartScreen(): UseCartScreenResult {
     [promoPending, applyServer],
   );
 
+  const offer = useOfferActions(applyServer);
+
   return {
     snapshot,
     isLoading,
     error,
     notSignedIn,
-    billStale: pendingLineIds.size > 0,
+    billStale: pendingLineIds.size > 0 || offer.pending,
     pendingLineIds,
     actionError,
     appliedCode,
@@ -258,5 +263,6 @@ export function useCartScreen(): UseCartScreenResult {
     removeLine,
     applyPromo,
     dismissActionError: useCallback(() => setActionError(null), []),
+    offer,
   };
 }

@@ -32,7 +32,7 @@ import {
   type TrackingData,
   type VegFleetState,
 } from '../services/tracking';
-import { getSocket } from '../lib/socket';
+import { getSocket, holdSocket } from '../lib/socket';
 import { logger, reportError } from '../lib/logger';
 
 const POLL_INTERVAL_MS = 30_000;
@@ -125,6 +125,9 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
   // ─── Socket events ─────────────────────────────────────────────────────────
   useEffect(() => {
     const socket = getSocket();
+    // Keep the shared socket connected while this screen is open, even if the app is
+    // backgrounded (the personal-offers channel otherwise lets it go — src/lib/socket.ts).
+    const releaseSocket = holdSocket('order-tracking');
     // Join the order room — required for the server to route events to this client. Reads the
     // token on every join: one captured when the screen opened has expired 15 minutes later, and
     // the server drops a socket that joins with an expired token.
@@ -312,6 +315,7 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
     const appStateSub = AppState.addEventListener('change', handleAppStateChange);
 
     return () => {
+      releaseSocket();
       socket.off('connect', joinRoom);
       socket.off('order_status_updated', onStatusUpdate);
       socket.off('delivery_assignment_updated', onAssignmentUpdate);

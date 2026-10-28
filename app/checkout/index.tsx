@@ -69,6 +69,7 @@ import {
   type PaymentMethodId,
 } from '../../src/services/payments';
 import type { SavedAddress } from '../../src/types/address';
+import CartOfferRow from '../../src/components/offers/CartOfferRow';
 
 const formatPrice = (n: number) => '₹' + Math.max(0, Math.round(n)).toLocaleString('en-IN');
 
@@ -808,6 +809,7 @@ export default function CheckoutScreen() {
     removeLine,
     addingMealItemId,
     addMealItem,
+    offer,
   } = useCheckout({
     addressId: pickedAddressId,
     tip,
@@ -1055,6 +1057,23 @@ export default function CheckoutScreen() {
           </View>
         )}
 
+        {/* Personal offer (live activity): applying / removing reprices the summary; Pay waits. */}
+        {!orderPlaced ? (
+          <View style={styles.offerRow}>
+            <CartOfferRow
+              restaurantId={summary.restaurantId}
+              appliedDiscountId={summary.appliedDiscountId}
+              discountAmount={bill.discountAmount}
+              offerIssue={bill.offerIssue}
+              shortfallPaise={bill.shortfallPaise}
+              pending={offer.pending}
+              error={offer.error}
+              onApply={offer.apply}
+              onRemove={offer.remove}
+            />
+          </View>
+        ) : null}
+
         <Text style={styles.sectionLabel}>Bill details</Text>
         <BillBlock
           bill={bill}
@@ -1208,6 +1227,7 @@ const makeStyles = (t: AccentTheme) =>
   backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginLeft: -6 },
   title: { fontSize: 22, fontWeight: '800', color: Colors.foodText },
 
+  offerRow: { marginBottom: Spacing.md },
   sectionLabel: {
     fontSize: 12,
     fontWeight: '800',

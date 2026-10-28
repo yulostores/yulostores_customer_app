@@ -150,6 +150,16 @@ async function doRefresh(): Promise<RefreshResult> {
   }
 }
 
+/**
+ * Rotate the access token now (sharing the one in-flight refresh) and return the current one —
+ * for a socket join that must not go out with a token about to expire (useUserChannel). Never
+ * signs out: a refused refresh is handled by the next API call exactly as before.
+ */
+export async function refreshAccessTokenNow(): Promise<string | undefined> {
+  await refreshAccessToken();
+  return getAccessToken();
+}
+
 // The 401 codes that mean "this access token is no good" — expired, revoked or missing. Any other
 // 401 is about the request, not the session: GUEST_ACCOUNT_REQUIRED (a guest opening Orders or
 // Help) used to go through refresh-and-replay, get 401 again, and sign the guest out — losing
