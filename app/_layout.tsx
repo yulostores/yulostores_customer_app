@@ -73,6 +73,7 @@ function RootNavigator() {
             screen's back arrow still led to "Browse by cuisine". */}
         <Stack.Screen name="cuisines/index" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="profile/edit" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="restaurants/nearby" options={{ animation: 'slide_from_right' }} />
       </Stack.Protected>
 
       <Stack.Protected guard={!isAuthenticated || isGuest}>
@@ -84,6 +85,8 @@ function RootNavigator() {
         <Stack.Screen name="verify-otp" />
       </Stack.Protected>
 
+      {/* Outside both guards: the Terms / Privacy links on sign-in open before any session. */}
+      <Stack.Screen name="legal/[doc]" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

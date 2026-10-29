@@ -65,7 +65,14 @@
         "expo-image-picker",
         {
           "photosPermission": "Yulo Stores accesses your photos so you can set a profile picture.",
-          "microphonePermission": false
+          "microphonePermission": "Yulo Stores uses the microphone so you can search by voice."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Yulo Stores uses the microphone so you can search by voice.",
+          "speechRecognitionPermission": "Yulo Stores turns what you say into a search for restaurants and dishes."
         }
       ],
       [

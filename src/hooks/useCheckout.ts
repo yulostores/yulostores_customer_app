@@ -86,6 +86,8 @@ export interface CheckoutOverrides {
   tip?: number;
   deliveryInstructions?: string;
   cookingRequests?: boolean;
+  /** What the cooking request is; sent only with `cookingRequests`. */
+  cookingInstructions?: string;
   extraCutlery?: boolean;
   vegFleetOptIn?: boolean;
 }
@@ -169,6 +171,7 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     tip: overrideTip,
     deliveryInstructions: overrideInstructions,
     cookingRequests: overrideCookingRequests,
+    cookingInstructions: overrideCookingInstructions,
     extraCutlery: overrideExtraCutlery,
     vegFleetOptIn: overrideVegFleetOptIn,
   } = overrides;
@@ -564,6 +567,7 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
       tip,
       overrideInstructions ?? '',
       !!overrideCookingRequests,
+      overrideCookingInstructions ?? '',
       !!overrideExtraCutlery,
       !!overrideVegFleetOptIn,
       expectedTotalPaise ?? null,
@@ -581,6 +585,7 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
         paymentMethod: method.wire,
         deliveryInstructions: overrideInstructions,
         cookingRequests: overrideCookingRequests,
+        cookingInstructions: overrideCookingInstructions,
         extraCutlery: overrideExtraCutlery,
         tip,
         vegFleetOptIn: overrideVegFleetOptIn,
@@ -684,6 +689,7 @@ export function useCheckout(overrides: CheckoutOverrides = {}): UseCheckoutResul
     overrideAddressId,
     overrideInstructions,
     overrideCookingRequests,
+    overrideCookingInstructions,
     overrideExtraCutlery,
     overrideVegFleetOptIn,
     load,

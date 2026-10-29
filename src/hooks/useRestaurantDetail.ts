@@ -136,6 +136,9 @@ export function useRestaurantDetail(
             return {
               ...s,
               items: merged,
+              // The page's `total` is already narrowed to the diet filter — keeps the
+              // header's "N items" in step with what is listed under it.
+              itemCount: pagination.total,
               page: pagination.page,
               pages: pagination.pages,
               status: 'ready',
@@ -189,7 +192,7 @@ export function useRestaurantDetail(
     try {
       const [detail, categories] = await Promise.all([
         fetchRestaurant(restaurantId),
-        fetchMenuCategories(restaurantId),
+        fetchMenuCategories(restaurantId, dietRef.current),
       ]);
       if (!isCurrent()) return;
 
@@ -259,7 +262,30 @@ export function useRestaurantDetail(
       })),
     );
     for (const id of expandedIds) loadPage(id, 1);
-  }, [dietFilter, loadPage]);
+
+    // Re-count every section for the new diet, collapsed ones included. Best-effort: the
+    // previous counts stay if this fails, and a section's own page load corrects its count.
+    if (!restaurantId) return;
+    const diet = dietFilter;
+    fetchMenuCategories(restaurantId, diet)
+      .then((categories) => {
+        if (!mountedRef.current || dietRef.current !== diet) return;
+        const countById = new Map(categories.map((c) => [c.id, c.itemCount]));
+        setSections((prev) =>
+          prev.map((s) =>
+            countById.has(s.id) && s.status !== 'ready'
+              ? { ...s, itemCount: countById.get(s.id) ?? s.itemCount }
+              : s,
+          ),
+        );
+      })
+      .catch((err) => {
+        logger.warn('restaurant', 'Could not re-count menu sections for the diet filter', {
+          restaurantId,
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }, [dietFilter, loadPage, restaurantId]);
 
   const toggleSection = useCallback(
     (id: string) => {

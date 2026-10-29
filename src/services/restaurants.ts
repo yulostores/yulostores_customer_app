@@ -216,9 +216,12 @@ export async function fetchRestaurantMenu(
  */
 export async function fetchMenuCategories(
   restaurantId: string,
+  /** Narrows each `itemCount` to this diet. `'all'` / undefined counts everything. */
+  foodType?: 'all' | 'veg' | 'non_veg' | 'egg',
 ): Promise<MenuCategorySummary[]> {
   const data = await apiGet<MenuCategoriesResponse>(
     `/api/restaurants/${restaurantId}/menu/categories`,
+    { foodType: foodType && foodType !== 'all' ? foodType : undefined },
   );
   return data.categories ?? [];
 }

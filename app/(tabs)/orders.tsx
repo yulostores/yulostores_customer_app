@@ -44,7 +44,7 @@ import { useCanGoBack } from '../../src/hooks/useCanGoBack';
 import { useOrders } from '../../src/hooks/useOrders';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
-import { toCartCachePayload } from '../../src/services/cart';
+import { clearCart, toCartCachePayload } from '../../src/services/cart';
 import {
   reorder,
   removedReasonLabel,
@@ -340,9 +340,31 @@ export default function OrdersScreen() {
         if (err instanceof ApiError && err.code === 'CART_RESTAURANT_CONFLICT') {
           const current = (err.details as { currentRestaurantName?: string } | null)
             ?.currentRestaurantName;
+          // Offer to do the clearing here — the customer used to be sent off to empty the
+          // cart by hand and come back to tap Reorder again.
           Alert.alert(
             'You already have a cart',
-            `Your cart has items from ${current ?? 'another restaurant'}. Clear it first, then reorder.`,
+            `Your cart has items from ${current ?? 'another restaurant'}. Clear it and add this order instead?`,
+            [
+              { text: 'Keep cart', style: 'cancel' },
+              {
+                text: 'Clear & reorder',
+                style: 'destructive',
+                onPress: () => {
+                  clearCart()
+                    .then((emptied) => {
+                      syncFromServer(toCartCachePayload(emptied));
+                      return reorderRef.current(order);
+                    })
+                    .catch((clearErr) => {
+                      reportError('orders', 'Clearing the cart to reorder failed', clearErr, {
+                        orderId: order.id,
+                      });
+                      Alert.alert('Couldn’t clear your cart', 'Please try again in a moment.');
+                    });
+                },
+              },
+            ],
           );
         } else if (err instanceof ApiError && err.status === 401) {
           Alert.alert('Sign in required', 'Please sign in again to reorder.');
@@ -362,6 +384,9 @@ export default function OrdersScreen() {
     },
     [reorderingId, syncFromServer],
   );
+  // "Clear & reorder" runs the reorder again from inside the alert, after this render.
+  const reorderRef = useRef(handleReorder);
+  reorderRef.current = handleReorder;
 
   const header = (
     <View style={styles.header}>

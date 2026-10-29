@@ -28,6 +28,7 @@ import {
   Map,
   Marker,
   type CameraRef,
+  type MarkerProps,
   type ViewStateChangeEvent,
 } from '@maplibre/maplibre-react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +41,13 @@ import { bearingBetween } from '../../lib/geo';
 import { decodeFlexiblePolyline, toLngLatPairs } from '../../lib/flexiblePolyline';
 import { useAccentTheme } from '../../hooks/useAccentTheme';
 import type { TrackingMapProps } from './TrackingMapFallback';
+
+// Types only: React Native 0.88's Animated.AnimatedComponent typing drops `children` from
+// MapLibre's Marker props, so the rider marker (which needs one) wouldn't type-check. The
+// component is unchanged; `lngLat` takes the animated point.
+const AnimatedMarker = MapLibreAnimated.Marker as unknown as React.ComponentType<
+  Omit<MarkerProps, 'lngLat'> & { lngLat: unknown }
+>;
 
 // Long enough to read as movement rather than a jump, short enough that the marker has settled
 // before the next ping lands. Pings arrive every ~15s from the partner app.
@@ -232,7 +240,7 @@ export default function MapLibreTrackingMap({
         )}
 
         {partnerLocation && (
-          <MapLibreAnimated.Marker lngLat={riderPoint as never} anchor="center">
+          <AnimatedMarker lngLat={riderPoint} anchor="center">
             <Animated.View
               style={[
                 styles.riderPin,
@@ -251,7 +259,7 @@ export default function MapLibreTrackingMap({
             >
               <Ionicons name="navigate" size={18} color={Colors.white} />
             </Animated.View>
-          </MapLibreAnimated.Marker>
+          </AnimatedMarker>
         )}
       </Map>
 

@@ -20,7 +20,8 @@
  *     restaurant's own real menu categories, already excluding what's in cart.
  *
  *   POST /api/orders/checkout   (Idempotency-Key header)
- *     { addressId?, deliveryInstructions?, cookingRequests?, extraCutlery?,
+ *     { addressId?, deliveryInstructions?, cookingRequests?, cookingInstructions?,
+ *       extraCutlery?,
  *       tip?, vegFleetOptIn?, paymentMethod, expectedTotalPaise? }
  *     → 201 { orderId, restaurantName, status, vegFleetOptIn, order,
  *             razorpayOrder?, paymentSimulated?, paymentError? }
@@ -190,6 +191,8 @@ export interface PlaceOrderInput {
   deliveryInstructions?: string;
   /** Restaurant-fulfilment toggles (flow to the kitchen, not the rider). */
   cookingRequests?: boolean;
+  /** What the cooking request is ("less spicy, no onion"); implies `cookingRequests`. */
+  cookingInstructions?: string;
   extraCutlery?: boolean;
   /** Rupees added to the order total (already in the summary that was shown). */
   tip?: number;
@@ -301,6 +304,7 @@ export function placeOrder(input: PlaceOrderInput): Promise<PlacedOrder> {
     addressId,
     deliveryInstructions,
     cookingRequests,
+    cookingInstructions,
     extraCutlery,
     tip,
     vegFleetOptIn,
@@ -312,6 +316,9 @@ export function placeOrder(input: PlaceOrderInput): Promise<PlacedOrder> {
     ...(addressId ? { addressId } : {}),
     ...(deliveryInstructions?.trim() ? { deliveryInstructions: deliveryInstructions.trim() } : {}),
     ...(cookingRequests ? { cookingRequests: true } : {}),
+    ...(cookingRequests && cookingInstructions?.trim()
+      ? { cookingInstructions: cookingInstructions.trim() }
+      : {}),
     ...(extraCutlery ? { extraCutlery: true } : {}),
     ...(typeof tip === 'number' && tip > 0 ? { tip } : {}),
     ...(vegFleetOptIn ? { vegFleetOptIn: true } : {}),

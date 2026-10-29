@@ -21,6 +21,7 @@ import CartBar from '../../src/components/CartBar';
 import { useTabBarInset } from '../../src/components/TabBar';
 import { FoodTypeMark } from '../../src/components/FoodTypeMark';
 import { RemoteImage } from '../../src/components/RemoteImage';
+import RestaurantNearbyCard from '../../src/components/RestaurantNearbyCard';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useAuth } from '../../src/context/AuthContext';
@@ -35,6 +36,7 @@ import {
 } from '../../src/hooks/useAccentTheme';
 import { useFavoriteToggle } from '../../src/hooks/useFavoriteToggle';
 import { useHomeData } from '../../src/hooks/useHomeData';
+import { deliveryEtaWindow } from '../../src/lib/deliveryEta';
 
 import type {
   CuisineCard,
@@ -51,32 +53,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function formatPrice(price: number): string {
   return '₹' + price.toLocaleString('en-IN');
-}
-
-/** Rider speed through city traffic, plus the kitchen's head start. */
-const AVG_SPEED_KMPH = 20;
-const PREP_MINUTES = 15;
-
-/**
- * Delivery estimate derived from the real distance to the restaurant.
- *
- * This used to be `Math.random()`, which re-rolled on every render — tapping the
- * heart on a card changed that card's ETA and distance. Returns null when we
- * don't know where the restaurant is, so the caller can drop the line rather
- * than print a made-up number.
- */
-function formatDeliveryTime(distanceKm: number | undefined): string | null {
-  if (distanceKm == null || !Number.isFinite(distanceKm)) return null;
-  const raw = PREP_MINUTES + (distanceKm / AVG_SPEED_KMPH) * 60;
-  const mins = Math.max(10, Math.round(raw / 5) * 5);
-  return `${mins}-${mins + 5} min`;
-}
-
-function formatDistance(distanceKm: number | undefined): string | null {
-  if (distanceKm == null || !Number.isFinite(distanceKm)) return null;
-  return distanceKm < 1
-    ? `${Math.round(distanceKm * 1000)} m`
-    : `${distanceKm.toFixed(1)} km`;
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────
@@ -526,7 +502,7 @@ function CuisineCardItem({ item }: { item: CuisineCard }) {
 function RecommendedItemCard({ item }: { item: RecommendedItem }) {
   const styles = useThemedStyles(makeStyles);
   const { menuItem, restaurant } = item;
-  const eta = formatDeliveryTime(restaurant?.distanceKm);
+  const eta = deliveryEtaWindow(restaurant?.deliveryMinutes, restaurant?.distanceKm);
   const { favorited, toggle } = useFavoriteToggle(
     'item',
     menuItem._id,
@@ -614,7 +590,7 @@ function RecommendedItemCard({ item }: { item: RecommendedItem }) {
 
 /** Horizontal restaurant card (for "Recommended restaurants") */
 function RestaurantHCard({ restaurant }: { restaurant: Restaurant }) {
-  const eta = formatDeliveryTime(restaurant.distanceKm);
+  const eta = deliveryEtaWindow(restaurant.deliveryMinutes, restaurant.distanceKm);
   const { favorited, toggle } = useFavoriteToggle(
     'restaurant',
     restaurant._id,
@@ -677,137 +653,6 @@ function RestaurantHCard({ restaurant }: { restaurant: Restaurant }) {
             <Text style={styles.newBadgeText}>New</Text>
           )}
         </View>
-      </View>
-    </Pressable>
-  );
-}
-
-/** Vertical restaurant card (for "Restaurants near you") */
-function RestaurantNearbyCard({ restaurant }: { restaurant: Restaurant }) {
-  const { favorited: liked, toggle: toggleFavorite } = useFavoriteToggle(
-    'restaurant',
-    restaurant._id,
-    restaurant.isFavorited,
-  );
-
-  const eta = formatDeliveryTime(restaurant.distanceKm);
-  const distance = formatDistance(restaurant.distanceKm);
-  const cuisines = restaurant.cuisineType.join(' • ');
-
-  // Only the facts we actually have, joined by dots — an unknown distance or a
-  // restaurant with nothing priced yet drops out instead of showing a filler.
-  const metaParts = [
-    eta,
-    distance,
-    restaurant.startingPrice != null
-      ? `Items from ${formatPrice(restaurant.startingPrice)}`
-      : null,
-  ].filter((part): part is string => !!part);
-
-  return (
-    <Pressable
-      style={styles.nearbyCard}
-      onPress={() => router.push(`/restaurant/${restaurant._id}`)}
-    >
-      {/* Cover image */}
-      <View style={styles.nearbyCoverWrap}>
-        <RemoteImage
-          uri={restaurant.coverImage || restaurant.logo}
-          style={styles.nearbyCover}
-          icon="restaurant-outline"
-          iconSize={48}
-        />
-
-        {/* Rating badge on cover */}
-        {restaurant.totalRatings > 0 && (
-          <View style={styles.nearbyRatingBadge}>
-            <Ionicons name="star" size={11} color="#FFF" />
-            <Text style={styles.nearbyRatingText}>
-              {restaurant.avgRating.toFixed(1)}
-            </Text>
-          </View>
-        )}
-
-        {/* Pure-veg badge — every dish here is vegetarian, not just what VEG
-            Only happens to be filtering to right now. */}
-        {restaurant.isPureVeg && (
-          <View style={styles.pureVegBadge}>
-            <FoodTypeMark foodType="veg" />
-            <Text style={styles.pureVegBadgeText}>Pure Veg</Text>
-          </View>
-        )}
-
-        {/* Heart icon */}
-        <Pressable
-          style={styles.heartBtn}
-          onPress={toggleFavorite}
-        >
-          <Ionicons
-            name={liked ? 'heart' : 'heart-outline'}
-            size={22}
-            color={liked ? Colors.foodHeartRed : Colors.white}
-          />
-        </Pressable>
-      </View>
-
-      {/* Info section */}
-      <View style={styles.nearbyInfo}>
-        <Text style={styles.nearbyName}>{restaurant.name}</Text>
-        {!!cuisines && (
-          <Text style={styles.nearbyCuisine} numberOfLines={1}>
-            {cuisines}
-          </Text>
-        )}
-        {metaParts.length > 0 && (
-          <View style={styles.nearbyMetaRow}>
-            <Ionicons
-              name="time-outline"
-              size={14}
-              color={Colors.foodTextMuted}
-            />
-            {metaParts.map((part, i) => (
-              <React.Fragment key={part}>
-                {i > 0 && <Text style={styles.nearbyDot}>·</Text>}
-                <Text style={styles.nearbyMetaText}>{part}</Text>
-              </React.Fragment>
-            ))}
-          </View>
-        )}
-        <View
-          style={[
-            styles.statusBadge,
-            restaurant.isOpen ? styles.statusOpen : styles.statusClosed,
-          ]}
-        >
-          <View
-            style={[
-              styles.vegDot,
-              !restaurant.isOpen && styles.statusDotClosed,
-            ]}
-          />
-          <Text
-            style={[
-              styles.statusText,
-              restaurant.isOpen ? styles.statusTextOpen : styles.statusTextClosed,
-            ]}
-          >
-            {restaurant.isOpen ? 'Open now' : 'Closed'}
-          </Text>
-        </View>
-
-        {/* Listed, but out of this restaurant's own delivery reach. Explicitly `=== false`:
-            undefined means the endpoint didn't answer the question (no pin), which is not
-            the same as a no. Saying so beats the alternative it replaced — the restaurant
-            silently not appearing at all, which is how a whole city's worth of newly-added
-            stores went missing. */}
-        {restaurant.deliversToPin === false && (
-          <View style={styles.tooFarNote}>
-            <Ionicons name="bicycle-outline" size={13} color={Colors.foodTextMuted} />
-            <Text style={styles.tooFarText}>
-              Too far to deliver here — browse the menu or pick a closer address
-            </Text>
-          </View>
-        )}
       </View>
     </Pressable>
   );
@@ -1046,8 +891,8 @@ export default function HomeScreen() {
         {nearbyRestaurants.length > 0 && (
           <Section tinted={isTinted('nearby')}>
             <SectionHeader 
-              title="Restaurants near you" 
-              onSeeAll={() => router.push('/search')}
+              title="Restaurants near you"
+              onSeeAll={() => router.push('/restaurants/nearby')}
             />
             {nearbyRestaurants.map((r) => (
               <RestaurantNearbyCard key={r._id} restaurant={r} />
@@ -1479,24 +1324,6 @@ const makeStyles = (t: AccentTheme) =>
   },
 
   // ── Pure-veg restaurant badge ──
-  pureVegBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.foodSurface,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-    ...Elevation.raised,
-  },
-  pureVegBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: Colors.foodVegGreen,
-  },
 
   // ── Banner ──
   bannerWrap: {
@@ -1751,64 +1578,6 @@ const makeStyles = (t: AccentTheme) =>
   },
 
   // ── Restaurants near you (vertical) ──
-  nearbyCard: {
-    backgroundColor: Colors.foodSurface,
-    borderRadius: BorderRadius.lg,
-    marginHorizontal: Spacing.base,
-    marginBottom: Spacing.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.foodBorder,
-    ...Elevation.card,
-  },
-  tooFarNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    marginTop: Spacing.xs,
-  },
-  tooFarText: {
-    flex: 1,
-    fontSize: 11.5,
-    color: Colors.foodTextMuted,
-    lineHeight: 15,
-  },
-  nearbyCoverWrap: {
-    position: 'relative',
-  },
-  nearbyCover: {
-    width: '100%',
-    height: 180,
-  },
-  nearbyRatingBadge: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: Colors.foodRatingBg,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-    ...Elevation.raised,
-  },
-  nearbyRatingText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  heartBtn: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(20,22,26,0.38)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   // Compact heart for the small scroller cards (recommended items / restaurants).
   cardHeartBtn: {
     position: 'absolute',
@@ -1820,69 +1589,6 @@ const makeStyles = (t: AccentTheme) =>
     backgroundColor: 'rgba(20,22,26,0.38)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  nearbyInfo: {
-    padding: Spacing.base,
-    gap: 4,
-  },
-  nearbyName: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: Colors.foodText,
-    letterSpacing: -0.3,
-  },
-  nearbyCuisine: {
-    fontSize: 13,
-    color: Colors.foodTextSecondary,
-  },
-  nearbyMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  nearbyMetaText: {
-    fontSize: 12,
-    color: Colors.foodTextMuted,
-  },
-  nearbyDot: {
-    fontSize: 12,
-    color: Colors.foodTextMuted,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-    marginTop: 4,
-  },
-  statusOpen: {
-    backgroundColor: Colors.foodPureVegBg,
-  },
-  statusClosed: {
-    backgroundColor: Colors.foodBgSecondary,
-  },
-  vegDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.foodVegGreen,
-  },
-  statusDotClosed: {
-    backgroundColor: Colors.foodTextMuted,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  statusTextOpen: {
-    color: Colors.foodVegGreen,
-  },
-  statusTextClosed: {
-    color: Colors.foodTextMuted,
   },
 
   // ── Loading skeleton ──

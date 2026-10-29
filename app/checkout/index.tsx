@@ -772,6 +772,8 @@ export default function CheckoutScreen() {
   const [instructions, setInstructions] = useState('');
   const [extraCutlery, setExtraCutlery] = useState(false);
   const [cookingRequests, setCookingRequests] = useState(false);
+  // What the request is — the chip alone told the kitchen there was one, not what it was.
+  const [cookingNote, setCookingNote] = useState('');
   const [vegBag, setVegBag] = useState(false);
   const [methodPickerOpen, setMethodPickerOpen] = useState(false);
 
@@ -815,6 +817,7 @@ export default function CheckoutScreen() {
     tip,
     deliveryInstructions: instructions,
     cookingRequests,
+    cookingInstructions: cookingRequests ? cookingNote : '',
     extraCutlery,
     vegFleetOptIn: vegBag,
   });
@@ -1012,7 +1015,10 @@ export default function CheckoutScreen() {
             label="Cooking requests"
             icon="reader-outline"
             active={cookingRequests}
-            onPress={() => setCookingRequests((v) => !v)}
+            onPress={() => {
+              if (cookingRequests) setCookingNote('');
+              setCookingRequests((v) => !v);
+            }}
           />
           <Chip
             label="Extra Cutlery Needed"
@@ -1021,6 +1027,22 @@ export default function CheckoutScreen() {
             onPress={() => setExtraCutlery((v) => !v)}
           />
         </View>
+
+        {cookingRequests && !orderPlaced && (
+          <View style={styles.instructionsOpen}>
+            <TextInput
+              style={styles.instructionsInput}
+              placeholder="E.g. Less spicy, no onion…"
+              placeholderTextColor={Colors.foodTextMuted}
+              value={cookingNote}
+              onChangeText={setCookingNote}
+              multiline
+              maxLength={300}
+              autoFocus
+              accessibilityLabel="Cooking request"
+            />
+          </View>
+        )}
 
         {summary.vegFleetEligible && (
           <Pressable

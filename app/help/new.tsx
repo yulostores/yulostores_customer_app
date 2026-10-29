@@ -10,11 +10,12 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -116,6 +117,16 @@ export default function NewSupportRequestScreen() {
   const showOrderPicker = topic.ordersRelevant && !notSignedIn && recentOrders.length > 0;
   const canSubmit = description.trim().length > 0 && !submitting;
 
+  // Back (arrow, Android back, swipe) with an unsent message used to throw it away silently.
+  // `sent` lets the replace to the new ticket's thread through once the request is created.
+  const [sent, setSent] = useState(false);
+  const allowLeaving = usePreventRemove(description.trim().length > 0 && !sent, ({ repeat }) => {
+    Alert.alert('Discard this message?', 'What you’ve typed will be lost.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: repeat },
+    ]);
+  });
+
   const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
@@ -127,6 +138,8 @@ export default function NewSupportRequestScreen() {
         orderId: orderId ?? undefined,
       });
       // replace, not push — Back from the thread returns to the landing.
+      setSent(true);
+      allowLeaving();
       router.replace({ pathname: '/help/[id]', params: { id: ticket.id } });
     } catch (err) {
       if (err instanceof ApiError && err.status >= 400 && err.status < 500) {

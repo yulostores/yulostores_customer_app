@@ -4,9 +4,11 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -33,6 +35,7 @@ import { useSearchDiscovery } from '../../src/hooks/useSearchDiscovery';
 import { useTypeahead } from '../../src/hooks/useTypeahead';
 import { confirmAction, confirmCopy, confirmThen } from '../../src/lib/confirm';
 import { logger, reportError } from '../../src/lib/logger';
+import { isVoiceSearchAvailable, startVoiceSearch, type VoiceSearchSession } from '../../src/lib/voiceSearch';
 import { ApiError } from '../../src/services/api';
 import { fetchRestaurants } from '../../src/services/restaurants';
 import { recordSearch } from '../../src/services/search';
@@ -408,6 +411,57 @@ export default function SearchScreen() {
     [hasSearched],
   );
 
+  // ── Voice search ──
+  // Only in builds that carry speech recognition (src/lib/voiceSearch.ts); in Expo Go the mic
+  // still just focuses the field.
+  const [listening, setListening] = useState(false);
+  const voiceRef = useRef<VoiceSearchSession | null>(null);
+  useEffect(() => () => voiceRef.current?.cancel(), []);
+
+  const onMicPress = useCallback(async () => {
+    if (listening) {
+      voiceRef.current?.stop();
+      return;
+    }
+    if (!isVoiceSearchAvailable()) {
+      // Re-focusing a field that is already focused doesn't bring Android's keyboard back
+      // (it had been dismissed with Back) — blur first so the focus opens it again.
+      inputRef.current?.blur();
+      requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    setListening(true);
+    try {
+      voiceRef.current = await startVoiceSearch({
+        onPartial: (text) => changeQuery(text),
+        onDone: (result) => {
+          voiceRef.current = null;
+          setListening(false);
+          if (result.kind === 'text') {
+            runSearch(result.text);
+          } else if (result.kind === 'denied') {
+            Alert.alert(
+              'Microphone is off',
+              'Allow microphone access for Yulo Stores in Settings to search by voice.',
+              [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              ],
+            );
+          } else if (result.kind === 'error') {
+            logger.warn('search', 'Voice search failed', { reason: result.message });
+            Alert.alert('Voice search stopped', 'Please try again, or type your search.');
+          }
+        },
+      });
+    } catch (err) {
+      reportError('search', 'Could not start voice search', err);
+      voiceRef.current = null;
+      setListening(false);
+      inputRef.current?.focus();
+    }
+  }, [listening, changeQuery, runSearch]);
+
   const clearSearch = useCallback(() => {
     // Invalidate any search still in flight so it can't land after the clear.
     searchSeqRef.current++;
@@ -649,7 +703,7 @@ export default function SearchScreen() {
             <TextInput
               ref={inputRef}
               style={styles.input}
-              placeholder="Search for restaurants and dishes"
+              placeholder={listening ? 'Listening…' : 'Search for restaurants and dishes'}
               placeholderTextColor={Colors.foodTextMuted}
               value={query}
               onChangeText={changeQuery}
@@ -659,15 +713,26 @@ export default function SearchScreen() {
               autoCorrect={false}
             />
             <View style={styles.searchDivider} />
-            {query.length > 0 ? (
+            {listening ? (
+              // While listening the spoken words fill the field, which would swap the mic for
+              // the clear button — keep a stop control here instead.
+              <Pressable
+                onPress={onMicPress}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Stop voice search"
+              >
+                <Ionicons name="stop-circle" size={22} color={t.accent} />
+              </Pressable>
+            ) : query.length > 0 ? (
               <Pressable onPress={clearSearch} hitSlop={8}>
                 <Ionicons name="close-circle" size={18} color={Colors.foodTextMuted} />
               </Pressable>
             ) : (
-              // Voice capture isn't wired up yet — tapping the mic focuses the
-              // field instead of doing nothing, same spirit as the Home bar's mic.
+              // Listens in builds with speech recognition; in Expo Go (no native module) it
+              // focuses the field instead — src/lib/voiceSearch.ts.
               <Pressable
-                onPress={() => inputRef.current?.focus()}
+                onPress={onMicPress}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Voice search"

@@ -48,6 +48,10 @@ import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
 import { BorderRadius, Elevation, Spacing } from '../../src/constants/Theme';
 import { useCart } from '../../src/context/CartContext';
+import { useDeliveryLocation } from '../../src/context/DeliveryLocationContext';
+import { deliveryEtaWindow } from '../../src/lib/deliveryEta';
+import { haversineKm } from '../../src/lib/geo';
+import type { ActiveLocation } from '../../src/types/address';
 import { confirmCartConflict } from '../../src/lib/cartConflict';
 import { confirmAction, confirmCopy } from '../../src/lib/confirm';
 import { useVegMode } from '../../src/context/VegModeContext';
@@ -99,25 +103,15 @@ function goBack() {
   else router.navigate('/(tabs)');
 }
 
-/** Rider speed through city traffic, plus the kitchen's head start — matches Home. */
-const AVG_SPEED_KMPH = 20;
-const PREP_MINUTES = 15;
-
 /**
- * Delivery estimate. Prefers the restaurant's own declared estimate, falls back to
- * one derived from the real distance, and returns null when neither is known so the
- * caller drops the line rather than printing a guess.
+ * Restaurant → delivery address, km. The detail endpoint sends no distance, so it is worked
+ * out here from the active delivery location — the same straight-line distance Home shows.
  */
-function formatEta(restaurant: Restaurant): string | null {
-  if (restaurant.deliveryMinutes && Number.isFinite(restaurant.deliveryMinutes)) {
-    const m = Math.max(10, Math.round(restaurant.deliveryMinutes / 5) * 5);
-    return `${m}–${m + 5} min`;
-  }
-  const km = restaurant.distanceKm;
-  if (km == null || !Number.isFinite(km)) return null;
-  const raw = PREP_MINUTES + (km / AVG_SPEED_KMPH) * 60;
-  const m = Math.max(10, Math.round(raw / 5) * 5);
-  return `${m}–${m + 5} min`;
+function distanceToRestaurant(restaurant: Restaurant, active: ActiveLocation | null): number | undefined {
+  if (restaurant.distanceKm != null) return restaurant.distanceKm;
+  const point = restaurant.location?.coordinates;
+  if (!active || active.unlocated || !point) return undefined;
+  return haversineKm(active.coordinates, { latitude: point[1], longitude: point[0] });
 }
 
 function localityOf(restaurant: Restaurant): string | null {
@@ -603,7 +597,11 @@ function Hero({
 }
 
 function InfoCard({ restaurant }: { restaurant: Restaurant }) {
-  const eta = formatEta(restaurant);
+  const { activeLocation } = useDeliveryLocation();
+  const eta = deliveryEtaWindow(
+    restaurant.deliveryMinutes,
+    distanceToRestaurant(restaurant, activeLocation),
+  );
   const locality = localityOf(restaurant);
   const cuisines = restaurant.cuisineType.join(', ');
   const rated = restaurant.totalRatings > 0;

@@ -166,7 +166,22 @@ export default function SignInScreen() {
           </Pressable>
 
           <Text style={styles.terms}>
-            By continuing, you agree to our Terms &amp; Privacy Policy
+            By continuing, you agree to our{' '}
+            <Text
+              style={styles.termsLink}
+              accessibilityRole="link"
+              onPress={() => router.push('/legal/terms')}
+            >
+              Terms
+            </Text>{' '}
+            &amp;{' '}
+            <Text
+              style={styles.termsLink}
+              accessibilityRole="link"
+              onPress={() => router.push('/legal/privacy')}
+            >
+              Privacy Policy
+            </Text>
           </Text>
 
           {!isGuest && (
@@ -258,6 +273,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingHorizontal: Spacing.base,
     marginTop: Spacing.base,
+  },
+  termsLink: {
+    color: Colors.authText,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   cta: {
     height: 48,
