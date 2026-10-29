@@ -36,6 +36,7 @@ import {
   Switch,
   Text,
   TextInput,
+  type TextInputInstance,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -123,7 +124,7 @@ function EditableChip({
 }) {
   const chipStyles = useThemedStyles(makeChipStyles);
   const { accent } = useAccentTheme();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [focused, setFocused] = useState(false);
   const hasValue = value.trim().length > 0;
 

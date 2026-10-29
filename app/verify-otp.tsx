@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputInstance,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -48,7 +49,7 @@ export default function VerifyOtpScreen() {
   const dialCode = params.dialCode ?? DEFAULT_DIAL_CODE;
 
   const { session, isGuest, signIn } = useAuth();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   const [isBypass, setIsBypass] = useState(params.bypass === '1');
   const [isOffline, setIsOffline] = useState(params.offline === '1');

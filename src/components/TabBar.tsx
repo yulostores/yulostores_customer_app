@@ -61,14 +61,16 @@ interface TabBarRoute {
 
 export interface TabBarProps {
   state: { index: number; routes: TabBarRoute[] };
-  navigation: {
+  // SDK 58: expo-router hands a custom tabBar `emitter` + `navigateToTab` (by route key)
+  // instead of the old `navigation` object.
+  emitter: {
     emit(event: {
       type: 'tabPress';
       target: string;
       canPreventDefault: true;
     }): { defaultPrevented: boolean };
-    navigate(name: string): void;
   };
+  navigateToTab(routeKey: string): void;
 }
 
 // ─── Height ─────────────────────────────────────────────────────────────────
@@ -201,7 +203,7 @@ function FabTab({ item, focused, badgeCount, palette, layout, onPress }: TabProp
 
 // ─── The bar ────────────────────────────────────────────────────────────────
 
-export default function TabBar({ state, navigation }: TabBarProps) {
+export default function TabBar({ state, emitter, navigateToTab }: TabBarProps) {
   const { items, palette, layout, cartCount } = useTabBar();
   const insets = useSafeAreaInsets();
   const cameraOpen = useCameraOpen();
@@ -223,13 +225,13 @@ export default function TabBar({ state, navigation }: TabBarProps) {
   const press = (item: TabBarItem) => () => {
     const route = state.routes.find((r) => r.name === item.route);
     if (!route) return;
-    const event = navigation.emit({
+    const event = emitter.emit({
       type: 'tabPress',
       target: route.key,
       canPreventDefault: true,
     });
     if (!event.defaultPrevented && route.name !== current) {
-      navigation.navigate(route.name);
+      navigateToTab(route.key);
     }
   };
 

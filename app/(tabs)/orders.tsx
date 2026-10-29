@@ -447,7 +447,7 @@ export default function OrdersScreen() {
             <Text style={styles.count}>
               {total} order{total !== 1 ? 's' : ''}
             </Text>
-          ) : null
+          ) : undefined
         }
         ListEmptyComponent={<EmptyState />}
         refreshControl={
@@ -463,7 +463,7 @@ export default function OrdersScreen() {
         ListFooterComponent={
           isPaging ? (
             <ActivityIndicator style={{ marginVertical: 16 }} color={accent} />
-          ) : null
+          ) : undefined
         }
       />
     </SafeAreaView>

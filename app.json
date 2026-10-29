@@ -2,7 +2,7 @@
   "expo": {
     "name": "Yulo Stores",
     "slug": "yulo-stores",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -45,6 +45,7 @@
       "expo-router",
       "expo-font",
       "expo-navigation-bar",
+      "expo-status-bar",
       [
         "expo-splash-screen",
         {

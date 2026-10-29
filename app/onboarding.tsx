@@ -15,7 +15,7 @@ import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  type ScrollView,
+  type ScrollViewInstance,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../src/constants/Colors';
@@ -58,7 +58,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { complete } = useOnboarding();
 
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   // Native-driven: slide transforms, copy crossfades. Kept off the JS thread so
   // the swipe stays at 60fps.
   const scrollX = useRef(new Animated.Value(0)).current;

@@ -30,7 +30,7 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect, useNavigation } from 'expo-router';
+import { router, useFocusEffect, useNavigation, usePreventRemove } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -868,14 +868,12 @@ export default function CheckoutScreen() {
 
   // No leaving mid-placement or mid-payment (Android back, swipe): the screen unmounting there
   // stopped Razorpay from ever opening, leaving an unpaid order behind.
+  // SDK 58 dropped the `beforeRemove` event; usePreventRemove is its replacement.
   const navigation = useNavigation();
   useEffect(() => {
     navigation.setOptions({ gestureEnabled: !busy });
-    if (!busy) return;
-    return navigation.addListener('beforeRemove', (e) => {
-      e.preventDefault();
-    });
   }, [navigation, busy]);
+  usePreventRemove(busy);
 
   // Leave for the confirmation screen the moment the order is placed (and paid,
   // for an online method).
