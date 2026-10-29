@@ -72,7 +72,9 @@ import {
 import { useOrderTracking } from '../../../src/hooks/useOrderTracking';
 import { usePayOrder } from '../../../src/hooks/usePayOrder';
 import { confirmAction, confirmCopy } from '../../../src/lib/confirm';
+import { reportError } from '../../../src/lib/logger';
 import { ApiError } from '../../../src/services/api';
+import { printOrderBill } from '../../../src/services/orderBill';
 import { submitReview } from '../../../src/services/orders';
 import {
   cancellationMessage,
@@ -587,6 +589,45 @@ function headingFor(status: string): string {
 
 // ─── Rate-your-order card ──────────────────────────────────────────────────
 
+/** "Print bill" — the system print sheet for this order's bill (print, or Save as PDF). */
+function PrintBillButton({ orderId }: { orderId: string }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
+  const [busy, setBusy] = useState(false);
+
+  const onPress = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await printOrderBill(orderId);
+    } catch (err) {
+      reportError('track', 'Could not open the bill', err, { orderId });
+      Alert.alert('Couldn’t open the bill', 'Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Pressable
+      style={[styles.printBillBtn, { borderColor: accent }]}
+      onPress={onPress}
+      disabled={busy}
+      accessibilityRole="button"
+      accessibilityLabel="Print bill"
+    >
+      {busy ? (
+        <ActivityIndicator size="small" color={accent} />
+      ) : (
+        <>
+          <Ionicons name="print-outline" size={16} color={accent} />
+          <Text style={[styles.printBillText, { color: accent }]}>Print bill</Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
 function ReviewCard({ orderId }: { orderId: string }) {
   const styles = useThemedStyles(makeStyles);
   const [rating, setRating] = useState(0);
@@ -1033,6 +1074,8 @@ export default function TrackingScreen() {
                 : 'Online payment'}
             </Text>
           )}
+
+          <PrintBillButton orderId={tracking.orderId} />
         </View>
       </ScrollView>
     </View>
@@ -1348,6 +1391,17 @@ const makeStyles = (t: AccentTheme) =>
     textAlign: 'right',
     marginTop: 4,
   },
+  printBillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    height: 42,
+    marginTop: Spacing.base,
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.full,
+  },
+  printBillText: { fontSize: 14, fontWeight: '700' },
 
   // ── Veg-fleet search card ──
   vegFleetHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 0 },
