@@ -10,8 +10,9 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -156,6 +157,19 @@ export default function FavoritesScreen() {
     remove,
   } = useFavoriteRestaurants();
 
+  // Re-read on coming back (a restaurant hearted or un-hearted from its own page), as the
+  // Orders and Cart tabs do — otherwise the list stayed as it was until a pull-to-refresh.
+  // The first focus is the mount, which the hook already loads.
+  const focusedOnceRef = useRef(false);
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedOnceRef.current) refreshRef.current();
+      focusedOnceRef.current = true;
+    }, []),
+  );
+
   const header = (
     <View style={styles.header}>
       <Pressable onPress={goBack} hitSlop={10} style={styles.backBtn}>
@@ -224,7 +238,7 @@ export default function FavoritesScreen() {
             <Text style={styles.count}>
               {total} favorite{total !== 1 ? 's' : ''}
             </Text>
-          ) : null
+          ) : undefined
         }
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -251,7 +265,7 @@ export default function FavoritesScreen() {
         ListFooterComponent={
           isPaging ? (
             <ActivityIndicator style={{ marginVertical: 16 }} color={accent} />
-          ) : null
+          ) : undefined
         }
       />
     </SafeAreaView>

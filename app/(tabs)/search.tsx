@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputInstance,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -240,7 +241,7 @@ export default function SearchScreen() {
   // it, so a slower, older response can't overwrite newer results or land after
   // the customer has cleared the search.
   const searchSeqRef = useRef(0);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   const {
     popular,
@@ -387,6 +388,26 @@ export default function SearchScreen() {
     }, [initialQuery]),
   );
 
+  // Editing the text after a search goes back to typing mode — live suggestions for what is
+  // being typed. Without this the previous query's results stayed on screen under the new
+  // text (the results for "South Indian" shown for "sandwich") until the search key was hit.
+  const changeQuery = useCallback(
+    (text: string) => {
+      setQuery(text);
+      if (!hasSearched) return;
+      // Invalidate any search still in flight so it can't land on the new text.
+      searchSeqRef.current++;
+      loadingMoreRef.current = false;
+      setHasSearched(false);
+      setIsSearching(false);
+      setIsLoadingMore(false);
+      setHasMore(false);
+      setResults([]);
+      setSearchError(null);
+    },
+    [hasSearched],
+  );
+
   const clearSearch = useCallback(() => {
     // Invalidate any search still in flight so it can't land after the clear.
     searchSeqRef.current++;
@@ -479,7 +500,7 @@ export default function SearchScreen() {
             <View style={styles.loadMoreFooter}>
               <ActivityIndicator size="small" color={t.accent} />
             </View>
-          ) : null
+          ) : undefined
         }
         renderItem={({ item }) => (
           <Pressable
@@ -631,7 +652,7 @@ export default function SearchScreen() {
               placeholder="Search for restaurants and dishes"
               placeholderTextColor={Colors.foodTextMuted}
               value={query}
-              onChangeText={setQuery}
+              onChangeText={changeQuery}
               onSubmitEditing={() => runSearch(query)}
               returnKeyType="search"
               autoCapitalize="none"

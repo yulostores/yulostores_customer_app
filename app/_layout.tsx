@@ -69,6 +69,10 @@ function RootNavigator() {
         <Stack.Screen name="checkout" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="item/[id]" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="order/[id]/track" options={{ animation: 'slide_from_bottom', headerShown: false }} />
+        {/* Unlisted, these two sat outside the guard: after signing out, the sign-in
+            screen's back arrow still led to "Browse by cuisine". */}
+        <Stack.Screen name="cuisines/index" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="profile/edit" options={{ animation: 'slide_from_right' }} />
       </Stack.Protected>
 
       <Stack.Protected guard={!isAuthenticated || isGuest}>

@@ -181,9 +181,25 @@ export function DeliveryLocationProvider({ children }: PropsWithChildren) {
     [persist],
   );
 
+  // The cart prices delivery to the account's default address, checkout to the picked one, so
+  // picking a non-default address showed one total in the cart and another at Pay. Making the
+  // picked address the default keeps the two on the same address. Best-effort: the local pick
+  // stands even if this call fails.
   const chooseSaved = useCallback(
-    (a: SavedAddress) => persist(activeFromSaved(a)),
-    [persist],
+    (a: SavedAddress) => {
+      persist(activeFromSaved(a));
+      if (!hasServerToken || a.isDefault) return;
+      setDefaultAddress(a._id)
+        .then((list) => {
+          if (list.length > 0) setSaved(list);
+        })
+        .catch((err) => {
+          logger.warn('location', 'Could not make the picked address the default', {
+            reason: err instanceof Error ? err.message : String(err),
+          });
+        });
+    },
+    [persist, hasServerToken],
   );
 
   /**

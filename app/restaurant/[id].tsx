@@ -1103,21 +1103,29 @@ export default function RestaurantDetailScreen() {
   // has loaded — park the target and let the effect below fire the scroll once
   // its items (or an error) are in.
   const pendingJump = useRef<string | null>(null);
+  // The section a jump is aiming at, and how many times it has been re-aimed — see
+  // onScrollToIndexFailed on the list.
+  const jumpRetry = useRef<{ index: number; tries: number } | null>(null);
 
   const scrollToSection = useCallback(
-    (index: number) => {
+    (index: number, tries = 0) => {
+      jumpRetry.current = { index, tries };
       try {
+        // itemIndex 1 = the section's first row. itemIndex 0 is its header, and a sticky
+        // header's measured offset is relative to its sticky wrapper — always 0 — so aiming at
+        // it scrolled to the top of the list every time. For itemIndex > 0 with sticky headers
+        // the list adds the header's height to viewOffset itself, so the title stays in view.
         listRef.current?.scrollToLocation({
           sectionIndex: index,
-          itemIndex: 0,
-          viewOffset: insets.top + 48,
+          itemIndex: 1,
+          viewOffset: 0,
           animated: true,
         });
       } catch {
         /* not measured yet — onScrollToIndexFailed / the effect will retry */
       }
     },
-    [insets.top],
+    [],
   );
 
   const jumpToSection = useCallback(
@@ -1182,9 +1190,26 @@ export default function RestaurantDetailScreen() {
         onEndReachedThreshold={0.5}
         initialNumToRender={6}
         maxToRenderPerBatch={8}
-        windowSize={7}
+        // RN's default window. At 7, the rows past the window were stood in for by spacers of
+        // averaged height (2-card rows, headers and empty footers average badly), and near the
+        // end of the menu mounting the real rows changed the content height, which moved the
+        // window, which unmounted them again — the menu flickered between scroll positions
+        // several times a second with no touch.
+        windowSize={21}
         removeClippedSubviews
-        onScrollToIndexFailed={() => {}}
+        // A section below the rendered window has no measured position yet, so scrollToLocation
+        // refuses it. Scroll to the list's own estimate so those rows render and get measured,
+        // then aim again — a few tries, since each lands closer. Ignoring this made every jump
+        // from the Menu sheet do nothing.
+        onScrollToIndexFailed={(info) => {
+          const target = jumpRetry.current;
+          if (!target || target.tries >= 4) return;
+          listRef.current?.getScrollResponder()?.scrollTo({
+            y: info.averageItemLength * info.index,
+            animated: false,
+          });
+          setTimeout(() => scrollToSection(target.index, target.tries + 1), 120);
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

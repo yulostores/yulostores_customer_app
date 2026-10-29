@@ -223,7 +223,7 @@ export default function SupportRequestsScreen() {
             <Text style={styles.count}>
               {total} request{total !== 1 ? 's' : ''}
             </Text>
-          ) : null
+          ) : undefined
         }
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -232,7 +232,9 @@ export default function SupportRequestsScreen() {
             <Text style={styles.emptySubtitle}>
               When you raise a help request it shows up here with every reply.
             </Text>
-            <Pressable style={styles.actionBtn} onPress={() => router.replace('/help')}>
+            {/* dismissTo, not replace: this screen is opened from Help, and replace stacked a
+                second Help screen on top of the first, so Back landed on Help again. */}
+            <Pressable style={styles.actionBtn} onPress={() => router.dismissTo('/help')}>
               <Text style={styles.actionBtnText}>Get help</Text>
             </Pressable>
           </View>
@@ -250,7 +252,7 @@ export default function SupportRequestsScreen() {
         ListFooterComponent={
           isPaging ? (
             <ActivityIndicator style={{ marginVertical: 16 }} color={accent} />
-          ) : null
+          ) : undefined
         }
       />
     </SafeAreaView>

@@ -94,7 +94,7 @@ function AddressCard({
 
   return (
     <Pressable
-      style={[styles.card, isActive && styles.cardActive]}
+      style={[styles.card, isActive && styles.cardActive, menuOpen && styles.cardMenuOpen]}
       onPress={() => { setMenuOpen(false); onChoose(); }}
       android_ripple={{ color: accentLight }}
     >
@@ -474,6 +474,14 @@ const makeStyles = (t: AccentTheme) =>
   cardActive: {
     borderColor: t.accent,
     backgroundColor: t.accentLight,
+  },
+  // While its ⋮ menu is open: the card's overflow:'hidden' clipped the dropdown to the card
+  // (only "Edit" showed), and the next card — a later sibling — drew over the rest. Unclip
+  // it and lift it above its siblings (zIndex for iOS, elevation for Android).
+  cardMenuOpen: {
+    overflow: 'visible',
+    zIndex: 10,
+    elevation: 12,
   },
   activeBar: {
     position: 'absolute',

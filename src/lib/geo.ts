@@ -164,8 +164,15 @@ async function reverseGeocodeOnDevice(coords: LatLng): Promise<ResolvedPlace | n
   const locality = hit.district ?? hit.subregion ?? undefined;
 
   // `name` is a short POI/building name on iOS but often the whole formatted
-  // line on Android — only use it as the title when it's genuinely short.
-  const nameIsShort = hit.name && hit.name.length <= 32 && !hit.name.includes(',');
+  // line on Android — only use it as the title when it's genuinely short. Android also
+  // hands back just the house number as `name` ("6"), which made a title of "6" — skip
+  // that too, so the street line ("6, Baner Road") is used instead.
+  const nameIsShort =
+    hit.name &&
+    hit.name.length <= 32 &&
+    !hit.name.includes(',') &&
+    hit.name !== hit.streetNumber &&
+    !/^\d+[A-Za-z]?$/.test(hit.name.trim());
   const title =
     (nameIsShort ? hit.name : undefined) ||
     streetLine ||
