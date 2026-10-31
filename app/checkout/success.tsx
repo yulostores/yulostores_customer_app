@@ -27,6 +27,7 @@ import {
 } from '../../src/hooks/useAccentTheme';
 import { reportError } from '../../src/lib/logger';
 import { getOrder, type OrderView } from '../../src/services/orders';
+import { shortOrderId } from '../../src/services/tracking';
 
 const formatMoney = (n: number) =>
   '₹' + Math.max(0, n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -37,6 +38,8 @@ function etaText(iso: string | null): string | null {
   if (!Number.isFinite(mins) || mins <= 0) return null;
   return `Arriving in about ${mins} min`;
 }
+
+const ACCEPTANCE_POLL_MS = 10_000;
 
 export default function OrderSuccessScreen() {
   const styles = useThemedStyles(makeStyles);
@@ -79,6 +82,23 @@ export default function OrderSuccessScreen() {
       alive = false;
     };
   }, [orderId]);
+
+  // "Waiting for the restaurant to accept" is a promise to update: while the order is still
+  // 'placed', re-read it so this screen turns into "Order accepted" / "Order cancelled" on its
+  // own. It used to read the order once, so a customer who stayed here never saw a rejection
+  // (and its refund) unless they opened tracking.
+  const waiting = loaded && order?.status === 'placed';
+  useEffect(() => {
+    if (!waiting || !orderId) return undefined;
+    const id = setInterval(() => {
+      getOrder(orderId)
+        .then(setOrder)
+        .catch(() => {
+          // Next tick tries again; the tracking screen is always one tap away.
+        });
+    }, ACCEPTANCE_POLL_MS);
+    return () => clearInterval(id);
+  }, [waiting, orderId]);
 
   const total = order?.grandTotal || paramTotal;
   const paid = order ? order.paymentStatus === 'paid' : !isCod;
@@ -125,7 +145,7 @@ export default function OrderSuccessScreen() {
           <ActivityIndicator style={{ marginTop: Spacing.lg }} color={accent} />
         ) : (
           <View style={styles.card}>
-            <Row label="Order ID" value={`#${(order?.id ?? orderId).slice(-8).toUpperCase()}`} />
+            <Row label="Order ID" value={`#${shortOrderId(order?.id ?? orderId)}`} />
             <View style={styles.divider} />
             <Row label="Amount" value={formatMoney(total)} />
             <View style={styles.divider} />

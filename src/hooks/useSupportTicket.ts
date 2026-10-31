@@ -39,6 +39,8 @@ interface UseSupportTicketResult {
   sendMessage: (text: string) => Promise<boolean>;
 }
 
+const TICKET_POLL_MS = 20_000;
+
 function messageFor(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
@@ -69,7 +71,7 @@ export function useSupportTicket(id: string): UseSupportTicketResult {
   const requestRef = useRef(0);
   const loadedOnceRef = useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     const requestId = ++requestRef.current;
     const isCurrent = () => mountedRef.current && requestRef.current === requestId;
 
@@ -93,8 +95,10 @@ export function useSupportTicket(id: string): UseSupportTicketResult {
 
     setNotSignedIn(false);
     setError(null);
-    if (loadedOnceRef.current) setIsRefreshing(true);
-    else setIsLoading(true);
+    if (!silent) {
+      if (loadedOnceRef.current) setIsRefreshing(true);
+      else setIsLoading(true);
+    }
 
     try {
       const fresh = await getTicket(id);
@@ -126,6 +130,18 @@ export function useSupportTicket(id: string): UseSupportTicketResult {
   useEffect(() => {
     load();
   }, [load]);
+
+  // The screen promises "you'll see updates on this screen", so a support reply (and the
+  // status it moves to) is picked up on its own while the request is still open — before,
+  // only a pull-to-refresh showed it. Paused while a reply is being sent, stopped once closed.
+  const status = ticket?.status;
+  useEffect(() => {
+    if (!status || status === 'closed' || isSending) return undefined;
+    const timer = setInterval(() => {
+      if (mountedRef.current) void load({ silent: true });
+    }, TICKET_POLL_MS);
+    return () => clearInterval(timer);
+  }, [status, isSending, load]);
 
   const sendMessage = useCallback(
     async (text: string): Promise<boolean> => {

@@ -38,7 +38,7 @@ import { useOrders } from '../../src/hooks/useOrders';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
 import { statusMeta, type OrderSummary } from '../../src/services/orders';
-import { createTicket, topicFor } from '../../src/services/support';
+import { createTicket, ordersForTopic, topicFor } from '../../src/services/support';
 
 const MAX_DESCRIPTION = 1000;
 const RECENT_ORDERS_SHOWN = 6;
@@ -113,7 +113,7 @@ export default function NewSupportRequestScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const recentOrders = orders.slice(0, RECENT_ORDERS_SHOWN);
+  const recentOrders = ordersForTopic(topic, orders).slice(0, RECENT_ORDERS_SHOWN);
   const showOrderPicker = topic.ordersRelevant && !notSignedIn && recentOrders.length > 0;
   const canSubmit = description.trim().length > 0 && !submitting;
 

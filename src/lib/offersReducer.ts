@@ -26,6 +26,8 @@ export interface CustomerOffer {
   maxDiscountAmount: number | null;
   /** Rupees; 0 = none. */
   minimumOrderValue: number;
+  /** The dishes a dish-only offer covers; empty = the whole order. */
+  dishNames: string[];
   /** ISO time the offer stops working. */
   expiresAt: string;
   status: OfferStatus;

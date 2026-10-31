@@ -12,7 +12,7 @@ import {
   type CustomerOffer,
   type OffersState,
 } from '../offersReducer';
-import { shouldMarkViewed, activityNoticeKey, arrivalText, countdownText, endsInText, offerValueText, rupees, shouldShowActivityNotice } from '../offerText';
+import { shouldMarkViewed, activityNoticeKey, arrivalText, countdownText, dishListText, endsInText, offerValueText, rupees, shouldShowActivityNotice } from '../offerText';
 import { toOffer, type RawCustomerOffer, type RawOfferReceived } from '../offerShape';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,6 +33,7 @@ function offer(id: string, overrides: Partial<CustomerOffer> = {}): CustomerOffe
     flatAmount: null,
     maxDiscountAmount: 100,
     minimumOrderValue: 0,
+    dishNames: [],
     expiresAt: inMinutes(30),
     status: 'sent',
     receivedAt: NOW,
@@ -373,6 +374,19 @@ describe('contract: what the app reads exists in the API', () => {
     assert.equal(offer.status, 'sent');
     assert.ok(Date.parse(offer.expiresAt) > NOW, 'endDate read as the expiry');
     assert.equal(arrivalText(offer, NOW), 'Spice Route sent you 15% off (up to ₹100) · ends in 30 min');
+  });
+
+  it('a dish-only offer keeps its dish names, from the socket and from the list', () => {
+    const fromSocket = toOffer({ ...realDates(fixture('socket-offer_received')), applicableItems: ['Butter Naan'] } as RawOfferReceived, NOW, 'sent');
+    assert.deepEqual(fromSocket.dishNames, ['Butter Naan']);
+    const listed = realDates(fixture('customer-offers-mine').data.offers[0]);
+    assert.deepEqual(toOffer(listed as RawCustomerOffer, NOW, 'delivered').dishNames, []);
+    const naanOnly = toOffer({ ...listed, applicableItems: ['<id>'], applicableItemNames: ['Butter Naan'] } as RawCustomerOffer, NOW, 'delivered');
+    assert.deepEqual(naanOnly.dishNames, ['Butter Naan'], 'names, never the ids');
+    assert.equal(offerValueText({ ...naanOnly, percentage: 25 }), '25% off Butter Naan (up to ₹100)');
+    assert.equal(offerValueText(offer('f', { type: 'flat_amount', percentage: null, flatAmount: 50, dishNames: ['Naan', 'Dal'] })), '₹50 off Naan and Dal');
+    assert.equal(dishListText(['A', 'B', 'C', 'D']), 'A, B and 2 more');
+    assert.equal(offerValueText(offer('w')), '15% off (up to ₹100)', 'whole-order offers read as before');
   });
 
   it('socket offer_updated (customer) carries offerId + offerStatus, no sessionId', () => {

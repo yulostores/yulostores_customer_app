@@ -107,6 +107,7 @@ interface RawBill {
   deliveryIssue?: string | null;
   offerIssue?: string | null;
   shortfallPaise?: number | null;
+  appliedCode?: string | null;
 }
 
 interface RawCartResponse {
@@ -209,6 +210,8 @@ export interface CartBill {
   offerIssue: string | null;
   /** With `offerIssue: 'DISCOUNT_MIN_VALUE'`: how much more the food must come to. */
   shortfallPaise: number | null;
+  /** The coupon code on the cart (from the server, so it survives a restart); null for none. */
+  appliedCode: string | null;
 }
 
 export interface Cart {
@@ -286,6 +289,7 @@ function toBill(raw: RawBill): CartBill {
     deliveryIssue: raw.deliveryIssue ?? null,
     offerIssue: raw.offerIssue ?? null,
     shortfallPaise: typeof raw.shortfallPaise === 'number' ? raw.shortfallPaise : null,
+    appliedCode: typeof raw.appliedCode === 'string' && raw.appliedCode ? raw.appliedCode.toUpperCase() : null,
   };
 }
 
@@ -407,11 +411,15 @@ export function clearCart(): Promise<CartSnapshot> {
  * An invalid / ineligible code comes back as `ApiError` 400 with a human message
  * from `discountService.validateDiscountForOrder`; the caller surfaces it inline.
  *
- * Note: there is no "remove promo" endpoint — the backend keeps `appliedDiscountId`
- * on the cart and re-validates it on every read, so it simply stops applying if
- * the cart later stops qualifying, and resumes if it qualifies again. Clearing the
- * cart is the only way to drop a code outright.
+ * The backend keeps `appliedDiscountId` on the cart and re-validates it on every read, so a
+ * code simply stops applying if the cart later stops qualifying, and resumes if it qualifies
+ * again. {@link removePromo} takes it off outright.
  */
 export function applyPromo(code: string): Promise<CartSnapshot> {
   return apiPost<RawCartResponse>('/api/cart/apply-promo', { code: code.trim() }).then(toSnapshot);
+}
+
+/** `DELETE /api/cart/promo` — takes an applied coupon code off the cart (never a personal offer). */
+export function removePromo(): Promise<CartSnapshot> {
+  return apiDelete<RawCartResponse>('/api/cart/promo').then(toSnapshot);
 }

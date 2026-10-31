@@ -74,7 +74,6 @@ import { usePayOrder } from '../../../src/hooks/usePayOrder';
 import { confirmAction, confirmCopy } from '../../../src/lib/confirm';
 import { reportError } from '../../../src/lib/logger';
 import { ApiError } from '../../../src/services/api';
-import { printOrderBill } from '../../../src/services/orderBill';
 import { submitReview } from '../../../src/services/orders';
 import {
   cancellationMessage,
@@ -589,41 +588,22 @@ function headingFor(status: string): string {
 
 // ─── Rate-your-order card ──────────────────────────────────────────────────
 
-/** "Print bill" — the system print sheet for this order's bill (print, or Save as PDF). */
-function PrintBillButton({ orderId }: { orderId: string }) {
+/**
+ * "View bill" — opens the bill in the app (app/order/[id]/bill.tsx). Customers view their bill;
+ * printing it is the restaurant's job (owner portal), so there is no print sheet here.
+ */
+function ViewBillButton({ orderId }: { orderId: string }) {
   const styles = useThemedStyles(makeStyles);
   const { accent } = useAccentTheme();
-  const [busy, setBusy] = useState(false);
-
-  const onPress = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await printOrderBill(orderId);
-    } catch (err) {
-      reportError('track', 'Could not open the bill', err, { orderId });
-      Alert.alert('Couldn’t open the bill', 'Check your connection and try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <Pressable
       style={[styles.printBillBtn, { borderColor: accent }]}
-      onPress={onPress}
-      disabled={busy}
+      onPress={() => router.push(`/order/${orderId}/bill`)}
       accessibilityRole="button"
-      accessibilityLabel="Print bill"
+      accessibilityLabel="View bill"
     >
-      {busy ? (
-        <ActivityIndicator size="small" color={accent} />
-      ) : (
-        <>
-          <Ionicons name="print-outline" size={16} color={accent} />
-          <Text style={[styles.printBillText, { color: accent }]}>Print bill</Text>
-        </>
-      )}
+      <Ionicons name="receipt-outline" size={16} color={accent} />
+      <Text style={[styles.printBillText, { color: accent }]}>View bill</Text>
     </Pressable>
   );
 }
@@ -1075,7 +1055,7 @@ export default function TrackingScreen() {
             </Text>
           )}
 
-          <PrintBillButton orderId={tracking.orderId} />
+          <ViewBillButton orderId={tracking.orderId} />
         </View>
       </ScrollView>
     </View>

@@ -216,8 +216,7 @@ function BillRow({
 /**
  * "Apply coupon" — a collapsed link that opens an inline code field. Once a code
  * takes (the server fills in `bill.discountAmount`), it flips to a confirmed
- * state. There is no "remove": the backend keeps the discount on the cart and
- * re-validates it per read — see `applyPromo` in src/services/cart.ts.
+ * state, with Remove to take it back off (`removePromo` in src/services/cart.ts).
  */
 function CouponRow({
   appliedCode,
@@ -225,12 +224,14 @@ function CouponRow({
   pending,
   accent,
   onApply,
+  onRemove,
 }: {
   appliedCode: string | null;
   discountAmount: number;
   pending: boolean;
   accent: string;
   onApply: (code: string) => Promise<boolean>;
+  onRemove: () => Promise<void>;
 }) {
   const styles = useThemedStyles(makeStyles);
   const [open, setOpen] = useState(false);
@@ -245,6 +246,19 @@ function CouponRow({
           <Text style={styles.couponCode}>{appliedCode}</Text> applied — you saved{' '}
           {formatPrice(discountAmount)}
         </Text>
+        <Pressable
+          onPress={() => {
+            setCode('');
+            setOpen(false);
+            void onRemove();
+          }}
+          disabled={pending}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Remove coupon ${appliedCode}`}
+        >
+          <Text style={[styles.couponRemove, pending && { opacity: 0.5 }]}>Remove</Text>
+        </Pressable>
       </View>
     );
   }
@@ -422,6 +436,7 @@ export default function CartScreen() {
     refreshQuietly,
     setLineQty,
     applyPromo,
+    removePromo,
     dismissActionError,
     offer,
   } = useCartScreen();
@@ -586,6 +601,7 @@ export default function CartScreen() {
           pending={promoPending}
           accent={accent}
           onApply={applyPromo}
+          onRemove={removePromo}
         />
 
         <BillDetails bill={bill} stale={billStale} />
@@ -709,6 +725,7 @@ const makeStyles = (t: AccentTheme) =>
   couponApplied: { borderColor: Colors.foodVegGreen, backgroundColor: Colors.foodPureVegBg },
   couponAppliedText: { flex: 1, fontSize: 13, color: Colors.foodText },
   couponCode: { fontWeight: '800', color: Colors.foodText },
+  couponRemove: { fontSize: 13, fontWeight: '700', color: Colors.danger },
   couponLink: { flex: 1, fontSize: 14, fontWeight: '700' },
   couponOpen: { paddingVertical: Spacing.xs },
   couponInput: { flex: 1, fontSize: 14, color: Colors.foodText, paddingVertical: Spacing.sm },

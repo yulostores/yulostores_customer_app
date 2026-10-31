@@ -1,12 +1,20 @@
 /// <reference types="node" />
 /**
  * Unit tests for src/lib/billHtml.ts — run with `npm run test:bill` (tsc compiles to
- * node_modules/.cache, then `node --test`). The bill must show the server's own figures,
- * never let order text break the page, and say plainly when an order was cancelled.
+ * node_modules/.cache, then `node --test`). The bill's wording and money formatting, as the
+ * in-app bill screen shows them.
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildBillHtml, shortOrderRef, validGstin, type BillData } from '../billHtml';
+import {
+  formatPaise,
+  formatPlacedAt,
+  formatRupees,
+  paymentLine,
+  shortOrderRef,
+  validGstin,
+  type BillData,
+} from '../billHtml';
 
 const base = (): BillData => ({
   orderId: '6ae2eb83a63339393326060e',
@@ -35,59 +43,26 @@ const base = (): BillData => ({
   paymentStatus: 'paid',
 });
 
-describe('buildBillHtml', () => {
-  it('lists every item with its line amount and every server bill row', () => {
-    const html = buildBillHtml(base());
-    assert.match(html, /Panner Roll/);
-    assert.match(html, /₹220\.00/, 'Virgin Mojito 2 × ₹110');
-    assert.match(html, /Delivery fee<div class="sub">0\.4 km · incl\. ₹0\.58 GST<\/div>/);
-    assert.match(html, /Platform fee/);
-    assert.match(html, /<td>Total<\/td><td class="num">₹371\.00<\/td>/);
-    assert.doesNotMatch(html, /To pay/, 'the grand total row is the Total line, not repeated');
-    assert.match(html, /Paid · Online/);
-    assert.match(html, /Order #3326060E/);
+describe('bill wording', () => {
+  it('describes how the order was paid', () => {
+    assert.equal(paymentLine('online', 'paid'), 'Paid · Online');
+    assert.equal(paymentLine('cash', 'paid'), 'Paid · Cash on delivery');
+    assert.equal(paymentLine('cash', 'pending_cod'), 'To be paid on delivery');
+    assert.equal(paymentLine('online', 'refunded'), 'Refunded');
+    assert.equal(paymentLine('online', 'failed'), 'Payment failed — not charged');
   });
 
-  it('shows a discount as a negative amount', () => {
-    const bill = base();
-    bill.charges.splice(1, 0, { key: 'discount', label: 'Discount', amountPaise: -5000, sublabel: null });
-    assert.match(buildBillHtml(bill), /Discount<\/td>\s*<td class="num">− ₹50\.00<\/td>/);
+  it('formats money the way the server meant it, discounts negative', () => {
+    assert.equal(formatRupees(1234), '₹1,234.00');
+    assert.equal(formatPaise(37100), '₹371.00');
+    assert.equal(formatPaise(-4800), '− ₹48.00');
+    assert.equal(formatPaise(22), '₹0.22');
   });
 
-  it('marks a cancelled, unpaid order clearly', () => {
-    const bill = { ...base(), status: 'cancelled', paymentStatus: 'failed' };
-    const html = buildBillHtml(bill);
-    assert.match(html, /ORDER CANCELLED/);
-    assert.match(html, /Payment failed — not charged/);
-    assert.doesNotMatch(buildBillHtml(base()), /ORDER CANCELLED/);
-  });
-
-  it('describes cash on delivery and refunds', () => {
-    assert.match(buildBillHtml({ ...base(), paymentMethod: 'cash', paymentStatus: 'pending_cod' }), /To be paid on delivery/);
-    assert.match(buildBillHtml({ ...base(), paymentMethod: 'cash', paymentStatus: 'paid' }), /Paid · Cash on delivery/);
-    assert.match(buildBillHtml({ ...base(), paymentStatus: 'refunded' }), /Refunded/);
-  });
-
-  it('escapes text from the order so it cannot break or inject into the page', () => {
-    const bill = base();
-    bill.items[0].name = '<script>alert(1)</script> & "Fries"';
-    bill.customer.name = "O'Brien <b>";
-    const html = buildBillHtml(bill);
-    assert.doesNotMatch(html, /<script>alert/);
-    assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt; &amp; &quot;Fries&quot;/);
-    assert.match(html, /O&#39;Brien &lt;b&gt;/);
-  });
-
-  it('prints the GSTIN only when there is one', () => {
-    assert.doesNotMatch(buildBillHtml(base()), /GSTIN/);
-    const bill = base();
-    bill.restaurant.gstin = '29AAPFU0939F1ZV';
-    assert.match(buildBillHtml(bill), /GSTIN: 29AAPFU0939F1ZV/);
-  });
-
-  it('falls back to the order grand total when the rows have no total', () => {
-    const bill = { ...base(), charges: base().charges.filter((c) => c.key !== 'grand_total') };
-    assert.match(buildBillHtml(bill), /<td>Total<\/td><td class="num">₹371\.00<\/td>/);
+  it('dates the bill in India time, and drops a bad date', () => {
+    assert.match(formatPlacedAt(base().placedAt) ?? '', /29 Oct 2026/);
+    assert.equal(formatPlacedAt(null), null);
+    assert.equal(formatPlacedAt('not a date'), null);
   });
 });
 
@@ -104,7 +79,7 @@ describe('validGstin', () => {
 });
 
 describe('shortOrderRef', () => {
-  it('is the last 8 characters, upper-cased', () => {
-    assert.equal(shortOrderRef('6ae2eb83a63339393326060e'), '#3326060E');
+  it('is the last 6 characters, upper-cased', () => {
+    assert.equal(shortOrderRef('6ae2eb83a63339393326060e'), '#26060E');
   });
 });

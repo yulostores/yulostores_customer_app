@@ -392,9 +392,12 @@ export function stageLabel(stage: TrackingStage): string {
   }
 }
 
-/** Short display id from a mongo ObjectId — last 8 chars, uppercased. */
+/**
+ * Short display id from a mongo ObjectId — last 6 chars, uppercased: the number the restaurant
+ * portal, kitchen display and support all show, so a customer reading it out is understood.
+ */
 export function shortOrderId(orderId: string): string {
-  return orderId.slice(-8).toUpperCase();
+  return orderId.slice(-6).toUpperCase();
 }
 
 /** Formats a rupee amount with the ₹ symbol and Indian grouping. */

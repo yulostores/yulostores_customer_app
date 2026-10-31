@@ -126,91 +126,45 @@ function LocationHeader() {
 }
 
 /**
- * The storefronts Yulo sells through. Food is the only one live today — the
- * other two are on the roadmap, so they render as designed and answer a tap
- * with a hint rather than a dead press or a route that doesn't exist.
+ * The storefronts Yulo sells through. Food is the only one today; Gifts & Toys and Bags were
+ * shown as "coming soon" tiles and have been taken off the home screen until they launch.
  */
 const STOREFRONTS: readonly {
   key: string;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   tint: string;
-  live: boolean;
-}[] = [
-  { key: 'food', label: 'Food', icon: 'restaurant', tint: Colors.white, live: true },
-  {
-    key: 'gifts',
-    label: 'Gifts & Toys',
-    icon: 'gift',
-    tint: Colors.foodVerticalGift,
-    live: false,
-  },
-  {
-    key: 'bags',
-    label: 'Bags',
-    icon: 'bag-handle',
-    tint: Colors.foodVerticalBag,
-    live: false,
-  },
-];
+}[] = [{ key: 'food', label: 'Food', icon: 'restaurant', tint: Colors.white }];
 
-/** Food / Gifts & Toys / Bags — the live one fills with the accent. */
+/** The storefront tiles — the current one fills with the accent. */
 function StorefrontTabs() {
   const styles = useThemedStyles(makeStyles);
   const t = useAccentTheme();
-  const [hint, setHint] = useState<string | null>(null);
-
-  // The hint behaves like a toast: it clears itself rather than waiting for a
-  // dismiss control the design has nowhere to put.
-  useEffect(() => {
-    if (!hint) return;
-    const timer = setTimeout(() => setHint(null), 2600);
-    return () => clearTimeout(timer);
-  }, [hint]);
 
   return (
-    <>
-      <View style={styles.storefrontRow}>
-        {STOREFRONTS.map((store) => (
-          <Pressable
-            key={store.key}
-            style={[styles.storefrontCard, !store.live && styles.storefrontCardIdle]}
-            onPress={() => {
-              if (!store.live) setHint(`${store.label} is coming soon`);
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ selected: store.live }}
-            accessibilityLabel={
-              store.live ? `${store.label}, selected` : `${store.label}, coming soon`
-            }
-          >
-            {store.live && (
-              <LinearGradient
-                colors={[t.accent, t.accentDark]}
-                locations={[0.15, 1]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.storefrontFill}
-              />
-            )}
-            <Ionicons name={store.icon} size={22} color={store.tint} />
-            <Text
-              style={[styles.storefrontLabel, store.live && styles.storefrontLabelActive]}
-              numberOfLines={1}
-            >
-              {store.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {!!hint && (
-        <View style={styles.storefrontHint}>
-          <Ionicons name="time-outline" size={13} color={Colors.foodTextSecondary} />
-          <Text style={styles.storefrontHintText}>{hint}</Text>
+    <View style={styles.storefrontRow}>
+      {STOREFRONTS.map((store) => (
+        <View
+          key={store.key}
+          style={styles.storefrontCard}
+          accessibilityRole="button"
+          accessibilityState={{ selected: true }}
+          accessibilityLabel={`${store.label}, selected`}
+        >
+          <LinearGradient
+            colors={[t.accent, t.accentDark]}
+            locations={[0.15, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.storefrontFill}
+          />
+          <Ionicons name={store.icon} size={22} color={store.tint} />
+          <Text style={[styles.storefrontLabel, styles.storefrontLabelActive]} numberOfLines={1}>
+            {store.label}
+          </Text>
         </View>
-      )}
-    </>
+      ))}
+    </View>
   );
 }
 
@@ -1070,11 +1024,6 @@ const makeStyles = (t: AccentTheme) =>
     gap: 6,
     ...Elevation.card,
   },
-  storefrontCardIdle: {
-    backgroundColor: Colors.foodSurface,
-    borderWidth: 1,
-    borderColor: Colors.foodBorder,
-  },
   // The accent fill is a sibling behind the icon and label rather than a
   // clipping parent: `overflow: 'hidden'` would take the card's elevation with
   // it on Android, so the gradient carries the radius itself.
@@ -1093,28 +1042,6 @@ const makeStyles = (t: AccentTheme) =>
   },
   storefrontLabelActive: {
     color: Colors.white,
-  },
-  // Sits in the gap the storefront row already leaves, so appearing and clearing
-  // shifts the search bar by the hint's own height and nothing more.
-  storefrontHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'center',
-    backgroundColor: Colors.foodSurface,
-    borderWidth: 1,
-    borderColor: Colors.foodBorder,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    marginTop: -Spacing.sm,
-    marginBottom: Spacing.sm,
-    ...Elevation.card,
-  },
-  storefrontHintText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.foodTextSecondary,
   },
 
   // ── Search bar ──

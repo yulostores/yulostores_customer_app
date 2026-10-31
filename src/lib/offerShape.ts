@@ -16,6 +16,10 @@ export interface RawCustomerOffer {
   flatAmount?: number | null;
   maxDiscountAmount?: number | null;
   minimumOrderValue?: number | null;
+  /** Dish ids (empty = the whole order). */
+  applicableItems?: string[];
+  /** Those dishes' names, in the same order. */
+  applicableItemNames?: string[];
   status?: OfferStatus;
   expiresAt?: string;
 }
@@ -30,6 +34,8 @@ export interface RawOfferReceived {
   flatAmount?: number | null;
   maxDiscountAmount?: number | null;
   minimumOrderValue?: number | null;
+  /** Here, the dishes' names (empty = the whole order). */
+  applicableItems?: string[];
   endDate?: string;
 }
 
@@ -42,6 +48,7 @@ export interface RawOfferUpdated {
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const names = (v: unknown): string[] => (Array.isArray(v) ? v.filter((n): n is string => typeof n === 'string' && n.length > 0) : []);
 
 export function toOffer(raw: RawCustomerOffer | (RawOfferReceived & { id?: string }), receivedAt: number, fallbackStatus: OfferStatus): CustomerOffer {
   const r = raw as RawCustomerOffer & RawOfferReceived;
@@ -55,6 +62,9 @@ export function toOffer(raw: RawCustomerOffer | (RawOfferReceived & { id?: strin
     flatAmount: num(r.flatAmount),
     maxDiscountAmount: num(r.maxDiscountAmount),
     minimumOrderValue: num(r.minimumOrderValue) ?? 0,
+    // The REST list names the dishes in applicableItemNames (its applicableItems are ids); the
+    // socket's offer_received names them in applicableItems itself.
+    dishNames: names(r.applicableItemNames ?? (r.id == null ? r.applicableItems : [])),
     expiresAt: String(r.expiresAt ?? r.endDate ?? new Date(0).toISOString()),
     status: r.status ?? fallbackStatus,
     receivedAt,

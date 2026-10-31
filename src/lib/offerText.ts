@@ -10,19 +10,31 @@ export function rupees(amount: number): string {
   return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });
 }
 
-/** "15% off (up to ₹100)" / "₹50 off". */
+/** "Butter Naan" · "Naan and Dal" · "Naan, Dal and 2 more". */
+export function dishListText(dishNames: string[]): string {
+  if (dishNames.length <= 2) return dishNames.join(' and ');
+  return `${dishNames.slice(0, 2).join(', ')} and ${dishNames.length - 2} more`;
+}
+
+/**
+ * "15% off (up to ₹100)" / "₹50 off" — and, for an offer limited to some dishes, which ones:
+ * "25% off Butter Naan (up to ₹100)". Without them a dish-only offer read as one on the whole
+ * order, and the customer saved less than the card seemed to promise.
+ */
 export function offerValueText(offer: {
   type: 'percentage' | 'flat_amount';
   percentage: number | null;
   flatAmount: number | null;
   maxDiscountAmount: number | null;
+  dishNames?: string[];
 }): string {
+  const on = offer.dishNames?.length ? ` ${dishListText(offer.dishNames)}` : '';
   if (offer.type === 'percentage') {
     return offer.maxDiscountAmount != null
-      ? `${offer.percentage}% off (up to ${rupees(offer.maxDiscountAmount)})`
-      : `${offer.percentage}% off`;
+      ? `${offer.percentage}% off${on} (up to ${rupees(offer.maxDiscountAmount)})`
+      : `${offer.percentage}% off${on}`;
   }
-  return `${rupees(offer.flatAmount ?? 0)} off`;
+  return `${rupees(offer.flatAmount ?? 0)} off${on}`;
 }
 
 /**

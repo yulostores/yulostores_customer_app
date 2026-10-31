@@ -1,16 +1,15 @@
 /**
- * orderBill.ts — print / save the customer's bill for an order.
+ * orderBill.ts — the customer's bill for an order, for the in-app bill screen to show.
  *
  *   GET /api/orders/:id          → the order: items frozen at checkout, `charges.lines`
  *                                  (the bill rows in paise), payment state, delivery address
  *   GET /api/restaurants/:id     → the restaurant's public name, address, phone, GST number
  *
- * The page itself is built by src/lib/billHtml.ts and handed to expo-print, which opens the
- * system print sheet (print, or "Save as PDF"). expo-print ships in Expo Go and in builds.
+ * View only: customers read the bill in the app (app/order/[id]/bill.tsx); printing is the
+ * restaurant's, from the owner portal.
  */
 
-import * as Print from 'expo-print';
-import { buildBillHtml, validGstin, type BillChargeLine, type BillData } from '../lib/billHtml';
+import { validGstin, type BillChargeLine, type BillData } from '../lib/billHtml';
 import { apiGet } from './api';
 
 interface RawOrder {
@@ -119,10 +118,4 @@ export async function getOrderBill(orderId: string): Promise<BillData> {
     paymentMethod: order.paymentMethod ?? null,
     paymentStatus: order.paymentStatus ?? 'pending',
   };
-}
-
-/** Open the system print sheet for an order's bill. Resolves once the sheet is dismissed. */
-export async function printOrderBill(orderId: string): Promise<void> {
-  const bill = await getOrderBill(orderId);
-  await Print.printAsync({ html: buildBillHtml(bill) });
 }

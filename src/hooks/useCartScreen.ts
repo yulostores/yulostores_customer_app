@@ -25,6 +25,7 @@ import { ApiError } from '../services/api';
 import { useOfferActions } from './useOfferActions';
 import {
   applyPromo as applyPromoRequest,
+  removePromo as removePromoRequest,
   getCart,
   removeCartLine,
   toCartCachePayload,
@@ -56,6 +57,8 @@ interface UseCartScreenResult {
   removeLine: (lineId: string) => Promise<void>;
   /** Apply a coupon code; resolves `true` on success, `false` on a rejected code. */
   applyPromo: (code: string) => Promise<boolean>;
+  /** Take the applied coupon code back off the cart. */
+  removePromo: () => Promise<void>;
   dismissActionError: () => void;
   /** Personal offer Apply / Remove (live activity); `pending` holds the bill as stale. */
   offer: ReturnType<typeof useOfferActions>;
@@ -78,7 +81,6 @@ export function useCartScreen(): UseCartScreenResult {
   const [notSignedIn, setNotSignedIn] = useState(false);
   const [pendingLineIds, setPendingLineIds] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
-  const [appliedCode, setAppliedCode] = useState<string | null>(null);
   const [promoPending, setPromoPending] = useState(false);
 
   const mountedRef = useRef(true);
@@ -215,9 +217,6 @@ export function useCartScreen(): UseCartScreenResult {
         const next = await applyPromoRequest(trimmed);
         if (!mountedRef.current) return false;
         applyServer(next);
-        // The wire cart carries `appliedDiscountId` but not the code text — keep the
-        // one the customer just entered so the screen can name it.
-        setAppliedCode(next.bill.discountAmount > 0 ? trimmed.toUpperCase() : null);
         return next.bill.discountAmount > 0;
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
@@ -245,6 +244,22 @@ export function useCartScreen(): UseCartScreenResult {
     [promoPending, applyServer],
   );
 
+  const removePromo = useCallback(async () => {
+    if (promoPending) return;
+    setActionError(null);
+    setPromoPending(true);
+    try {
+      const next = await removePromoRequest();
+      if (!mountedRef.current) return;
+      applyServer(next);
+    } catch (err) {
+      reportError('cart', 'Coupon remove failed', err);
+      if (mountedRef.current) setActionError(messageFor(err, 'Couldn’t remove the coupon. Please try again.'));
+    } finally {
+      if (mountedRef.current) setPromoPending(false);
+    }
+  }, [promoPending, applyServer]);
+
   const offer = useOfferActions(applyServer);
 
   return {
@@ -255,13 +270,15 @@ export function useCartScreen(): UseCartScreenResult {
     billStale: pendingLineIds.size > 0 || offer.pending,
     pendingLineIds,
     actionError,
-    appliedCode,
+    // From the server's bill, so a coupon applied before a restart is still named (and removable).
+    appliedCode: snapshot?.bill.appliedCode ?? null,
     promoPending,
     refresh: () => load(),
     refreshQuietly: () => load({ quiet: true }),
     setLineQty,
     removeLine,
     applyPromo,
+    removePromo,
     dismissActionError: useCallback(() => setActionError(null), []),
     offer,
   };

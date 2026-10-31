@@ -47,6 +47,20 @@ export interface SupportTopic {
   prompt: string;
   /** Whether attaching a specific order is offered for this topic. */
   ordersRelevant: boolean;
+  /**
+   * Which orders the picker offers, by status (absent = any). A missing-items complaint is
+   * about food that arrived, a delay about an order still on its way — listing the six most
+   * recent orders regardless left a customer whose recent orders were cancelled unable to
+   * pick the delivered one they were writing about.
+   */
+  orderStatuses?: readonly string[];
+}
+
+const IN_PROGRESS = ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery'] as const;
+
+/** The orders a topic's picker offers, newest first. */
+export function ordersForTopic<T extends { status: string }>(topic: SupportTopic, orders: readonly T[]): T[] {
+  return topic.orderStatuses ? orders.filter((o) => topic.orderStatuses!.includes(o.status)) : [...orders];
 }
 
 /**
@@ -62,6 +76,7 @@ export const SUPPORT_TOPICS: readonly SupportTopic[] = [
     icon: 'time-outline',
     prompt: 'Tell us what’s happening with the delivery — how long you’ve been waiting, anything the partner told you.',
     ordersRelevant: true,
+    orderStatuses: IN_PROGRESS,
   },
   {
     category: 'wrong_missing_items',
@@ -70,6 +85,7 @@ export const SUPPORT_TOPICS: readonly SupportTopic[] = [
     icon: 'bag-remove-outline',
     prompt: 'List the items that were wrong or missing so we can sort out a refund or replacement.',
     ordersRelevant: true,
+    orderStatuses: ['delivered'],
   },
   {
     category: 'veg_fleet_issue',
@@ -78,6 +94,7 @@ export const SUPPORT_TOPICS: readonly SupportTopic[] = [
     icon: 'leaf-outline',
     prompt: 'Describe what went wrong with the veg-only fleet handling on this order.',
     ordersRelevant: true,
+    orderStatuses: [...IN_PROGRESS, 'delivered'],
   },
   {
     category: 'payment_refund',
