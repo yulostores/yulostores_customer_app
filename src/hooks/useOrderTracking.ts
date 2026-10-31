@@ -208,6 +208,9 @@ export function useOrderTracking(orderId: string): UseOrderTrackingResult {
       if (String(payload.orderId) !== orderId) return;
       logger.debug('useOrderTracking', 'delivery_assignment_updated', payload);
       assignmentRef.current = payload.assignmentStatus;
+      // The delivery code comes into existence at pickup and is only in the REST payload (never
+      // broadcast) — fetch it now so it is on screen before the rider reaches the door.
+      if (payload.assignmentStatus === 'picked_up') fetchTracking().catch(() => {});
 
       setTracking((prev) => {
         if (!prev) return prev;

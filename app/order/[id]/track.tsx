@@ -586,6 +586,36 @@ function headingFor(status: string): string {
   }
 }
 
+// ─── Delivery code card ────────────────────────────────────────────────────
+// The code the customer reads to the rider at the door. The rider can't mark the order delivered
+// without it, so it sits right under the status while the food is on its way.
+function DeliveryCodeCard({ code }: { code: string }) {
+  const styles = useThemedStyles(makeStyles);
+  const { accent } = useAccentTheme();
+  return (
+    <View
+      style={[styles.card, styles.deliveryCodeCard, { borderColor: accent }]}
+      accessible
+      accessibilityLabel={`Delivery code ${code.split('').join(' ')}. Share it with your delivery partner when they arrive.`}
+    >
+      <View style={styles.deliveryCodeHeader}>
+        <Ionicons name="key-outline" size={18} color={accent} />
+        <Text style={styles.deliveryCodeTitle}>Delivery code</Text>
+      </View>
+      <View style={styles.deliveryCodeDigits}>
+        {code.split('').map((digit, i) => (
+          <View key={i} style={[styles.deliveryCodeDigitBox, { borderColor: accent }]}>
+            <Text style={[styles.deliveryCodeDigit, { color: accent }]}>{digit}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={styles.deliveryCodeHint}>
+        Share this code with your delivery partner only when you have your order.
+      </Text>
+    </View>
+  );
+}
+
 // ─── Rate-your-order card ──────────────────────────────────────────────────
 
 /**
@@ -865,6 +895,11 @@ export default function TrackingScreen() {
           )}
         </View>
 
+        {/* ── DELIVERY CODE (rider has the food) ───────────────────────────── */}
+        {!isCancelled && tracking.assignmentStatus === 'picked_up' && tracking.deliveryOtp ? (
+          <DeliveryCodeCard code={tracking.deliveryOtp} />
+        ) : null}
+
         {/* ── RESTAURANT DECISION ──────────────────────────────────────────── */}
         {awaitingPayment && <PaymentPendingCard tracking={tracking} onPaid={() => refetch()} />}
         {/* Not paying after all: without this an unpaid order could only wait out the
@@ -1120,6 +1155,27 @@ const makeStyles = (t: AccentTheme) =>
     borderWidth: 1,
     borderColor: Colors.foodBorder,
   },
+
+  // ── Delivery code ──
+  deliveryCodeCard: {
+    borderWidth: 1.5,
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  deliveryCodeHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  deliveryCodeTitle: { fontSize: 15, fontWeight: '800', color: Colors.foodText },
+  deliveryCodeDigits: { flexDirection: 'row', gap: Spacing.sm },
+  deliveryCodeDigitBox: {
+    width: 48,
+    height: 56,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.foodBg,
+  },
+  deliveryCodeDigit: { fontSize: 26, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  deliveryCodeHint: { fontSize: 12.5, color: Colors.foodTextSecondary, textAlign: 'center' },
 
   // ── Status section ──
   statusRow: {

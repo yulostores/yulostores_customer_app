@@ -166,6 +166,12 @@ export interface TrackingData {
   /** Delivery-assignment sub-status — finer-grained than order.status. */
   assignmentStatus: OrderAssignmentStatus;
   /**
+   * The 4-digit code the customer reads to the rider at the door. Set only while the rider has
+   * the food (`assignmentStatus === 'picked_up'`); the rider can't mark the order delivered
+   * without it.
+   */
+  deliveryOtp: string | null;
+  /**
    * Minutes until arrival. Populated for every pre-delivery phase now, not just once the partner
    * is carrying the food: before a rider is assigned it is remaining prep plus the
    * restaurant-to-customer drive, and while the rider heads to the restaurant it covers both
@@ -204,6 +210,7 @@ interface RawTrackingResponse {
   refundStatus?: string | null;
   refund?: unknown;
   assignmentStatus: OrderAssignmentStatus;
+  deliveryOtp?: string | null;
   etaMinutes: number | null;
   etaSource: EtaSource | null;
   route: TrackingRoute | null;
@@ -247,6 +254,7 @@ export async function getOrderTracking(orderId: string): Promise<TrackingData> {
       ? { ...raw.deliveryAddress, coordinates: validLngLat(raw.deliveryAddress.coordinates) }
       : null,
     isReviewed: raw.isReviewed === true,
+    deliveryOtp: typeof raw.deliveryOtp === 'string' && /^\d{4}$/.test(raw.deliveryOtp) ? raw.deliveryOtp : null,
   };
 }
 
