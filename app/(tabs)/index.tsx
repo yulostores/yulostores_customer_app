@@ -58,9 +58,9 @@ function formatPrice(price: number): string {
 // ─── Sub-components ────────────────────────────────────────────────────────
 
 /**
- * The home app bar: where we're delivering, who's signed in, which storefront
- * you're shopping, and the search field — all on one warm wash that runs from
- * the status bar down into the page canvas.
+ * The home app bar: where we're delivering, who's signed in, and the search
+ * field — all on one warm wash that runs from the status bar down into the
+ * page canvas.
  */
 function HomeHeader() {
   const styles = useThemedStyles(makeStyles);
@@ -75,7 +75,6 @@ function HomeHeader() {
       style={styles.topBar}
     >
       <LocationHeader />
-      <StorefrontTabs />
       <SearchRow />
     </LinearGradient>
   );
@@ -121,49 +120,6 @@ function LocationHeader() {
       >
         <Ionicons name="person-outline" size={20} color={Colors.foodText} />
       </Pressable>
-    </View>
-  );
-}
-
-/**
- * The storefronts Yulo sells through. Food is the only one today; Gifts & Toys and Bags were
- * shown as "coming soon" tiles and have been taken off the home screen until they launch.
- */
-const STOREFRONTS: readonly {
-  key: string;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  tint: string;
-}[] = [{ key: 'food', label: 'Food', icon: 'restaurant', tint: Colors.white }];
-
-/** The storefront tiles — the current one fills with the accent. */
-function StorefrontTabs() {
-  const styles = useThemedStyles(makeStyles);
-  const t = useAccentTheme();
-
-  return (
-    <View style={styles.storefrontRow}>
-      {STOREFRONTS.map((store) => (
-        <View
-          key={store.key}
-          style={styles.storefrontCard}
-          accessibilityRole="button"
-          accessibilityState={{ selected: true }}
-          accessibilityLabel={`${store.label}, selected`}
-        >
-          <LinearGradient
-            colors={[t.accent, t.accentDark]}
-            locations={[0.15, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.storefrontFill}
-          />
-          <Ionicons name={store.icon} size={22} color={store.tint} />
-          <Text style={[styles.storefrontLabel, styles.storefrontLabelActive]} numberOfLines={1}>
-            {store.label}
-          </Text>
-        </View>
-      ))}
     </View>
   );
 }
@@ -881,9 +837,9 @@ export default function HomeScreen() {
             />
           }
         >
-          {/* ── The app bar: address, storefronts and search on one warm
-                 wash. It's the first thing the eye lands on, so it reads as a
-                 single block rather than three floating rows. ── */}
+          {/* ── The app bar: address and search on one warm wash. It's the
+                 first thing the eye lands on, so it reads as a single block
+                 rather than floating rows. ── */}
           <HomeHeader />
 
           {/* ── Guest nudge ── */}
@@ -1006,42 +962,6 @@ const makeStyles = (t: AccentTheme) =>
     borderWidth: 1,
     borderColor: Colors.foodBorder,
     ...Elevation.card,
-  },
-
-  // ── Storefront tabs ──
-  storefrontRow: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.base,
-    gap: 10,
-    marginBottom: Spacing.base,
-  },
-  storefrontCard: {
-    flex: 1,
-    height: 68,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    ...Elevation.card,
-  },
-  // The accent fill is a sibling behind the icon and label rather than a
-  // clipping parent: `overflow: 'hidden'` would take the card's elevation with
-  // it on Android, so the gradient carries the radius itself.
-  storefrontFill: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: BorderRadius.lg,
-  },
-  storefrontLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.foodText,
-  },
-  storefrontLabelActive: {
-    color: Colors.white,
   },
 
   // ── Search bar ──
