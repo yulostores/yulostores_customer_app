@@ -70,6 +70,7 @@ import {
   type AccentTheme,
 } from '../../../src/hooks/useAccentTheme';
 import { useOrderTracking } from '../../../src/hooks/useOrderTracking';
+import { CouponsEarnedCard } from '../../../src/components/coupons/CouponsEarnedCard';
 import { usePayOrder } from '../../../src/hooks/usePayOrder';
 import { confirmAction, confirmCopy } from '../../../src/lib/confirm';
 import { reportError } from '../../../src/lib/logger';
@@ -1091,6 +1092,7 @@ export default function TrackingScreen() {
           )}
 
           <ViewBillButton orderId={tracking.orderId} />
+          {tracking.paymentStatus === 'paid' ? <CouponsEarnedCard orderId={tracking.orderId} /> : null}
         </View>
       </ScrollView>
     </View>

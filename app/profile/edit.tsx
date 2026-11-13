@@ -1,5 +1,6 @@
 /**
- * app/profile/edit.tsx — edit the customer's name and avatar. The phone is shown
+ * app/profile/edit.tsx — edit the customer's name, avatar and the optional gender / date of
+ * birth (used for partner-shop coupon offers; shops only see an age group). The phone is shown
  * read-only: it is the OTP login identity, and changing it here would skip OTP
  * verification entirely (the next login by the real number would then create a
  * fresh, empty account).
@@ -28,6 +29,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DemographicsFields } from '../../src/components/coupons/DemographicsFields';
 import ActionButton from '../../src/components/location/ActionButton';
 import { RemoteImage } from '../../src/components/RemoteImage';
 import { Colors } from '../../src/constants/Colors';
@@ -39,9 +41,10 @@ import {
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
 import { useProfile } from '../../src/hooks/useProfile';
+import { dobForInput, parseDob, type Gender } from '../../src/lib/demographics';
 import { logger, reportError } from '../../src/lib/logger';
 import { ApiError } from '../../src/services/api';
-import { initialsFor, updateProfile, type AvatarFile } from '../../src/services/profile';
+import { initialsFor, updateProfile, type AvatarFile, type ProfileUpdate } from '../../src/services/profile';
 
 function goBack() {
   if (router.canGoBack()) router.back();
@@ -56,6 +59,9 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState<AvatarFile | null>(null);
+  const [gender, setGender] = useState<Gender | null>(null);
+  const [dob, setDob] = useState('');
+  const [dobError, setDobError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,6 +77,8 @@ export default function EditProfileScreen() {
     if (!isFresh && !loadError && !notSignedIn) return;
     seededRef.current = true;
     setName(profile.name);
+    setGender(profile.gender);
+    setDob(dobForInput(profile.dateOfBirth));
     setSeeded(true);
   }, [profile, isFresh, loadError, notSignedIn]);
 
@@ -101,14 +109,26 @@ export default function EditProfileScreen() {
     }
   };
 
-  const canSave = name.trim().length >= 2 && !saving && seeded;
+  // A name is needed once given (2+ characters), but a customer who never set one can still save
+  // their gender / date of birth without inventing one — the server doesn't require a name.
+  const nameOk = name.trim().length >= 2 || (name.trim() === '' && !profile?.name);
+  const canSave = nameOk && !saving && seeded;
 
   const onSave = async () => {
     if (!canSave) return;
+    const parsedDob = parseDob(dob);
+    if (!parsedDob.ok) {
+      setDobError(parsedDob.error);
+      return;
+    }
+    // Gender / date of birth only when changed — `null` clears what was there.
+    const payload: ProfileUpdate = name.trim() ? { name: name.trim() } : {};
+    if (gender !== (profile?.gender ?? null)) payload.gender = gender;
+    if (parsedDob.value !== (profile?.dateOfBirth ?? null)) payload.dateOfBirth = parsedDob.value;
     setSaving(true);
     setError(null);
     try {
-      await updateProfile({ name: name.trim() }, avatar ?? undefined);
+      await updateProfile(payload, avatar ?? undefined);
       // Never throws (useProfile handles its own errors); the Profile tab also
       // refetches when it regains focus.
       await refresh();
@@ -196,6 +216,19 @@ export default function EditProfileScreen() {
               {profile?.phone ?? '—'}
             </Text>
             <Ionicons name="lock-closed" size={16} color={Colors.foodTextMuted} />
+          </View>
+
+          <View style={{ marginTop: Spacing.xl }}>
+            <DemographicsFields
+              gender={gender}
+              onGender={setGender}
+              dob={dob}
+              onDob={(text) => {
+                setDob(text);
+                setDobError(null);
+              }}
+              dobError={dobError}
+            />
           </View>
 
           {(isLoading || !seeded) && !loadError && !notSignedIn ? (

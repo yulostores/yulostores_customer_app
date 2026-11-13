@@ -26,6 +26,7 @@ import {
   type AccentTheme,
 } from '../../src/hooks/useAccentTheme';
 import { reportError } from '../../src/lib/logger';
+import { CouponsEarnedCard } from '../../src/components/coupons/CouponsEarnedCard';
 import { getOrder, type OrderView } from '../../src/services/orders';
 import { shortOrderId } from '../../src/services/tracking';
 
@@ -164,6 +165,8 @@ export default function OrderSuccessScreen() {
             ) : null}
           </View>
         )}
+        {/* Coupons come with an online payment; issued just after it (the card re-asks). */}
+        {orderId && loaded && paid && !isCod && !cancelled ? <CouponsEarnedCard orderId={orderId} /> : null}
       </View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>

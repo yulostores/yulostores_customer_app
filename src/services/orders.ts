@@ -88,6 +88,8 @@ interface RawOrder {
   refundStatus?: string | null;
   /** The refund in plain words (backend customerRefundView), or null. */
   refund?: { status?: string; amount?: number; timeline?: string | null } | null;
+  /** Coupons this order earned (GET /api/orders/:id only; void ones not counted). */
+  couponsEarned?: { count?: number; ids?: string[] } | null;
   deliveryAddress?: {
     label?: string | null;
     street?: string;
@@ -145,6 +147,8 @@ export interface OrderView {
   /** ISO string, or `null` when the backend has not set an ETA yet. */
   estimatedDeliveryTime: string | null;
   deliveryLine: string | null;
+  /** Partner-shop coupons earned by paying for this order (issued just after payment). */
+  couponsEarned: number;
 }
 
 // ─── Reshape ──────────────────────────────────────────────────────────────
@@ -245,6 +249,7 @@ function toOrderView(raw: RawOrder): OrderView {
     paymentStatus: raw.paymentStatus ?? 'pending',
     estimatedDeliveryTime: raw.estimatedDeliveryTime ?? null,
     deliveryLine,
+    couponsEarned: num(raw.couponsEarned?.count),
   };
 }
 

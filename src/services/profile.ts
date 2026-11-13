@@ -12,6 +12,7 @@
  * on the in-memory session instead.
  */
 
+import { dobYmd, isGender, type Gender } from '../lib/demographics';
 import { apiGet, apiPatch } from './api';
 
 interface RawUser {
@@ -22,6 +23,9 @@ interface RawUser {
   profilePicture?: string | null;
   savedAddresses?: unknown[];
   createdAt?: string | null;
+  gender?: string | null;
+  /** Stored as a date: "1998-05-01T00:00:00.000Z". */
+  dateOfBirth?: string | null;
 }
 
 /** The flat shape the Profile screen renders. */
@@ -37,6 +41,10 @@ export interface CustomerProfile {
   savedAddressCount: number;
   /** ISO date the account was created, or null on older rows. */
   memberSince: string | null;
+  /** Optional, for coupon offers (src/lib/demographics.ts). */
+  gender: Gender | null;
+  /** "YYYY-MM-DD", or null when not given. */
+  dateOfBirth: string | null;
 }
 
 function reshape(u: RawUser): CustomerProfile {
@@ -48,6 +56,8 @@ function reshape(u: RawUser): CustomerProfile {
     avatarUrl: u.profilePicture?.trim() || null,
     savedAddressCount: Array.isArray(u.savedAddresses) ? u.savedAddresses.length : 0,
     memberSince: u.createdAt ?? null,
+    gender: isGender(u.gender) ? u.gender : null,
+    dateOfBirth: dobYmd(u.dateOfBirth),
   };
 }
 
@@ -71,18 +81,31 @@ export interface AvatarFile {
  * avatar field sent in the same call). `apiSend` leaves `Content-Type` to
  * `fetch` for a `FormData` body, so no extra plumbing is needed here.
  */
-export async function updateProfile(
-  payload: { name?: string; phone?: string },
-  avatar?: AvatarFile,
-): Promise<CustomerProfile> {
+export interface ProfileUpdate {
+  name?: string;
+  phone?: string;
+  /** `null` clears it. */
+  gender?: Gender | null;
+  /** "YYYY-MM-DD"; `null` clears it. */
+  dateOfBirth?: string | null;
+}
+
+export async function updateProfile(payload: ProfileUpdate, avatar?: AvatarFile): Promise<CustomerProfile> {
   let data: { user: RawUser };
   if (avatar) {
     const form = new FormData();
-    if (payload.name !== undefined) form.append('name', payload.name);
-    if (payload.phone !== undefined) form.append('phone', payload.phone);
+    // A multipart form can't carry `null` (the server drops blank fields), so clearing gender /
+    // date of birth goes in a JSON follow-up below.
+    const clears: ProfileUpdate = {};
+    for (const [key, value] of Object.entries(payload) as Array<[keyof ProfileUpdate, string | null | undefined]>) {
+      if (value === undefined) continue;
+      if (value === null) (clears as Record<string, null>)[key] = null;
+      else form.append(key, value);
+    }
     // React Native's FormData accepts this {uri, name, type} shape directly.
     form.append('avatar', { uri: avatar.uri, name: avatar.name, type: avatar.type } as unknown as Blob);
     data = await apiPatch<{ user: RawUser }>('/api/users/me', form);
+    if (Object.keys(clears).length) data = await apiPatch<{ user: RawUser }>('/api/users/me', clears);
   } else {
     data = await apiPatch<{ user: RawUser }>('/api/users/me', payload);
   }

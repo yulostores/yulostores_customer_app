@@ -68,6 +68,7 @@ function goBack() {
 
 const MENU: readonly MenuRow[] = [
   { key: 'orders', label: 'Order history', icon: 'time-outline', kind: 'link', route: '/(tabs)/orders' },
+  { key: 'coupons', label: 'My coupons', icon: 'ticket-outline', kind: 'link', route: '/coupons' },
   { key: 'favorites', label: 'Favorites', icon: 'heart-outline', kind: 'link', route: '/favorites' },
   { key: 'addresses', label: 'Saved addresses', icon: 'location-outline', kind: 'link', route: '/address' },
   { key: 'veg-fleet', label: 'Veg-fleet preference', icon: 'leaf-outline', kind: 'toggle' },

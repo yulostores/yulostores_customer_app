@@ -55,6 +55,8 @@ function seedFrom(user: ReturnType<typeof useAuth>['user']): CustomerProfile | n
     avatarUrl: null,
     savedAddressCount: 0,
     memberSince: null,
+    gender: null,
+    dateOfBirth: null,
   };
 }
 

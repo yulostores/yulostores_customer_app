@@ -25,6 +25,7 @@
     "expo-splash-screen": "~58.0.12",
     "expo-status-bar": "~58.0.4",
     "expo-updates": "~58.0.19",
+    "qrcode-generator": "2.0.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
@@ -50,7 +51,8 @@
     "test:confirm": "rm -rf node_modules/.cache/confirm-test && tsc --ignoreConfig --outDir node_modules/.cache/confirm-test --rootDir src --module commonjs --target es2020 --strict --skipLibCheck --types node src/lib/confirmCore.ts src/lib/__tests__/confirmCore.test.ts && node --test node_modules/.cache/confirm-test/lib/__tests__/",
     "test:offers": "rm -rf node_modules/.cache/offers-test && tsc --ignoreConfig --outDir node_modules/.cache/offers-test --rootDir src --module commonjs --target es2020 --strict --skipLibCheck --types node src/lib/offersReducer.ts src/lib/offerText.ts src/lib/offerErrors.ts src/lib/userChannelCore.ts src/lib/offerShape.ts src/lib/__tests__/offers.test.ts && node --test node_modules/.cache/offers-test/lib/__tests__/",
     "test:bill": "rm -rf node_modules/.cache/bill-test && tsc --ignoreConfig --outDir node_modules/.cache/bill-test --rootDir src --module commonjs --target es2020 --strict --skipLibCheck --types node src/lib/billHtml.ts src/lib/__tests__/billHtml.test.ts && node --test node_modules/.cache/bill-test/lib/__tests__/",
-    "test": "npm run test:confirm && npm run test:offers && npm run test:bill"
+    "test": "npm run test:confirm && npm run test:offers && npm run test:bill && npm run test:coupons",
+    "test:coupons": "rm -rf node_modules/.cache/coupons-test && tsc --ignoreConfig --outDir node_modules/.cache/coupons-test --rootDir src --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck --types node src/lib/coupons.ts src/lib/qrMatrix.ts src/lib/demographics.ts src/lib/__tests__/coupons.test.ts && node --test node_modules/.cache/coupons-test/lib/__tests__/"
   },
   "private": true
 }
