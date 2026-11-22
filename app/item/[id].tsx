@@ -223,6 +223,9 @@ function OptionGroupCard({
               />
             ) : option.priceDelta > 0 ? (
               <Text style={styles.optionDelta}>+ {formatPrice(option.priceDelta)}</Text>
+            ) : option.priceDelta < 0 ? (
+              // A cheaper choice — e.g. "Half plate" on a dish sold in half and full plates.
+              <Text style={styles.optionDelta}>− {formatPrice(-option.priceDelta)}</Text>
             ) : null}
           </Pressable>
         );

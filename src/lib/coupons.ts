@@ -113,7 +113,9 @@ export function expiryCountdown(
   const left = Date.parse(expiresAt) - now;
   if (!Number.isFinite(left)) return { text: 'No expiry date', urgent: false, expired: false };
   if (left <= 0) return { text: 'Expired', urgent: false, expired: true };
-  if (left >= 2 * DAY) return { text: `Expires in ${Math.floor(left / DAY)} days`, urgent: false, expired: false };
+  // Whole days rounded, not cut off: a coupon just issued for 30 days has 29 d 23 h left and
+  // read "Expires in 29 days" on production (Nov 2026) — on the day its "Valid until" is 30 away.
+  if (left >= 2 * DAY) return { text: `Expires in ${Math.round(left / DAY)} days`, urgent: false, expired: false };
   if (left >= DAY) {
     const h = Math.floor((left - DAY) / HOUR);
     return { text: `Expires in 1 day${h ? ` ${h} h` : ''}`, urgent: false, expired: false };
@@ -169,9 +171,10 @@ export type CouponListState =
   | { kind: 'list' };
 
 export const EMPTY_TEXT: Record<CouponTabKey, { title: string; body: string }> = {
+  // Not "No coupons yet": a customer whose only coupon was just used lands here too.
   active: {
-    title: 'No coupons yet',
-    body: 'Pay online for an order and you’ll get coupons from salons, spas and shops near the restaurant.',
+    title: 'No active coupons',
+    body: 'Pay online for an order and you’ll get coupons from salons, spas and shops near the restaurant. Used and expired ones are in the other tabs.',
   },
   used: { title: 'Nothing used yet', body: 'Coupons you use at a shop show up here.' },
   expired: { title: 'Nothing expired', body: 'Coupons that run out before you use them show up here.' },

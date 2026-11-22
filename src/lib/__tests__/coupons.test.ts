@@ -91,6 +91,9 @@ describe('expiryCountdown', () => {
   const H = 3_600_000;
   it('days, then hours and minutes in the last day (urgent), then seconds', () => {
     assert.deepEqual(expiryCountdown(at(12 * 24 * H + H), NOW), { text: 'Expires in 12 days', urgent: false, expired: false });
+    // Just issued for 30 days (a few seconds already gone): 30, not 29 — seen on production.
+    assert.equal(expiryCountdown(at(30 * 24 * H - 5000), NOW).text, 'Expires in 30 days');
+    assert.equal(expiryCountdown(at(2 * 24 * H + 13 * H), NOW).text, 'Expires in 3 days');
     assert.equal(expiryCountdown(at(24 * H + 3 * H), NOW).text, 'Expires in 1 day 3 h');
     assert.equal(expiryCountdown(at(24 * H), NOW).text, 'Expires in 1 day');
     assert.deepEqual(expiryCountdown(at(5 * H + 20 * 60_000), NOW), { text: 'Expires in 5 h 20 min', urgent: true, expired: false });
