@@ -145,7 +145,11 @@ export default function OrderBillScreen() {
                   <Text style={styles.body}>{c.label}</Text>
                   {c.sublabel ? <Text style={styles.sub}>{c.sublabel}</Text> : null}
                 </View>
-                <Text style={styles.amount}>{c.amountPaise == null ? '—' : paise(c.amountPaise)}</Text>
+                <Text style={styles.amount}>{c.amountPaise == null
+                    ? '—'
+                    : c.key === 'round_off' && c.amountPaise > 0
+                      ? `+ ${paise(c.amountPaise)}`
+                      : paise(c.amountPaise)}</Text>
               </View>
             ))}
 

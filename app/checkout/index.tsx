@@ -604,6 +604,8 @@ function lineValue(line: ChargeLine): { value: string; positive: boolean } {
   // Free delivery: the restaurant pays it — the one line that is genuinely "FREE".
   if (line.key === 'delivery_fee' && line.amountPaise === 0) return { value: 'FREE', positive: true };
   if (line.amountPaise < 0) return { value: '− ' + formatPaise(line.amountPaise), positive: line.key === 'discount' };
+  // Rounded up: shown with a plus, so "+ ₹0.50" / "− ₹0.30" says which way it went.
+  if (line.key === 'round_off' && line.amountPaise > 0) return { value: '+ ' + formatPaise(line.amountPaise), positive: false };
   return { value: formatPaise(line.amountPaise), positive: false };
 }
 

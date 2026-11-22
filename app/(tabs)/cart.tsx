@@ -70,6 +70,7 @@ function chargeValue(line: ChargeLine): { value: string; positive: boolean } {
   if (line.amountPaise == null) return { value: 'At checkout', positive: false };
   if (line.key === 'delivery_fee' && line.amountPaise === 0) return { value: 'FREE', positive: true };
   if (line.amountPaise < 0) return { value: '− ' + formatPaise(line.amountPaise), positive: line.key === 'discount' };
+  if (line.key === 'round_off' && line.amountPaise > 0) return { value: '+ ' + formatPaise(line.amountPaise), positive: false };
   return { value: formatPaise(line.amountPaise), positive: false };
 }
 
